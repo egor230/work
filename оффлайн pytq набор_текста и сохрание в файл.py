@@ -93,33 +93,25 @@ class MyThread(QtCore.QThread):  # Определение класса пото�
         condition_on_previous_text=False)
        text = str(result["text"])
        print(text)
-
-      # Запуск записи
-      stream = sd.InputStream(samplerate=sample_rate, channels=1,
-                              dtype="float32", callback=audio_callback, blocksize=block_size)
-      stream.start()
-
       self.icon_signal.emit("/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project/stop icon.jpeg")
-      # audio = sd.rec(int(duration * sample_rate), samplerate=sample_rate, channels=1, dtype='float32')
-      # sd.wait()  # Ожидание завершения записи
-      #
-       # thread = threading.Thread(target=process_text, args=(text, k,))
-       # thread.start()
+      audio = sd.rec(int(duration * sample_rate), samplerate=sample_rate, channels=1, dtype='float32')
+      sd.wait()  # Ожидание завершения записи
+      
       # Сохранение аудио в файл
-      # with wave.open("temp.wav", 'wb') as wf:
-      #  wf.setnchannels(1)
-      #  wf.setsampwidth(2)
-      #  wf.setframerate(sample_rate)
-      #  wf.writeframes((audio * 32767).astype(np.int16).tobytes())
-      # # Распознавание речи
-      # message = model.transcribe("temp.wav", fp16=False, language="ru", task="transcribe")["text"]
-      # if message:
-      #  message = repeat(message)
-      #  thread = threading.Thread(target=process_text, args=(message, k))
-      #  thread.daemon = True
-      #  thread.start()
-      #  thread.join()
-      #
+      with wave.open("temp.wav", 'wb') as wf:
+       wf.setnchannels(1)
+       wf.setsampwidth(2)
+       wf.setframerate(sample_rate)
+       wf.writeframes((audio * 32767).astype(np.int16).tobytes())
+      # Распознавание речи
+      message = model.transcribe("temp.wav", fp16=False, language="ru", task="transcribe")["text"]
+      if message:
+       message = repeat(message)
+       thread = threading.Thread(target=process_text, args=(message, k))
+       thread.daemon = True
+       thread.start()
+       thread.join()
+
    except Exception as ex2:
     print(ex2)  # Лучше видеть ошибки
     self.error_signal.emit(str(ex2))

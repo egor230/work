@@ -96,9 +96,9 @@ def web():
     # driver.minimize_window()
     WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.ID, 'mic')))
     driver.find_element("id", "mic").click()# включить запись голоса
-    html_content = driver.page_source
-    with open('page_source.html', 'w', encoding='utf-8') as file:
-     file.write(html_content)
+#    html_content = driver.page_source
+#    with open('page_source.html', 'w', encoding='utf-8') as file:
+#     file.write(html_content)
 
     return driver
 

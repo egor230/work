@@ -32,28 +32,25 @@ def get_steam(model_path):
  # Настраиваем чувствительность
  recognizer.energy_threshold = 50  # Снижаем порог для лучшего распознавания
  recognizer.dynamic_energy_threshold = True  # Включаем динамическую настройку
- # Инициализация PyAudio
- audio = pyaudio.PyAudio()
+ audio = pyaudio.PyAudio() # Инициализация PyAudio
  
  # Установка параметров потока
- stream = audio.open(format=pyaudio.paInt16, channels=1, rate=sample_rate, input=True,
-                     frames_per_buffer=block_size)
+ stream = audio.open(format=pyaudio.paInt16, channels=1, rate=sample_rate,
+                     input=True, frames_per_buffer=block_size)
  stream.start_stream()
  return stream, recognizer
 def recognize_from_microphone(stream, recognizer):
-
   print("Начало распознавания речи... Говорите в микрофон.")
-
   while True:
    try:
     large_chunk = stream.read(16000, exception_on_overflow=False)
- 
-    # Разбиваем большие данные на чанки по 16000 байт
+     # Разбиваем большие данные на чанки по 16000 байт
     for i in range(0, len(large_chunk), 8000):
      chunk = large_chunk[i:i + 8000]
      if recognizer.AcceptWaveform(chunk):
-        result = recognizer.Result()
-        text = json.loads(result)["text"]
+       result = recognizer.Result()
+       text = json.loads(result)["text"]
+       if text:
         print(text)   # if len(data) == 0:
         break
 
@@ -61,8 +58,8 @@ def recognize_from_microphone(stream, recognizer):
     print(ex1)
     pass
 # Установка пути к модели
-# model_path = "vosk-model-ru-0.42"
-model_path = "vosk-model-ru-0.10"
+model_path = "vosk-model-ru-0.42"
+# model_path = "vosk-model-ru-0.10"
 stream, recognizer = get_steam(model_path)
 recognize_from_microphone(stream, recognizer)
 

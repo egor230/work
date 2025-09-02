@@ -30,11 +30,13 @@ def on_release(key):
 def a():
   listener = keyboard.Listener(on_press=on_press, on_release=on_release)
   listener.start()
+
 cache_dir = Path("/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project/cache")
 cache_dir.mkdir(parents=True, exist_ok=True)  # Создаёт или пропускает
 os.environ["XDG_CACHE_HOME"] = str(cache_dir)
-models = ["tiny",
-    "base", "small",
+subprocess.run( ["pactl", "set-source-mute", "54", "0"],
+ check=True)# вкл микрофон.
+models = ["tiny", "base", "small",
     "medium","large","large-v3"]
 model = whisper.load_model(models[2])  # Убедитесь, что модель скачана через whisper.load_model()
 
@@ -45,16 +47,16 @@ block_size = int(sample_rate * duration)  # 16000 * 0.5 = 8000 сэмплов
 buffer = queue.Queue()  # Оставляем для совместимости, но используем напрямую
 # Функция обратного вызова для записи аудио
 def audio_callback(indata, frames, time, status):
-    if status:
-        print("Ошибка:", status) # Прямое распознавание без буфера
-    audio = indata.flatten().astype(np.float32)
-    result = model.transcribe(
-      audio, language="ru",  fp16=False,  # Отключаем FP16 для CPU
-      condition_on_previous_text=False )
-    text = str(result["text"])
-    print(text)
-    # thread = threading.Thread(target=process_text, args=(text, k,))
-    # thread.start()
+  if status:
+      print("Ошибка:", status) # Прямое распознавание без буфера
+  audio = indata.flatten().astype(np.float32)
+  result = model.transcribe(
+    audio, language="ru",  fp16=False,  # Отключаем FP16 для CPU
+    condition_on_previous_text=False )
+  text = str(result["text"])
+  print(text)
+  # thread = threading.Thread(target=process_text, args=(text, k,))
+  # thread.start()
 
 # Запуск записи
 stream = sd.InputStream( samplerate=sample_rate, channels=1,

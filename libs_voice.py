@@ -1,4 +1,4 @@
-import os, time, json, subprocess, re, threading, socket, uuid,  glob, sys, pyaudio, shutil, pyautogui, pystray, whisper, wave, os, requests, torch
+import os, time, json, subprocess, re, threading, socket, uuid, glob, sys, pyaudio, shutil, pyautogui, pystray, whisper, wave, requests, torch
 import whisper, tempfile, queue, torchaudio
 from pathlib import Path
 from selenium import webdriver
@@ -13,6 +13,7 @@ from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 from bs4 import BeautifulSoup
+from deepdiff import DeepDiff
 from PIL import Image
 from io import BytesIO
 from pynput import *
@@ -84,7 +85,6 @@ def is_text_stable(driver, timeout=3):
 def get_user_messages(driver):  # Извлекаем текст всех сообщений пользователя
  # Находим все контейнеры сообщений пользователя
  user_m = driver.find_elements(By.CSS_SELECTOR, ".MessageBubble-Container_from-user")
- 
  if user_m:
   # Берем последний контейнер
   last_user_container = user_m[-1]
@@ -130,18 +130,28 @@ def get_element_attributes(element):  # Получает все атрибуты
 
 def del_all_chats(driver):  # Находим все чаты
  try:
+  chats = driver.find_elements(By.CSS_SELECTOR, ".ChatListGroup-List .ChatListItem")
+  for i in range(len(chats)):
    chats = driver.find_elements(By.CSS_SELECTOR, ".ChatListGroup-List .ChatListItem")
-   for i in range(len(chats)):
-    chats = driver.find_elements(By.CSS_SELECTOR, ".ChatListGroup-List .ChatListItem")
-    if len(chats) == 1:
-     break
-    chats[0].find_element(By.CSS_SELECTOR, ".ChatListItem-MoreButton").click()
-    WebDriverWait(driver, 10).until(  EC.element_to_be_clickable(
-       (By.XPATH, "//span[contains(@class, 'ContextMenuItem-Text') and (text()='Удалить чат' or text()='Удалить диалог')]")
-      )     ).click()
-    time.sleep(1)
+   if len(chats) < 2:
+    break
+   more_button = chats[0].find_element(By.CSS_SELECTOR, ".ChatListItem-Button_more")
+   driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", more_button)
+   time.sleep(0.5)
+   more_button.click()
+   delete_button = WebDriverWait(driver, 10).until(
+    EC.element_to_be_clickable((
+        By.XPATH,
+        "//div[@role='button' and contains(@class, 'ContextMenuItem')]"
+        "[.//span[@class='ContextMenuItem-Text' and text()='Удалить чат']]"
+    ))
+)
+   driver.execute_script("arguments[0].click();", delete_button)
+
+   time.sleep(1.5)  # ждём пока чат реально исчезнет
+
  except Exception as e:
-    # print(f"Ошибка: {e}")
+   print(f"Ошибка: {e}")
    pass
 
 def cut_image(driver):# Получение скриншота всей страницы и сохранение его в файл
@@ -228,21 +238,6 @@ class get_lang:
   def get_text(self):
     return self.text
 
-script = '''#!/bin/bash
-# Ищем идентификаторы процессов, содержащих слово "chrome"
-pids=$(pgrep -f "chrome")
-# Перебираем найденные идентификаторы процессов и отправляем им сигнал завершения
-for pid in $pids; do
-    kill $pid
-done
-
-pids=$(pgrep -f "chromedriver")
-# Перебираем найденные идентификаторы процессов и отправляем им сигнал завершения
-for pid in $pids; do
-    kill $pid
-done
-'''
-subprocess.call(['bash', '-c', script])
 k = save_key()
 k.update_dict()
 time.sleep(2.2)
@@ -265,31 +260,33 @@ def replace(match):
   return res[match.group(0)]
 
 def repeat(text):
-  text1 = ""
-
-  # text = "linux менч linux минт"
+  # text = "linux менч установить линукс минт помоги мне установить "
+  # print(text)
   k.save_text(text)
+  text1 = ""
   res = k.get_dict()
   k.save_words(res)
   words = k.get_words()
   # print(words)
   try:
-   words_regex = r'\b(' + r'|'.join(words) + r')\b'
-   text1 = re.sub(words_regex, replace, k.get_text())
+   # Создаем регулярное выражение для всех слов и словосочетаний из словаря
+   words_regex = r'\b(' + r'|'.join(map(re.escape, words)) + r')\b'
+   # Выполняем замену с учетом регистра
+   text1 = re.sub(words_regex, lambda m: res.get(m.group(0).lower(), m.group(0)), k.get_text(), flags=re.IGNORECASE)
    k.save_text(text1)
-   new_res_texts = [re.sub(re.escape(word), i, k.get_text(), flags=re.IGNORECASE) for word, i in new_res.items()]
-   for text in new_res_texts:
-    [k.save_text(re.sub(r'\b' + r'\b|\b'.join([i]) + r'\b', replace, k.get_text())) for i in words]
- 
+   # Дополнительная замена для слов из словаря res
+   for word, replacement in res.items():
+    text1 = re.sub(r'\b' + re.escape(word) + r'\b', replacement, text1, flags=re.IGNORECASE)
+   k.save_text(text1)
+  except Exception as ex:
+   print(f"Ошибка: {ex}")  # Выводим ошибку для диагностики
+  return text1
     # for i in words:
     #   text = k.get_text()
     #   reg = r'\b' + r'\b|\b'.join([i]) + r'\b'
     #   text1 = re.sub(reg, replace, text)
     #   k.save_text(text1)
-    k.save_text(text1)
-  except Exception as ex:
-    pass
-  return text1
+    #  k.save_text(text1)
 
 def is_connected():
   try:  # попытаемся установить соединение с google.com на порту 80
@@ -315,7 +312,6 @@ def process_text(previous_message1, k):
       return layout.strip().split()[-1]
     except Exception:
       return None
-
 
 def switch_layout(to_layout):
   """Переключает раскладку на указанную."""
@@ -382,7 +378,6 @@ class work_key:
       thread0.daemon
       thread0.start()
       return 0
-
 
 class save_ln:
   def __init__(self):

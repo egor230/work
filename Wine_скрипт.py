@@ -46,7 +46,8 @@ export PW_LOCALE_SELECT="ru_RU.utf"
 export FPS_LIMIT="90"
 # Пути
 WINEPREFIX_PATH="/home/egor/PortProton/data/prefixes/DEFAULT"
-WINE_PATH="/home/egor/PortProton/data/dist/WINE_LG_10-12"
+#WINE_PATH="/home/egor/PortProton/data/dist/WINE_LG_10-12"
+WINE_PATH="/home/egor/PortProton/data/dist/PROTON-SAREK10-15-ASYNC"
 GAME_PATH=\"{0}\"
 export PW_MESA_VK_WSI_PRESENT_MODE="mailbox"
 # Параметры gamescope

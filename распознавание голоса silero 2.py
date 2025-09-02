@@ -1,13 +1,12 @@
 from libs_voice import *
-import sounddevice as sd
-import numpy as np
 from pynput import keyboard
 from pynput.keyboard import Controller as Contr1, Key
 from silero import silero_stt
 # Убедитесь, что у вас установлены torch и torchaudio
 from pprint import pprint
 from collections import deque
-
+import sounddevice as sd
+import numpy as np
 import soundfile as sf
 def record():
  # Запись аудио с микрофона
@@ -49,14 +48,16 @@ def start_listener():
  listener = keyboard.Listener(on_press=on_press, on_release=on_release)
  listener.start()
 
-start_listener()  # Запускаем слушатель# driver.set_window_position(1, 505)
+subprocess.run( ["pactl", "set-source-mute", "54", "0"],
+ check=True)# вкл микрофон.
 # Настройка директории кэша
 cache_dir = Path("/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project/cache")
 cache_dir.mkdir(parents=True, exist_ok=True)
 os.environ["XDG_CACHE_HOME"] = str(cache_dir)
 # Загрузка модели (tiny для скорости, small для качества)
-model = whisper.load_model("large")  # Можно заменить на "tiny" для ускорения
-
+models = ["tiny", "base", "small",
+    "medium","large","large-v3"]
+model = whisper.load_model(models[2])  # Убедитесь, что модель скачана через whisper.load_model()
 # Параметры записи
 sample_rate = 16000
 block_size = 1024  # Оптимальный размер блока
@@ -113,7 +114,7 @@ def main():
    current_time = time.time()
    
    # Обрабатываем аудио каждые 1.5 секунды
-   if current_time - last_process_time >= 1.5:
+   if current_time - last_process_time >= 2.5:
     audio_chunk = process_audio_chunk()
     
     if audio_chunk is not None:

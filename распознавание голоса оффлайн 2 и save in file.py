@@ -29,64 +29,57 @@ def start_listener():
  listener = keyboard.Listener(on_press=on_press, on_release=on_release)
  listener.start()
 
+subprocess.run( ["pactl", "set-source-mute", "54", "0"], check=True)# вкл микрофон.
 start_listener()  # Запускаем слушатель# driver.set_window_position(1, 505)
 cache_dir = Path("/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project/cache")
 cache_dir.mkdir(parents=True, exist_ok=True)
 os.environ["XDG_CACHE_HOME"] = str(cache_dir)
 
 # Проверка наличия модели
-model_name = "large"
+models = ["tiny", "base", "small", "medium", "large", "large-v3"]
+model_name = models[5]
 model_path = cache_dir / "whisper" / f"{model_name}.pt"
+# Запись аудио с микрофона
+duration = 20  # Длительность записи в секундах
+sample_rate = 16000  # Частота дискретизации
 
 if model_path.exists():
     print(f"✅ Модель '{model_name}' уже скачена: {model_path}")
     # Загрузка модели (Whisper сам проверит кэш)
-
-    # Установка параметров для оптимизации CPU
-    os.environ["OMP_NUM_THREADS"] = "8"
+    os.environ["OMP_NUM_THREADS"] = "8"    # Установка параметров для оптимизации CPU
     os.environ["MKL_NUM_THREADS"] = "8"
     model = whisper.load_model(model_name, device="cpu")
 else:
     print(f"⚠️ Модель '{model_name}' не найдена. Будет скачана в: {model_path}")
     exit(0)
-# Запись аудио с микрофона
-duration = 20  # Длительность записи в секундах
-sample_rate = 16000  # Частота дискретизации
 while 1:
  print("Запись началась...")
  audio = sd.rec(int(duration * sample_rate), samplerate=sample_rate, channels=1, dtype='float32')
  sd.wait()  # Ожидание завершения записи
  print("Запись завершена.")
-#
-# Сохранение аудио в файл
- with wave.open("temp.wav", 'wb') as wf:
-    wf.setnchannels(1)
-    wf.setsampwidth(2)
-    wf.setframerate(sample_rate)
-    wf.writeframes((audio * 32767).astype(np.int16).tobytes())
+ with wave.open("temp.wav", 'wb') as wf: # Сохранение аудио в файл
+   wf.setnchannels(1)
+   wf.setsampwidth(2)
+   wf.setframerate(sample_rate)
+   wf.writeframes((audio * 32767).astype(np.int16).tobytes())
 
 # Распознавание речи
  message = model.transcribe("temp.wav", fp16=False, language="ru", task="transcribe")["text"]
  if message:
   message = repeat(message)
   print(message)
-  # process_text(message, k)
+  # process_text(message, k) # Напечатать этот текст
+
 '''
-
-Да, вы можете получать распознавание речи **напрямую с микрофона** без сохранения аудио в файл. Для этого можно использовать библиотеку `sounddevice` для записи аудио с микрофона и передавать данные напрямую в модель Whisper. Вот как это сделать:
-
----
-
-### 1. **Установка необходимых библиотек**
+Да, вы можете получать распознавание речи **напрямую с микрофона** без сохранения аудио в файл.
+Для этого можно использовать библиотеку `sounddevice` для записи аудио с микрофона и передавать данные напрямую в модель Whisper. Вот как это сделать:
+1. **Установка необходимых библиотек**
 Убедитесь, что у вас установлены `whisper` и `sounddevice`:
 
 ```bash
 pip install openai-whisper sounddevice numpy
 ```
-
----
-
-### 2. **Код для распознавания речи с микрофона**
+ 2. **Код для распознавания речи с микрофона**
 Вот пример кода, который записывает аудио с микрофона и передает его в модель Whisper для распознавания:
 
 ```python

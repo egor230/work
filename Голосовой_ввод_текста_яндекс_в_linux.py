@@ -37,7 +37,7 @@ excluded_phrases = ["С чего начнём?Нарисовать картин�
                     "Три заветных слова: мобильное приложение Яндекса. Там такое наверняка можно сделать."]  # input()      # Получение текущего адреса страницы
 
 html = driver.page_source
-# with open('page_source.html', 'w', encoding='utf-8') as file:
+# with open('page_source.txt', 'w', encoding='utf-8') as file:
 #   file.write(html)
 
 # ---------- настройки ----------
@@ -55,41 +55,44 @@ def tray_left(icon, button):
 def start_tray():
  global tray
  img = Image.open(ICON_PATH)
- tray = Icon("OFF" if mic_on else "ON",  img,
-  title="OFF" if mic_on else "ON",  menu=Menu(MenuItem("ON OFF", tray_left)) )
+ tray = Icon("OFF" if mic_on else "ON", img, title="OFF" if mic_on else "ON",
+             menu=Menu(MenuItem("ON OFF", tray_left)) )
  tray.on_click = tray_left
  tray.run()
 
 set_mute("0" if mic_on else "1")
 
-def run_app(driver, len_c, soup):
- def update_label(soup):
+def run_app(driver, len_c):
+ def update_label():
    nonlocal len_c
    try:
     if not mic_on:
       root.withdraw()  # Сначала скрываем окно
     else:
       root.deiconify()
-      elements = soup.find_all(attrs={"aria-label": lambda x: x})
-      aria_label = elements[1].get("aria-label")
-      if 'слушать' in aria_label:
+      last_user_container = driver.find_elements(By.CSS_SELECTOR, ".MessageBubble-Container_from-user")[-1]
+      message = last_user_container.find_element(By.CSS_SELECTOR, ".MessageBubble").text.strip()
       #   oknyx_lottie = soup.find('div', class_='StandaloneOknyx')  # Ищем SVG, у которого нет класса animation-hidden
       #   active_svg = oknyx_lottie.find('svg', class_=lambda x: x and 'animation-hidden' not in x.split())
       #   if oknyx_lottie and active_svg:
       #  message = driver.find_elements(By.CLASS_NAME, 'message-bubble_container_from-user')[-1].text   # <-- должна быть определена где-то
-       last_user_container = driver.find_elements(By.CSS_SELECTOR, ".MessageBubble-Container_from-user")[-1]
-       message = last_user_container.find_element(By.CSS_SELECTOR, ".MessageBubble").text.strip()
-       label.config(text=str(message))
-       len_message = len(message) * 10
-       if message and len(message) < 4:
+
+      label.config(text=str(message))
+      len_message = len(message) * 10
+      if message and len(message) < 4:
         len_message = len(message) * 10 + 12
-       root.geometry(f"{len_message}x20+600+1025")
-      else:
-        root.withdraw()
+      root.geometry(f"{len_message}x20+600+1025")
+      mic_button = driver.find_element(By.CSS_SELECTOR, ".StandaloneOknyx")  # Альтернатива без ожидания, если элемент точно есть
+      aria_label = mic_button.get_attribute('aria-label')
+      if 'слушать' in aria_label:
+       root.deiconify()
+      # else:
+      #  if 'стоп' in aria_label:
+      #    root.withdraw()
    except Exception as e:
        # print(e)
        pass
-   root.after(450, lambda: update_label(soup))
+   root.after(450, lambda: update_label())
  
  root = tk.Tk()
  frame = Frame(root)
@@ -99,7 +102,7 @@ def run_app(driver, len_c, soup):
  root.overrideredirect(True)
  root.resizable(True, True)
  root.attributes("-topmost", True)
- update_label(soup)
+ update_label()
  threading.Thread(target=start_tray, daemon=True).start()
  root.mainloop()
 
@@ -111,9 +114,13 @@ try:
  # mode_button.click()
  # base_mode_button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//button[.//h5[text()="Базовый режим"]]')))  # Кликаем на кнопку
  # base_mode_button.click()  # Находим первый элемент <li> в списке чатов
- # del_all_chats(driver)# Ждём кнопку переключения режима
- soup = BeautifulSoup(html, 'html.parser')
- app_thread = threading.Thread(target=run_app, args=(driver, counts, soup,))
+ new_chat_button = WebDriverWait(driver, 10).until(
+  EC.element_to_be_clickable((By.XPATH, "//button[.//span[@class='AliceButton-Icon']]")) )
+
+ del_all_chats(driver)# Ждём кнопку переключения режима
+
+ new_chat_button.click() # Нажимаем на кнопку
+ app_thread = threading.Thread(target=run_app, args=(driver, counts,))
  app_thread.start()
  url = str(driver.current_url)
  button = driver.find_element(By.CSS_SELECTOR, "button[data-testid='oknyx']")  # повторно находим кнопку
@@ -130,13 +137,14 @@ try:
 
    if (counts1 > counts and len(message) != 0 and not any(phrase in message for phrase in excluded_phrases)):
     thread = threading.Thread(target=process_text, args=(message, k,))  # break  #
-    thread.daemon
-    thread.start()  # # thread.join()
+    #thread.daemon
+    thread.start()  #
+    thread.join()
     print("+++++++")
     print(counts1)  # print(counts)
     counts = counts1  # break
     time.sleep(1.7)
-    # button.click()  # print(filter_elem)
+    button.click()  # print(filter_elem)
   except Exception as ex1:  #   print(ex1)
    current_url = str(driver.current_url)  # Получение текущего адреса страницы
    if "/search/" in current_url:  # Проверка, содержится ли в адресе строка "/alice.yandex.ru/chat/"     # Переход на нужный URL
