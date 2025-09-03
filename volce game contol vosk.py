@@ -142,13 +142,13 @@ class VoiceControlThread(QThread):
       thread.start()
 
   def voice_internet(self, driver):
-    time.sleep(1)
     element = driver.find_element(By.ID, "speech-text")  # Поиск элемента по ID
     text = str(element.text).lower()
     if text:
      driver.find_element("id", "mic").click()
      thread = threading.Thread(target=press_key_function, args=(text, self.words), daemon=True)
      thread.start()
+     thread.join()
      time.sleep(1.5)       # driver.find_element("class","p_edit dir_LTR").clear()  # удалить старый текст.
      driver.find_element("id", "mic").click()
   def run(self):
