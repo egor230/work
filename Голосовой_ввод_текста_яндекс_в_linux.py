@@ -60,7 +60,7 @@ def start_tray():
  tray.on_click = tray_left
  tray.run()
 
-set_mute("0" if mic_on else "1")
+set_mute("0" if mic_on else "1") # вкл микрофон.
 
 def run_app(driver, len_c):
  def update_label():
