@@ -42,10 +42,9 @@ def start_listener():
  listener.start()
 start_listener()
 
-
 ### Починенный рабочий вариант
 class MyThread(QtCore.QThread):  # Поток
-  mysignal = QtCore.pyqtSignal(str, bool)
+  mysignal = QtCore.pyqtSignal(str, bool, bool)
   error_signal = QtCore.pyqtSignal(str)
   icon_signal = QtCore.pyqtSignal(str)
 
@@ -63,33 +62,44 @@ class MyThread(QtCore.QThread):  # Поток
     self.hint_text = None
     self.show_hint = False
 
+    self.DATA_TESTID_ATTR = "data-testid"
+    self.OKNYX_CORE_CLASS = "StandaloneOknyxCore"
+    self.MIC_BUTTON_CLASS = "StandaloneOknyx"
   def update_mic_state(self, mic):
     self.mic = mic
 
   def stop(self):
     self._running = False
 
-  def show_message(self, text, mic, show=True):
+  def show_message(self, text, mic, show):
     self.hint_text = text
     self.show_hint = show
-    if show:
-      self.mysignal.emit(text, mic)
+    if show and text:
+      self.mysignal.emit(text, mic, show)
     else:
-      self.mysignal.emit(None, mic)
+      self.mysignal.emit(None, mic, show)
 
   def selenium_worker(self):
+
+    mic_button = self.driver.find_element(By.CSS_SELECTOR, f".{self.MIC_BUTTON_CLASS}")
+    oknyx_core = mic_button.find_element(By.CSS_SELECTOR, f".{self.OKNYX_CORE_CLASS}")
     while self._running:
-      try:
-        user_m = self.driver.find_elements(By.CSS_SELECTOR, ".MessageBubble-Container_from-user")
-        if user_m:
-          last_user_container = user_m[-1]
-          message = last_user_container.find_element(By.CSS_SELECTOR, ".MessageBubble").text.strip()
-          self.show_message(message, self.mic, show=True)
-      except Exception:
-        pass
+     try:
+      user_m = self.driver.find_elements(By.CSS_SELECTOR, ".MessageBubble-Container_from-user")
+      if user_m:
+       last_user_container = user_m[-1]
+       message = last_user_container.find_element(By.CSS_SELECTOR, ".MessageBubble").text.strip()
+       filter_elem = oknyx_core.get_attribute(self.DATA_TESTID_ATTR)
+       if self.mic and "li" or "su" in filter_elem and len(message)>0:
+         self.show_message(message, self.mic, show=True)
+       else:
+        self.show_message(None, False, show=False)
+     except Exception:
+       pass
 
   def run(self):
    try:
+    self.show_message(None, False, False)
     option = get_option()
     self.driver = webdriver.Chrome(
       service=Service(ChromeDriverManager().install()), options=option
@@ -99,26 +109,35 @@ class MyThread(QtCore.QThread):  # Поток
     self.driver.implicitly_wait(1)
     selenium_thread = threading.Thread(target=self.selenium_worker, daemon=True)
     selenium_thread.start()
+    del_all_chats(self.driver)
+    new_chat_button = WebDriverWait(self.driver, 1).until(
+     EC.element_to_be_clickable((By.XPATH, "//button[.//span[@class='AliceButton-Icon']]"))   )
+    new_chat_button.click()
    except Exception as e:
     print(e)
     pass
-   del_all_chats(self.driver)
-   new_chat_button = WebDriverWait(self.driver, 1).until(
-    EC.element_to_be_clickable((By.XPATH, "//button[.//span[@class='AliceButton-Icon']]"))   )
-   new_chat_button.click()
    self.button = self.driver.find_element(By.CSS_SELECTOR, "button[data-testid='oknyx']")
    self.button.click()
-   
+   alisa = "aria-label"
+   self.show_message("Давай поговорите", self.mic, show=True)
    while self._running:
     try:
      time.sleep(1)
-     mic_button = self.driver.find_element(By.CSS_SELECTOR, ".StandaloneOknyx")
-     aria_label = mic_button.get_attribute("aria-label")
-     oknyx_core = mic_button.find_element(By.CSS_SELECTOR, ".StandaloneOknyxCore")
-     filter_elem = oknyx_core.get_attribute("data-testid")
+     # Используем переменные в методе
+     mic_button = self.driver.find_element(By.CSS_SELECTOR, f".{self.MIC_BUTTON_CLASS}")
+     aria_label = mic_button.get_attribute(alisa)
+     oknyx_core = mic_button.find_element(By.CSS_SELECTOR, f".{self.OKNYX_CORE_CLASS}")
+     filter_elem = oknyx_core.get_attribute(self.DATA_TESTID_ATTR)
   
      if not self.mic:#    print(filter_elem)
        self.show_message(None, False, show=False)
+       print(filter_elem)
+       print(aria_label)
+       if  "стоп" in aria_label or "li" in filter_elem:
+        self.button.click()
+       while not self.mic:
+        time.sleep(1)
+       self.button.click()
   
      if self.mic and not self.message and "слушать" in aria_label and "su" or "th" in filter_elem:
        self.button.click()
@@ -126,14 +145,16 @@ class MyThread(QtCore.QThread):  # Поток
      self.message, counts1 = get_latest_message(self.driver, self.counts)
   
      if counts1 > self.counts and self.mic and self.message and not any(phrase in self.message for phrase in excluded_phrases):
+       self.mic=False
        thread = threading.Thread(target=process_text, args=(self.message, k,))
        thread.start()
        thread.join()
-       print("+++++++")
-       print(counts1)
-       self.counts = counts1
-       time.sleep(1.7)
+       time.sleep(2.7)
        self.button.click()
+       time.sleep(2.1)
+       self.button.click()
+       self.mic=True
+       self.counts = counts1
     except Exception as ex1:
       print(ex1)
       time.sleep(0.1)

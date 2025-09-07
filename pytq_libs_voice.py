@@ -26,9 +26,59 @@ from webdriver_manager.chrome import ChromeDriverManager
 from pynput import keyboard
 from pynput.keyboard import Controller as Contr1, Key
 
-# import numpy as np
-# select,
-# import speech_recognition as sr
+# Исключенные фразы
+excluded_phrases = ["С чего начнём?Нарисовать картинку", "Для звонков телефон как-то удобнее, давайте попробую там.",
+                    "Яндекс — с АлисойБыстрый поиск и Алиса всегда рядомПоиск текстом, картинкой или голосомУмная",
+                    "Три заветных слова: мобильное приложение Яндекса. Там такое наверняка можно сделать."]
+
+def set_mute(mute: str):
+ subprocess.run(["pactl", "set-source-mute", "54", mute], check=True)
+
+def get_user_messages(driver):
+ user_m = driver.find_elements(By.CSS_SELECTOR, ".MessageBubble-Container_from-user")
+ if user_m:
+  last_user_container = user_m[-1]
+  message = last_user_container.find_element(By.CSS_SELECTOR, ".MessageBubble").text.strip()
+  counts = len(user_m)
+  message = repeat(message)  # Предполагается, что эта функция определена в libs_voice
+  return message, counts
+ return "", 0
+
+def get_latest_message(driver, len_c=0):
+ try:
+  stream = ".AliceChat-StreamingPlaceholder"
+  driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+  element = driver.find_element(By.CSS_SELECTOR, ".AliceChat-StreamingPlaceholder")
+  if element.is_displayed():
+   message, counts = get_user_messages(driver)
+   return message, counts + 1
+  else:
+   return "", len_c
+ except Exception as ex:
+  return "", len_c
+ 
+def del_all_chats(driver):  # Находим все чаты
+  try:
+   chats = driver.find_elements(By.CSS_SELECTOR, ".ChatListGroup-List .ChatListItem")
+   for i in range(len(chats)):
+    chats = driver.find_elements(By.CSS_SELECTOR, ".ChatListGroup-List .ChatListItem")
+    if len(chats) < 2:
+     break
+    more_button = chats[0].find_element(By.CSS_SELECTOR, ".ChatListItem-Button_more")
+    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", more_button)
+    time.sleep(0.2)
+    more_button.click()
+    delete_button = WebDriverWait(driver, 2).until(
+     EC.element_to_be_clickable((By.XPATH, "//div[@role='button' and contains(@class, 'ContextMenuItem')]"
+                                           "[.//span[@class='ContextMenuItem-Text' and text()='Удалить']]"
+                                 )))
+    driver.execute_script("arguments[0].click();", delete_button)
+    time.sleep(0.5)  # ждём пока чат реально исчезнет
+  
+  except Exception as e:
+   print(f"Ошибка: {e}")
+   pass
+
 
 # Словарь клавиш из оригинального скрипта
 KEYS = {  "LBUTTON": 0x01, "RBUTTON": 0x02, "CANCEL": 0x03, "MBUTTON": 0x04, "XBUTTON1": 0x05,
@@ -69,38 +119,7 @@ KEYS = {  "LBUTTON": 0x01, "RBUTTON": 0x02, "CANCEL": 0x03, "MBUTTON": 0x04, "XB
     "OEM_BACKTAB": 0xF5, "ATTN": 0xF6, "CRSEL": 0xF7, "EXSEL": 0xF8, "EREOF": 0xF9,
     "PLAY": 0xFA, "ZOOM": 0xFB, "PA1": 0xFD, "OEM_CLEAR": 0xFE}
 
-# Исключенные фразы
-excluded_phrases = [
- "С чего начнём?Нарисовать картинку",
- "Для звонков телефон как-то удобнее, давайте попробую там.",
- "Яндекс — с АлисойБыстрый поиск и Алиса всегда рядомПоиск текстом, картинкой или голосомУмная",
- "Три заветных слова: мобильное приложение Яндекса. Там такое наверняка можно сделать."
-]
-def set_mute(mute: str):
- subprocess.run(["pactl", "set-source-mute", "54", mute], check=True)
 
-def get_user_messages(driver):
- user_m = driver.find_elements(By.CSS_SELECTOR, ".MessageBubble-Container_from-user")
- if user_m:
-  last_user_container = user_m[-1]
-  message = last_user_container.find_element(By.CSS_SELECTOR, ".MessageBubble").text.strip()
-  counts = len(user_m)
-  message = repeat(message)  # Предполагается, что эта функция определена в libs_voice
-  return message, counts
- return "", 0
-
-def get_latest_message(driver, len_c=0):
- try:
-  driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-  element = driver.find_element(By.CSS_SELECTOR, '.AliceChat-StreamingPlaceholder')
-  if element.is_displayed():
-   message, counts = get_user_messages(driver)
-   return message, counts + 1
-  else:
-   return "", len_c
- except Exception as ex:
-  return "", len_c
- 
 def get_last_three_messages(driver, class_name):
  messages = driver.find_elements(By.CLASS_NAME, class_name)  # Найти все элементы с заданным классом
  last_three_messages = [message.text.strip() for message in messages[-3:]]  # Получить текст последних трех элементов
@@ -119,28 +138,6 @@ def get_element_attributes(element):  # Получает все атрибуты
             items[item.name] = item.value;
         }
         return items;    """, element) # return attributes
-
-def del_all_chats(driver):  # Находим все чаты
- try:
-  chats = driver.find_elements(By.CSS_SELECTOR, ".ChatListGroup-List .ChatListItem")
-  for i in range(len(chats)):
-   chats = driver.find_elements(By.CSS_SELECTOR, ".ChatListGroup-List .ChatListItem")
-   if len(chats) < 2:
-    break
-   more_button = chats[0].find_element(By.CSS_SELECTOR, ".ChatListItem-Button_more")
-   driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", more_button)
-   time.sleep(0.2)
-   more_button.click()
-   delete_button = WebDriverWait(driver, 2).until(
-    EC.element_to_be_clickable(( By.XPATH,  "//div[@role='button' and contains(@class, 'ContextMenuItem')]"
-        "[.//span[@class='ContextMenuItem-Text' and text()='Удалить']]"
-    )))
-   driver.execute_script("arguments[0].click();", delete_button)
-   time.sleep(0.5)  # ждём пока чат реально исчезнет
-
- except Exception as e:
-   print(f"Ошибка: {e}")
-   pass
 
 def cut_image(driver):# Получение скриншота всей страницы и сохранение его в файл
  screenshot = driver.get_screenshot_as_png()

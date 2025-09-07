@@ -25,7 +25,7 @@ def check_model():  # Проверка наличия модели
   check_model.model = whisper.load_model(model_name, device="cpu")
   return check_model.model
 
-def is_speech(audio_data, threshold=0.022, min_duration=3.5, sample_rate=44100):
+def is_speech(audio_data, threshold=0.022, min_duration=4.5, sample_rate=44100):
   avg_amplitude = np.mean(np.abs(audio_data))
   if avg_amplitude > threshold:
     return True

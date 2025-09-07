@@ -48,8 +48,7 @@ def start_listener():
  listener = keyboard.Listener(on_press=on_press, on_release=on_release)
  listener.start()
 
-subprocess.run( ["pactl", "set-source-mute", "54", "0"],
- check=True)# вкл микрофон.
+subprocess.run( ["pactl", "set-source-mute", "54", "0"], check=True)# вкл микрофон.
 # Настройка директории кэша
 cache_dir = Path("/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project/cache")
 cache_dir.mkdir(parents=True, exist_ok=True)
@@ -96,7 +95,6 @@ def process_audio_chunk():#Обработка аудио чанка для ра�
    return None
   return audio_array
  return None
-
 
 def main():
  last_text = ""  # Инициализация last_text внутри функции

@@ -423,8 +423,8 @@ def open_documents_from_dict(res1, driver, folder_path="статьи для кн
    filename = f"{title}.doc"
    file_path = os.path.join(os.getcwd(), folder_path, filename)
    try:
-    driver.get(res[title])
-    url = driver.page_source
+    # driver.get(res[title])
+    # url = driver.page_source
     # with open('page_source.html', 'w', encoding='utf-8') as file:
     #   file.write(url)
    
@@ -432,7 +432,7 @@ def open_documents_from_dict(res1, driver, folder_path="статьи для кн
     # copy_to_clipboard(url)
     print(file_path)
     # input()
-    find_image(thread)
+    # find_image(thread)
     # Опционально: добавить небольшую паузу между открытием файлов,
     # чтобы не перегружать систему, если открывается много документов сразу
     # time.sleep(1) # Потребуется import time
