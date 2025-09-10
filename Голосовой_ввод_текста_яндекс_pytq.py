@@ -153,6 +153,7 @@ class MyThread(QtCore.QThread):  # Поток
        self.button.click()
        time.sleep(2.1)
        self.button.click()
+       time.sleep(1.1)
        self.mic=True
        self.counts = counts1
     except Exception as ex1:

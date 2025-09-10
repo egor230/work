@@ -39,47 +39,6 @@ def check_current_active_window(user):# Получаем идентификат�
  except:
       return False
 
-def screenshot(left, top, width, height):  # print(left, top, width, height, end=' ')
-  time.sleep(0.3)
-  # Делаем скриншот с заданными размерами и координатами
-  screenshot = ImageGrab.grab(bbox=(left, top, left + width, top + height))
-  now = datetime.now()
-  current_date = now.strftime("%Y-%m-%d")
-  current_time = now.strftime("%H-%M-%S")
-  file_name_path = format("{}screenshot-{}-{}.png".format(
-    "/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project/Screenshots/",
-    current_time,
-    current_date))
-  screenshot.save(file_name_path, format="PNG")  # Сохраняем изображение в файл
-  time.sleep(0.1)
-  # Копируем изображение в буфер обмена с помощью xclip
-  subprocess.run(['xclip', '-selection', 'clipboard', '-t', 'image/png', '-i', file_name_path])
-
-def calculate_coordinates(begin_point, end_point):
-  left = min(begin_point.x(), end_point.x())
-  top = min(begin_point.y(), end_point.y())
-  width = abs(end_point.x() - begin_point.x())
-  height = abs(end_point.y() - begin_point.y())
-  return left, top, width, height  # Рассчитываем координаты top-left угла и размеры для скриншота
-
-def load_coordinates_from_json():
-  json_file_path = 'settings for screenshot.json'  # Путь к JSON файлу
-  
-  if os.path.exists(json_file_path):  # Проверяем существует ли файл
-    with open(json_file_path, 'r') as json_file:
-      coords = json.load(json_file)
-      # Присваиваем значения из словаря переменным
-      left = int(coords['left'])
-      top = int(coords['top'])
-      width = int(coords['width'])
-      height = int(coords['height'])
-      screenshot(left, top, width, height)  # Вызываем функцию скриншота с расчитанными параметрами
-  else:  # Задаем размеры скриншота если нет файла настроек.
-    top = int(130)
-    left = int(110)
-    width = 1530
-    height = 910
-    screenshot(left, top, width, height)
 def clean_label(root):
  root.overrideredirect(False)
  root.withdraw()  # свернуть панель подсказок.
