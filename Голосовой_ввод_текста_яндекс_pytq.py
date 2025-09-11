@@ -99,7 +99,7 @@ class MyThread(QtCore.QThread):  # Поток
 
   def run(self):
    try:
-    self.show_message(None, False, False)
+    self.show_message(None, False, show=False)
     option = get_option()
     self.driver = webdriver.Chrome(
       service=Service(ChromeDriverManager().install()), options=option
@@ -153,7 +153,7 @@ class MyThread(QtCore.QThread):  # Поток
        self.button.click()
        time.sleep(2.1)
        self.button.click()
-       time.sleep(1.1)
+       time.sleep(2.1)
        self.mic=True
        self.counts = counts1
     except Exception as ex1:

@@ -6,32 +6,33 @@ def get_paths_file():  #  Получаем аргументы командной
     url += str(arg) + " "# Объединяем аргументы через цикл for
 
   url = url.strip()
+  # url="/mnt/807EB5FA7EB5E954/games/Splinter Cell/system/SplinterCell.exe"
   directory = os.path.dirname(url)
   filename = os.path.basename(url)
   if '.' in filename:
     filename_without_extension = filename[:filename.rfind('.')]   # extension = filename[filename.rfind('.') + 1:]
   else:
     filename_without_extension = filename    # extension = None
-  return directory, filename_without_extension, filename
+  return url, directory, filename_without_extension, filename
 
-directory, filename_without_extension, filename = get_paths_file()
+full_path, directory, filename_without_extension, filename = get_paths_file()
 
 file1=str(os.path.join(directory, filename)).replace('\'','')
 show_list_id = '''#!/bin/bash
 # Настройка переменных среды
-export LAUNCH_PARAMETERS="-dx11 -skipintro 1"
-export PW_WINDOWS_VER="10"
-export PW_DLL_INSTALL="vcrun2019 corefonts lucida"
-export WINEDLLOVERRIDES="d3dx9_36,d3dx9_42=n,b;mfc120=b,n,d3d8,d3d9,ddraw,dinput8,dsound=n,b"
-export PW_VULKAN_USE=2
 #export WINE_FULLSCREEN_FSR=1
 #export WINE_FULLSCREEN_FSR_STRENGTH=1
-export WINE_SIMULATE_WRITE=COPY
 #export PW_USE_LS_FRAME_GEN="1"
 #export PW_USE_OPTISCALER="1"
 #export LSFG_MULTIPLIER="2"
 #export LSFG_FLOW_SCALE="0.1"
 #export LSFG_PERF_MODE="1"
+export LAUNCH_PARAMETERS="-dx11 -skipintro 1"
+export PW_WINDOWS_VER="10"
+export PW_DLL_INSTALL="vcrun2019 corefonts lucida"
+export WINEDLLOVERRIDES="d3dx9_36,d3dx9_42=n,b;mfc120=b,n,d3d8,d3d9,ddraw,dinput8,dsound=n,b"
+export PW_VULKAN_USE=2
+export WINE_SIMULATE_WRITE=COPY
 export PW_USE_GAMEMODE="1"
 export PW_USE_D3D_EXTRAS="1"
 export PW_FIX_VIDEO_IN_GAME="1"
@@ -67,8 +68,13 @@ with open(file, 'w') as file:    # Записываем текст в файл
 show_list_id = '''#!/bin/bash\n
 chmod +x "{0}"\n'''.format( file1)
 subprocess.run(['bash', '-c', show_list_id])
+# print(directory)
+# print(filename_without_extension)
+# print(filename)
 
-
+command = f'cd "{directory}" || wrestool -x -t 14 "{filename}" > "{filename_without_extension}.ico"'
+subprocess.run(['bash', '-c', command], check=True)
+# show_list_id])
 
 
 
