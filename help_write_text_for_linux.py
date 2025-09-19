@@ -280,8 +280,16 @@ def search_image():
     '''
     region = (1400, 100, 1500, 900)  # Пример области
     image_path = 'Search button.png'    # Укажите путь к вашему изображению
-    location = pyautogui.locateOnScreen(image_path, confidence=0.6, region=region)  # Проверяем, есть ли изображение на экране
-    if location and find_nemo(): #
+
+    loc = pyautogui.locateOnScreen(image_path, confidence=0.25, region=region)  # Проверяем, есть ли изображение на экране
+    '''  "left": 268,
+  "top": 44,
+  "right": 450,
+  "bottom": 152'''
+    region1 = (268, 44, 182, 108)  # (left, top, width, height)
+    image_path1 = 'Search text.png'    # Укажите путь к вашему изображению
+    loc1 = pyautogui.locateOnScreen(image_path1, confidence=0.2, region=region1)  # Проверяем, есть ли изображение на экране
+    if loc and loc1 and find_nemo(): #
       # print("22")
       subprocess.call(['bash', '-c', s, '_'])
   except:

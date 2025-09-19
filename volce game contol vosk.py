@@ -31,7 +31,6 @@ def web():
  try:
   subprocess.call(['bash', '-c', script])
   option = webdriver.ChromeOptions()
-
   option.add_experimental_option("excludeSwitches", ['enable-automation'])  # убрать окно
   option.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.6367.118 Safari/537.36")
   option.add_argument("--use-fake-ui-for-media-stream")  # звук
@@ -142,15 +141,25 @@ class VoiceControlThread(QThread):
       thread.start()
 
   def voice_internet(self, driver):
-    element = driver.find_element(By.ID, "speech-text")  # Поиск элемента по ID
-    text = str(element.text).lower()
-    if text:
-     driver.find_element("id", "mic").click()
-     thread = threading.Thread(target=press_key_function, args=(text, self.words), daemon=True)
-     thread.start()
-     thread.join()
-     time.sleep(1.5)       # driver.find_element("class","p_edit dir_LTR").clear()  # удалить старый текст.
-     driver.find_element("id", "mic").click()
+   t = time.time()
+   while not self.stopped:
+    try:
+     element = driver.find_element(By.ID, "speech-text")  # Поиск элемента по ID
+     text = str(element.text).lower()
+     if text:
+      driver.find_element("id", "mic").click()
+      thread = threading.Thread(target=press_key_function, args=(text, self.words), daemon=True)
+      thread.start()
+      thread.join()
+      time.sleep(1.5)  # driver.find_element("class","p_edit dir_LTR").clear()  # удалить старый текст.
+      driver.find_element("id", "mic").click()
+     if t - time.time() > 15:
+      t = time.time()
+      driver.find_element("id", "mic").click()
+      time.sleep(1.5)  # driver.find_element("class","p_edit dir_LTR").clear()  # удалить старый текст.
+      driver.find_element("id", "mic").click()
+    except Exception:
+     pass
   def run(self):
    if self.current_profile == "vosk":
       model_path = "vosk-model-ru-0.10"

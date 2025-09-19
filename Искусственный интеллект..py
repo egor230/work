@@ -2,8 +2,8 @@ from llama_cpp import Llama
 import contextlib, os, sys
 
 # Путь к модели
-# model_path = "/mnt/807EB5FA7EB5E954/Program Files/ai models/hugging-quants/Llama-3.2-1B-Instruct-Q8_0-GGUF/llama-3.2-1b-instruct-q8_0.gguf"
-model_path = "/mnt/807EB5FA7EB5E954/Program Files/ai models/lmstudio-community/WizardLM/wizardlm-7b-uncensored-q4_0.gguf"
+model_path = "/mnt/807EB5FA7EB5E954/Program Files/ai models/hugging-quants/Llama-3.2-1B-Instruct-Q8_0-GGUF/llama-3.2-1b-instruct-q8_0.gguf"
+# model_path = "/mnt/807EB5FA7EB5E954/Program Files/ai models/lmstudio-community/WizardLM/wizardlm-7b-uncensored-q4_0.gguf"
 
 # Функция для подавления вывода
 @contextlib.contextmanager
