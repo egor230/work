@@ -114,6 +114,15 @@ def fill_labes(canvas):
   scrollable_frame = Frame(root)
   scrollbar.bind("<ButtonRelease-1>",lambda event, agr=labels, agr1=canvas: f(event, agr, agr1))
 
+<<<<<<< HEAD
+=======
+
+  # time.sleep(2)
+  # print(res)
+  # scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all") ))
+  # time.sleep(2)
+  # print(res)
+>>>>>>> ca952c6e0b896bf9e25df10333b1ef1b556512e9
 def update(event, canvas):# Изменение назначения кнопок.
   # k.save_labels(labels)
   # for i in range(len(labels)):
@@ -147,6 +156,7 @@ e.grid(column=0, row=0, padx=10, pady=5)
 # update(0)
 
 root.mainloop()
+<<<<<<< HEAD
 
 # time.sleep(2)
 # print(res)
@@ -155,3 +165,5 @@ root.mainloop()
 # print(res)
 
 
+=======
+>>>>>>> ca952c6e0b896bf9e25df10333b1ef1b556512e9
