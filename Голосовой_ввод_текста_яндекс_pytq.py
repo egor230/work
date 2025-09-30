@@ -58,8 +58,7 @@ class MyThread(QtCore.QThread):
  
  def get_user_messages(self, driver):
   try:
-   user_m = WebDriverWait(driver, 3).until(  EC.presence_of_all_elements_located((By.CSS_SELECTOR, ".MessageBubble-Container_from-user"))
-   )
+   user_m = WebDriverWait(driver, 3).until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, ".MessageBubble-Container_from-user")) )
    if user_m:
     last_user_container = user_m[-1]
     message = last_user_container.find_element(By.CSS_SELECTOR, ".MessageBubble").text.strip()
@@ -93,7 +92,8 @@ class MyThread(QtCore.QThread):
   try:
    option = get_option()
    service = Service("/usr/local/bin/chromedriver")  # Указываем путь к chromedriver (если не в PATH, укажите явно)
-   self.driver = webdriver.Chrome(service=service, options=option) # Инициализация драйвера
+   # self.driver = webdriver.Chrome(service=service, options=option) # Инициализация драйвера
+   self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=option)
    self.driver.get("https://alice.yandex.ru/chat/01938823-14ea-4000-bd7a-3cca57830d6a/")
    self.url = self.driver.current_url
    self.driver.implicitly_wait(1)
@@ -191,6 +191,7 @@ class MyWindow(QtWidgets.QWidget):
   self.mythread = MyThread(parent=self)
   self.mythread.init_ui_signal.connect(self.QL)
   self.mythread.start()
+  QTimer.singleShot(0, self.hide)
   self.icon1_path = "/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project/stop icon.jpeg"
   self.icon2_path = "/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project/голос.png"
   self.tray_icon = QSystemTrayIcon(QtGui.QIcon(self.icon2_path), self)
