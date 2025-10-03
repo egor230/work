@@ -12,17 +12,20 @@ def find_nemo():  #Checks if the active window is Nemo file manager.#
     echo "0"
   fi
   exit'''
-  result1 = subprocess.run(['bash'], input=get_main_id, stdout=subprocess.PIPE, text=True).stdout.strip()  #  Получаем ID активного окна
-  process_id_active = int(result1.splitlines()[0])  #  Преобразуем результат в целое число
-  result = subprocess.run(['ps', 'aux'], stdout=subprocess.PIPE, text=True).stdout  #  Получаем список процессов
-  for line in result.splitlines():  #  Перебираем строки вывода
+  try:
+   result1 = subprocess.run(['bash'], input=get_main_id, stdout=subprocess.PIPE, text=True).stdout.strip()  #  Получаем ID активного окна
+   process_id_active = int(result1.splitlines()[0])  #  Преобразуем результат в целое число
+   result = subprocess.run(['ps', 'aux'], stdout=subprocess.PIPE, text=True).stdout  #  Получаем список процессов
+   for line in result.splitlines():  #  Перебираем строки вывода
     if 'nemo' in line:  #  Ищем процесс nemo
-      parts = line.split()  #  Разбиваем строку на части
-      pid = int(parts[1])  #  Получаем PID процесса
-      cmd = ' '.join(parts[10:]).replace(" ", "")  #  Получаем команду процесса
-      if 'nemo' in cmd and process_id_active == pid:  #  Проверяем, совпадает ли PID с активным окном
-        return True
-  return False
+     parts = line.split()  #  Разбиваем строку на части
+     pid = int(parts[1])  #  Получаем PID процесса
+     cmd = ' '.join(parts[10:]).replace(" ", "")  #  Получаем команду процесса
+     if 'nemo' in cmd and process_id_active == pid:  #  Проверяем, совпадает ли PID с активным окном
+      return True
+   return False
+  except:
+   return False
 
 def search_image():  #Searches for specific images on screen and simulates Enter if found in Nemo.#
   try:
@@ -34,7 +37,8 @@ def search_image():  #Searches for specific images on screen and simulates Enter
     region1 = (268, 44, 182, 108)  #  Область поиска текста
     image_path1 = 'Search text.png'  #  Путь к изображению текста поиска
     loc1 = pyautogui.locateOnScreen(image_path1, confidence=0.2, region=region1)  #  Ищем текст поиска
-    if loc and loc1 and find_nemo(): # Если обе картинки найдены и активное окно — Nemo  print("1")
+    if loc and loc1 and find_nemo(): # Если обе картинки найдены и активное окно — Nemo
+     print("1")
      subprocess.call(['bash', '-c', s, '_'])  #  Симулируем нажатие Enter
   except:
     pass  #  Игнорируем ошибки
@@ -63,8 +67,7 @@ class ToolTip:  #Manages tooltip display for abbreviation suggestions.#
       label = Label(self.tipwindow, text=self.text, justify='left', background="#ffffe0", relief='solid', borderwidth=1, font=("tahoma", "12", "normal"))  #  Создаем новую метку
       label.pack(ipadx=1)  #  Размещаем метку
 
-  def hidetip(self):
-    #Hides and destroys the tooltip.#
+  def hidetip(self):   #Hides and destroys the tooltip.#
     if self.tipwindow:  #  Если окно существует
       self.tipwindow.destroy()  #  Уничтожаем окно
       self.tipwindow = None  #  Сбрасываем ссылку
@@ -150,8 +153,7 @@ class SmartTyper:  #Main class for smart typing with abbreviations and word sugg
       pass
     return "ru"  #  По умолчанию русская раскладка
 
-  def _get_translated_key(self, key_char):
-    #Translates key to English layout equivalent based on current layout.#
+  def _get_translated_key(self, key_char):   #Translates key to English layout equivalent based on current layout.#
     ch = key_char.lower()  #  Приводим символ к нижнему регистру
     layout = self._get_current_keyboard_layout()  #  Получаем текущую раскладку
     if layout == "ru":  #  Если раскладка русская
@@ -325,11 +327,15 @@ class SmartTyper:  #Main class for smart typing with abbreviations and word sugg
        for line in lines:  #  Перебираем строки
         dir_process_name = line.split(maxsplit=10)[10].replace('\\', '/')  #  Получаем имя процесса
         if re.search(pattern, dir_process_name) and process_id == int(line.split()[1]):  #  Если найден .exe файл и PID совпадает
-          file_path_lower = dir_process_name.lower()  #  Приводим имя к нижнему регистру
-          if ".exe" in file_path_lower and "winword.exe" not in file_path_lower:  #  Если это не WinWord
-           self.swit = True  #  Устанавливаем флаг
-           found = True  #  Помечаем, что найдено
-           break
+         file_path_lower = dir_process_name.lower()  #  Приводим имя к нижнему регистру
+         if ".exe" in file_path_lower and "winword.exe" not in file_path_lower:  #  Если это не WinWord
+          self.swit = True  #  Устанавливаем флаг
+          self._hide_suggestions()  #  Скрываем предложения
+          self.current_word=""
+          self.suggestions = []  #  Сбрасываем предложения
+          self.hide_abbrev_tooltip()
+          found = True  #  Помечаем, что найдено
+          break
        if not found:  #  Если не найдено
          self.swit = False  #  Сбрасываем флаг
     except Exception as e:
@@ -337,12 +343,16 @@ class SmartTyper:  #Main class for smart typing with abbreviations and word sugg
 
   def _on_press(self, key):    #Handles key press events for suggestions and replacements.#
     key_str = str(key).replace("'", "").replace(" ", "")  # Преобразуем клавишу в строку
+    if self.swit:  # ← Добавьте: если .exe-окно, suppress и stop
+     self.root.after(0, lambda: self.abbrev_listener.stop() if self.abbrev_listener else None)
+     return True
     if key_str =="Key.enter":
      return True
-    threading.Thread(target=search_image, daemon=True).start()  #  Запускаем поиск изображения в потоке
     if self.swit or time.time() - self.last_key_press_time < 0.05:  #  Если флаг установлен или нажатие слишком быстрое
       self.last_key_press_time = time.time()  #  Обновляем время последнего нажатия
       return True
+    if not self.swit:
+     threading.Thread(target=search_image, daemon=True).start()
     self.last_key_press_time = time.time()  #  Обновляем время последнего нажатия
 
     if key == keyboard.Key.backspace:  #  Если нажали Backspace
@@ -400,9 +410,9 @@ class SmartTyper:  #Main class for smart typing with abbreviations and word sugg
     self.is_abbreviation_active = False  #  Сбрасываем флаг активности аббревиатуры
     self.suggestions = self._find_word_suggestions(self.current_word)  #  Ищем предложения
     if self.suggestions:  #  Если предложения есть
-      self.root.after(0, self._update_suggestions_ui)  #  Обновляем интерфейс предложений
+     self.root.after(0, self._update_suggestions_ui)  #  Обновляем интерфейс предложений
     else:
-      self._hide_suggestions()  #  Скрываем предложения
+     self._hide_suggestions()  #  Скрываем предложения
 
   def check_for_abbreviation(self):#   #Checks if current key sequence matches an abbreviation.#
     normalized = self.key_sequence  #  Нормализованная последовательность
