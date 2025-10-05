@@ -1,6 +1,7 @@
 import time,json,os,copy,psutil,threading,re,select,glob,subprocess,sys
 from PyQt5.QtWidgets import QApplication,QMainWindow,QWidget,QVBoxLayout,QLineEdit,QScrollArea,QLabel
 from PyQt5.QtCore import Qt  # Импортируем необходимые модули в одну строку
+os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = "/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project/myenv/lib/python3.12/site-packages/PyQt5/Qt5/plugins"
 
 class SaveDict:
   def __init__(self):
@@ -73,7 +74,7 @@ k.save_res(res)  # Сохраняем список результатов
 class MainWindow(QMainWindow):
   def __init__(self):
     super().__init__()  # Инициализируем базовый класс QMainWindow
-    self.setWindowTitle("PyQt5 Application")  # Устанавливаем заголовок окна
+    self.setWindowTitle("Find text")  # Устанавливаем заголовок окна
     self.setGeometry(630, 550, 500, 286)  # Устанавливаем размер (500x236) и позицию (x=630, y=540)
     # self.setStyleSheet("background-color: DimGray;")  # Устанавливаем цвет фона окна DimGray
     self.central_widget = QWidget()  # Создаем центральный виджет

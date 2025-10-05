@@ -189,9 +189,6 @@ class MyWindow(QtWidgets.QWidget):
   super(MyWindow, self).__init__(parent)
   self.mic = True
   self.mythread = MyThread(parent=self)
-  self.mythread.init_ui_signal.connect(self.QL)
-  self.mythread.start()
-  QTimer.singleShot(0, self.hide)
   self.icon1_path = "/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project/stop icon.jpeg"
   self.icon2_path = "/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project/голос.png"
   self.tray_icon = QSystemTrayIcon(QtGui.QIcon(self.icon2_path), self)
@@ -212,6 +209,9 @@ class MyWindow(QtWidgets.QWidget):
   self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
   self.setAttribute(Qt.WA_TranslucentBackground)
   self.setStyleSheet("background-color: rgba(255, 255, 255, 255); border-radius: 3px;")
+  self.mythread.init_ui_signal.connect(self.QL)
+  self.mythread.start()
+  QTimer.singleShot(0, self.hide)
  
  def QL(self):
   layout = QVBoxLayout()
