@@ -233,6 +233,12 @@ def press_keys(text):  # xte 'keyup Shift_L'
    for char in text:
     if char in ['a', 'A', 'b', 'B', 'c', 'C', 'd', 'D', 'e', 'E', 'f', 'F', 'g', 'G', 'h', 'H', 'i', 'I', 'j', 'J', 'k', 'K', 'l', 'L', 'm', 'M',
      'n', 'N', 'o', 'O', 'p', 'P', 'q', 'Q', 'r', 'R', 's', 'S', 't', 'T', 'u', 'U', 'v', 'V', 'w', 'W', 'x', 'X', 'y', 'Y', 'z', 'Z',' ', ',']:  # Диапазон от пробела до тильды (ASCII 32-126)#
+     if char ==",":
+      key_s = '''#!/bin/bash
+      xte 'keyup Shift_L'
+      exit
+      '''
+      subprocess.run(['bash', '-c', key_s])
      subprocess.call(['xdotool', 'type', '--delay', '9', char])
       # pyautogui.write(char, interval=0.01)
     else:  # Русский или смешанный вкладку ак
