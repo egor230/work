@@ -189,8 +189,8 @@ class MyWindow(QtWidgets.QWidget):
   super(MyWindow, self).__init__(parent)
   self.mic = True
   self.mythread = MyThread(parent=self)
-  self.icon1_path = "/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project/stop icon.jpeg"
-  self.icon2_path = "/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project/голос.png"
+  self.icon1_path = "stop icon.jpeg"
+  self.icon2_path = "голос.png"
   self.tray_icon = QSystemTrayIcon(QtGui.QIcon(self.icon2_path), self)
   
   menu = QMenu()
