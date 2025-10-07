@@ -13,20 +13,15 @@ def remove_duplicates(text):
   if line.strip() != prev_line:
    result_lines.append(line.strip())
    prev_line = line.strip()
- 
  return "\n".join(result_lines)
 
-def clean_text(content):
- # Если content это список, объединяем в строку
+def clean_text(content): # Если content это список, объединяем в строку
  if isinstance(content, list):
   content = " ".join(content)
- 
  # Регулярное выражение для удаления временных меток SRT
  clean_content = re.sub(r'\d+\n\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}\n.*?\n', '', content)
- 
  # Удаляем теги </c>
  clean_content = re.sub(r'</c>', '', clean_content)
- 
  # Удаляем временные метки в формате [00:00:00]
  pattern = r'\[\d{2}:\d{2}:\d{2}\]'
  clean_content = re.sub(pattern, '', clean_content)
@@ -36,68 +31,58 @@ def clean_text(content):
  
  # Удаляем дубликаты строк
  clean_content = remove_duplicates(clean_content)
- 
  return clean_content
-
-
 def format_text(text, sentences_per_paragraph=7, max_line_length=120):
- # Убираем лишние пробелы и переносы строк
+ # 1. Очистка текста и надежное разделение на предложения
+ # Убираем множественные пробелы и переносы
  text = re.sub(r'\s+', ' ', text.strip())
+ # Разделяем текст, сохраняя знаки препинания (. ! ?), чтобы
+ # гарантировать, что каждое предложение завершено
+ parts = re.split(r'([.!?])', text)
+ sentences = []
+ temp_sentence = ""
+ for part in parts:
+  if part.strip():   # Если это знак препинания, завершаем текущее предложение
+   if part.strip() in ['.', '!', '?']:
+    temp_sentence += part.strip()
+    sentences.append(temp_sentence.strip())
+    temp_sentence = ""
+   # Если это текст, добавляем его. Добавляем пробел перед ним,
+   # если это не начало временного предложения.
+   else:
+    if temp_sentence and not temp_sentence.endswith(' '):
+     temp_sentence += ' '
+    temp_sentence += part.strip()
  
- # Разбиваем текст на предложения
- sentences = re.split(r'(?<=[.!?])\s+', text)
+ # Добавляем оставшуюся часть, если она есть
+ if temp_sentence.strip():
+  sentences.append(temp_sentence.strip())
  
- # Фильтруем пустые предложения и очищаем от лишних знаков
- clean_sentences = []
- for sentence in sentences:
-  sentence = sentence.strip()
-  if sentence:
-   # Убираем лишние знаки препинания в конце
-   sentence = re.sub(r'[.!?]+$', '', sentence)
-   # Добавляем только одну точку в конце
-   sentence = sentence.strip() + '.'
-   clean_sentences.append(sentence)
- 
- if not clean_sentences:
-  return ""
- 
- # Группируем предложения в абзацы
- paragraphs = []
- for i in range(0, len(clean_sentences), sentences_per_paragraph):
-  paragraph_sentences = clean_sentences[i:i + sentences_per_paragraph]
-  # Объединяем предложения в абзац
-  paragraph = ' '.join(paragraph_sentences)
-  
-  # Разбиваем длинные строки на более короткие
-  if len(paragraph) > max_line_length:
-   words = paragraph.split()
-   lines = []
-   current_line = ""
-   
-   for word in words:
-    if len(current_line + " " + word) <= max_line_length:
-     if current_line:
-      current_line += " " + word
-     else:
-      current_line = word
-    else:
-     if current_line:
-      lines.append(current_line)
-     current_line = word
-   
-   if current_line:
-    lines.append(current_line)
-   
-   paragraph = '\n'.join(lines)
-  else:
-   # Добавляем точку в конце абзаца, если её нет
-   if paragraph and not paragraph.endswith('.'):
-    paragraph += '.'
-  
-  paragraphs.append(paragraph)
- 
- # Объединяем абзацы с двумя переносами строк между ними
- return '\n\n'.join(paragraphs)
+ if not sentences:
+  return '' # 2. Группируем в абзацы и форматируем линии (перенос только по предложениям)
+ paragraphs_output = []
+ for i in range(0, len(sentences), sentences_per_paragraph):
+  # Группируем предложения для текущего абзаца
+  paragraph_sentences = sentences[i:i + sentences_per_paragraph]
+  lines = []
+  current_line = ''
+  for sent in paragraph_sentences: # Проверяем, поместится ли предложение в текущую строку
+   # Добавляем пробел только если строка current_line не пуста
+   new_line = current_line + (' ' if current_line else '') + sent
+   if len(new_line) <= max_line_length:
+    # Предложение помещается, обновляем текущую строку
+    current_line = new_line
+   else:
+    # 1. Завершаем предыдущую строку
+    if current_line:
+     lines.append(current_line)
+    # 2. Текущее предложение начинает новую строку.
+    current_line = sent
+  # Добавляем последнюю незавершенную строку абзаца
+  if current_line:
+   lines.append(current_line)
+  paragraphs_output.append('\n'.join(lines))
+ return '\n\n'.join(paragraphs_output)
 
 # Получаем текст из буфера обмена
 clipboard_text = str(pyperclip.paste()).strip()
