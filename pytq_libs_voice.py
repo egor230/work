@@ -231,28 +231,30 @@ def press_keys(text):  # xte 'keyup Shift_L'
    print(text)
    # text="lunix mint"
    for char in text:
-    if char in ['a', 'A', 'b', 'B', 'c', 'C', 'd', 'D', 'e', 'E', 'f', 'F', 'g', 'G', 'h', 'H', 'i', 'I', 'j', 'J', 'k', 'K', 'l', 'L', 'm', 'M',
-     'n', 'N', 'o', 'O', 'p', 'P', 'q', 'Q', 'r', 'R', 's', 'S', 't', 'T', 'u', 'U', 'v', 'V', 'w', 'W', 'x', 'X', 'y', 'Y', 'z', 'Z',' ', ',']:  # Диапазон от пробела до тильды (ASCII 32-126)#
-     if char ==",":
-      key_s = '''#!/bin/bash
-      xte 'keyup Shift_L'
-      exit
-      '''
-      subprocess.run(['bash', '-c', key_s])
-     subprocess.call(['xdotool', 'type', '--delay', '9', char])
-      # pyautogui.write(char, interval=0.01)
-    else:  # Русский или смешанный вкладку ак
-     if char.isupper():  # Если символ заглавный
-          keyboard.press(char.upper())  # Нажимаем строчную версию символа
-          keyboard.release(char.upper())
-     else:
-        keyboard.press(char)
-        keyboard.release(char)
-        time.sleep(0.03)  # Уменьшение задержки
-   #
+    if char ==",":
+     key_s = '''#!/bin/bash
+     xte 'keyup Shift_R'
+     sleep 0.1
+     xte 'keyup Shift_L'
+     exit
+     '''
+     # print(char)
+     subprocess.run(['bash', '-c', key_s])
+    if char.isupper():  # Если символ заглавный
+      keyboard.press(char.upper())  # Нажимаем строчную версию символа
+      keyboard.release(char.upper())
+    else:
+      keyboard.press(char)
+      keyboard.release(char)
+      time.sleep(0.03)  # Уменьшение задержки
+     # keyboard.release(Key.shift)  # Отпустить Shift
   except Exception as ex1:
     print(ex1)
     return
+  # if char in ['a', 'A', 'b', 'B', 'c', 'C', 'd', 'D', 'e', 'E', 'f', 'F', 'g', 'G', 'h', 'H', 'i', 'I', 'j', 'J', 'k', 'K', 'l', 'L', 'm', 'M',
+  #  'n', 'N', 'o', 'O', 'p', 'P', 'q', 'Q', 'r', 'R', 's', 'S', 't', 'T', 'u', 'U', 'v', 'V', 'w', 'W', 'x', 'X', 'y', 'Y', 'z', 'Z', ',' ]:  # Диапазон от пробела до тильды (ASCII 32-126)#
+
+
 def process_text(previous_message1, k):
   text = previous_message1 + str(" ")
   text=text[0].lower()+ text[1:]

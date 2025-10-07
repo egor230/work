@@ -92,16 +92,18 @@ class MainWindow(QMainWindow):
     self.entry.textChanged.connect(self.on_text_changed)  # Подключаем обработчик изменения текста
 
   def on_text_changed(self, text):
-    del_labels()  # Очищаем предыдущие метки
-    search_text = text.lower()  # Приводим введенный текст к нижнему регистру
-    matching_indices = [i for i, item in enumerate(k.return_res()) if search_text in item.lower()]  # Ищем совпадения в списке результатов
-    new_labels = []  # Создаем список для новых меток
-    for idx in matching_indices:  # Перебираем индексы совпадающих результатов
-      label_text = k.return_res()[idx]  # Получаем текст результата
-      label = ClickableLabel(label_text, idx, self.scroll_widget)  # Создаем кликабельную метку
-      self.scroll_layout.addWidget(label)  # Добавляем метку в компоновку области прокрутки
-      new_labels.append(label)  # Добавляем метку в список
-    k.save_labels(new_labels)  # Сохраняем новый список меток
+   if text == "":
+    return
+   del_labels()  # Очищаем предыдущие метки
+   search_text = text.lower()  # Приводим введенный текст к нижнему регистру
+   matching_indices = [i for i, item in enumerate(k.return_res()) if search_text in item.lower()]  # Ищем совпадения в списке результатов
+   new_labels = []  # Создаем список для новых меток
+   for idx in matching_indices:  # Перебираем индексы совпадающих результатов
+     label_text = k.return_res()[idx]  # Получаем текст результата
+     label = ClickableLabel(label_text, idx, self.scroll_widget)  # Создаем кликабельную метку
+     self.scroll_layout.addWidget(label)  # Добавляем метку в компоновку области прокрутки
+     new_labels.append(label)  # Добавляем метку в список
+   k.save_labels(new_labels)  # Сохраняем новый список меток
 
 if __name__ == "__main__":
   app = QApplication(sys.argv)  # Создаем приложение PyQt5
