@@ -55,80 +55,15 @@ model_path = cache_dir / "whisper" / f"{model_name}.pt"
 
 # Пример использования:
 
-def convert_whisper_to_ct2(model_name: str, cache_dir: Path, converted_dir: Path, compute_type: str = "int8") -> bool:
- """
- Конвертирует существующую .pt модель Whisper в формат CTranslate2 для faster-whisper.
-
- Args:
-     model_name (str): Имя модели, например "large-v3".
-     cache_dir (Path): Путь к кэшу, где лежит модель (например, Path.home() / ".cache" / "whisper").
-     converted_dir (Path): Путь к новой папке для конвертированной модели.
-     compute_type (str): Тип квантизации ("int8", "int16", "float16" и т.д.) для скорости и экономии памяти.
-
- Returns:
-     bool: True, если конвертация успешна, иначе False.
-
- Примечание: Функция предполагает, что модель сохранена в папке cache_dir / "whisper" / model_name /
- с файлами вроде pytorch_model.bin, config.json. Если model_path указан как .pt файл, укажите
- original_dir как Path(model_path).parent.
- """
- # Формируем путь к папке с оригинальной моделью (не к файлу .pt, а к dir)
- original_dir = cache_dir / "whisper" / model_name
- 
- # Проверяем, существует ли оригинальная модель
- if not original_dir.exists():
-  print(f"Ошибка: Папка с моделью не найдена: {original_dir}")
-  return False
- 
- pytorch_bin = original_dir / "pytorch_model.bin"
- if not pytorch_bin.exists():
-  # Если у вас .pt файл, возможно, это он — переименуйте или скорректируйте
-  pt_file = original_dir / f"{model_name}.pt"
-  if pt_file.exists():
-   print(f"Найден .pt файл: {pt_file}. Переименовываем в pytorch_model.bin для совместимости.")
-   pt_file.rename(pytorch_bin)
-  else:
-   print(f"Ошибка: Не найден pytorch_model.bin или {model_name}.pt в {original_dir}")
-   return False
- 
- # Проверяем, существует ли уже конвертированная папка
- if converted_dir.exists() and any(converted_dir.iterdir()):
-  print(f"Конвертированная модель уже существует: {converted_dir}")
-  return True
- 
- # Конвертируем
- print(f"Конвертирую модель из {original_dir} в {converted_dir}...")
- cmd = [
-  "ct2-transformers-converter",
-  "--model", str(original_dir),
-  "--output_dir", str(converted_dir),
-  "--copy_files", "tokenizer.json,preprocessor_config.json,added_tokens.json,special_tokens_map.json",
-  "--quantization", compute_type
- ]
- try:
-  subprocess.check_call(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-  print(f"Конвертация завершена! Папка: {converted_dir}")
-  return True
- except subprocess.CalledProcessError as e:
-  print(f"Ошибка конвертации: {e}")
-  return False
-
-
-# cache_dir = Path.home() / ".cache"  # Или твой cache_dir
-# model_name = "large-v3"
-# converted_dir = Path("/path/to/NEW/FOLDER/faster_whisper_large_v3_ct2")
-# success = convert_whisper_to_ct2(model_name, cache_dir, converted_dir)
-# if success:
-#     model = WhisperModel(str(converted_dir), device="cpu", compute_type="int8")
+# Установка параметров для оптимизации CPU
+os.environ["OMP_NUM_THREADS"] = "8"
+os.environ["MKL_NUM_THREADS"] = "8"
 
 if model_path.exists():  # Загрузка модели (Whisper сам проверит кэш)
-  # Установка параметров для оптимизации CPU
-  os.environ["OMP_NUM_THREADS"] = "8"
-  os.environ["MKL_NUM_THREADS"] = "8"
   t=time.time()
   model = whisper.load_model(model_name, device="cpu")
 
-  # model = WhisperModel(str(model_path), device="cpu")
+#  model = WhisperModel(str("/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project/cache/whisper/whisper-large-v3"), device="cpu")
   print(time.time()-t)
   subprocess.run(["pactl", "set-source-mute", "54", "0"], check=True)  # вкл микрофон.
 else:

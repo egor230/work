@@ -240,20 +240,20 @@ def press_keys(text):  # xte 'keyup Shift_L'
      '''
      # print(char)
      subprocess.run(['bash', '-c', key_s])
+    if  char in ['a', 'A', 'b', 'B', 'c', 'C', 'd', 'D', 'e', 'E', 'f', 'F', 'g', 'G', 'h', 'H', 'i', 'I', 'j', 'J', 'k', 'K', 'l', 'L', 'm', 'M',
+     'n', 'N', 'o', 'O', 'p', 'P', 'q', 'Q', 'r', 'R', 's', 'S', 't', 'T', 'u', 'U', 'v', 'V', 'w', 'W', 'x', 'X', 'y', 'Y', 'z', 'Z']:  # Диапазон от пробела до тильды (ASCII 32-126)#
+      subprocess.call(['xdotool', 'type', '--delay', '3', char])
+    else:
+     keyboard.press(char)
+     keyboard.release(char)
     if char.isupper():  # Если символ заглавный
       keyboard.press(char.upper())  # Нажимаем строчную версию символа
       keyboard.release(char.upper())
-    else:
-      keyboard.press(char)
-      keyboard.release(char)
-      time.sleep(0.03)  # Уменьшение задержки
-     # keyboard.release(Key.shift)  # Отпустить Shift
+    time.sleep(0.04)  # Уменьшение задержки
+    keyboard.release(Key.shift)  # Отпустить Shift
   except Exception as ex1:
     print(ex1)
     return
-  # if char in ['a', 'A', 'b', 'B', 'c', 'C', 'd', 'D', 'e', 'E', 'f', 'F', 'g', 'G', 'h', 'H', 'i', 'I', 'j', 'J', 'k', 'K', 'l', 'L', 'm', 'M',
-  #  'n', 'N', 'o', 'O', 'p', 'P', 'q', 'Q', 'r', 'R', 's', 'S', 't', 'T', 'u', 'U', 'v', 'V', 'w', 'W', 'x', 'X', 'y', 'Y', 'z', 'Z', ',' ]:  # Диапазон от пробела до тильды (ASCII 32-126)#
-
 
 def process_text(previous_message1, k):
   text = previous_message1 + str(" ")

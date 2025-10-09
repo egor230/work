@@ -204,7 +204,7 @@ class save_key:
     self.flag = value
   
   def update_dict(self):
-   data = "/mnt/807EB5FA7EB5E954/Program Files/list for replacements.json"  # файл настроек.
+   data = "/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/work/list for replacements.json"  # файл настроек.
    if os.path.exists(data):  # есть ли этот файл.
     with open(data, encoding="cp1251") as json_file:  # загрузка настроек из файла.
      self.res = json.load(json_file)  # проходимся по каждому элементу словаря

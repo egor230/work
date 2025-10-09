@@ -61,46 +61,49 @@ def simplify_html(html, base_url="https://dzen.ru"):
   show_list_id = '''#!/bin/bash
     sleep 1.9
     copyq select 0  '''
-  subprocess.run(['bash', '-c', show_list_id])
+  # subprocess.run(['bash', '-c', show_list_id])
   if process.returncode == 0:
    print("Полный текст статьи успешно скопирован в буфер обмена.")
+   return title_element.get_text(strip=True)
   else:
    print(f"Ошибка xclip: {stderr.decode('utf-8')}")
-   process_text = subprocess.Popen(['xclip', '-selection', 'clipboard'], stdin=subprocess.PIPE, stderr=subprocess.PIPE)
-   stdout_text, stderr_text = process_text.communicate(input=html_content.encode('utf-8'), timeout=10)
-   if process_text.returncode == 0:
-    print("Текст успешно скопирован как обычный текст.")
-   else:
-    print(f"Ошибка при копировании как текст: {stderr_text.decode('utf-8')}")
-  
+   # process_text = subprocess.Popen(['xclip', '-selection', 'clipboard'], stdin=subprocess.PIPE, stderr=subprocess.PIPE)
+   # stdout_text, stderr_text = process_text.communicate(input=html_content.encode('utf-8'), timeout=10)
+   # if process_text.returncode == 0:
+   #  print("Текст успешно скопирован как обычный текст.")
+   # else:
+   #  print(f"Ошибка при копировании как текст: {stderr_text.decode('utf-8')}")
+ 
   return title_element.get_text(strip=True)
  except Exception as e:
   print(f"Неожиданная ошибка при копировании: {e}")
 
 def main():
- option = get_option()
- driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=option)
- # url = "https://dzen.ru/a/aDlCzRvCfwxp9WIR"
- url = str(pyperclip.paste())
- driver.get(url)
- # input()
- # html_content = driver.page_source
- # with open('page_source.html', 'w', encoding='utf-8') as file:
- #   file.write(html_content)
-
+ 
  try:# Вызываем функцию прокрутки
-  res={}
+  option = get_option()
+  driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=option)
+  url = "https://dzen.ru/a/aDlCzRvCfwxp9WIR"
+   # url = str(pyperclip.paste())
+  driver.get(url)
+  # response = requests.get(url)
+  # response.raise_for_status()
+  #
+  # source = response.text
+
+  # Использование BeautifulSoup для парсинга
+  res = {}  # Ваш словарь для результатов
   source = driver.page_source
   res[simplify_html(source)] =url
-  print(res)
+  # print(res)
   # time.sleep(3)  # Дополнительное время для загрузки контента
-
-  copy_and_rename_file(res)
-  open_documents_from_dict(res, driver)
+  input()
+  # copy_and_rename_file(res)
+  # open_documents_from_dict(res, driver)
  except Exception as e:
   print(f"Произошла ошибка: {str(e)}")
- finally:
-  driver.quit()
+ # finally:
+  # driver.quit()
 
 
 if __name__ == "__main__":
