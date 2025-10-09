@@ -6,7 +6,7 @@ import os, subprocess, torch, shutil, gigaam, tempfile, torchaudio, time
 
 # Настройка директории кэша
 
-cache_dir = Path("/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project/cache")
+cache_dir = Path("/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache")
 # Отключаем предупреждения ALSA и JACK
 os.environ["PYAUDIO_ALSA_WARN"] = "0"
 os.environ["ALSA_LOG_LEVEL"] = "0"  # Подавляем логи ALSA

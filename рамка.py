@@ -1,7 +1,7 @@
 import json, os, pyautogui, subprocess, sys, time
 from datetime import datetime
 from PIL import ImageGrab
-os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = "/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project/myenv/lib/python3.12/site-packages/PyQt5/Qt5/plugins"
+os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/myenv/lib/python3.12/site-packages/PyQt5/Qt5/plugins"
 from PyQt5.QtCore import Qt, QPoint, QRect
 from PyQt5.QtGui import QPainter, QPen, QMouseEvent
 from PyQt5.QtWidgets import QApplication, QMainWindow
@@ -20,7 +20,7 @@ def screenshot(left, top, width, height):  # print(left, top, width, height, end
   current_date = now.strftime("%Y-%m-%d")
   current_time = now.strftime("%H-%M-%S")
   file_name_path = format("{0}Screenshot {1} {2}.png".format(
-    "/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project/Screenshots/",
+    "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/Screenshots/",
     current_time,
     current_date))
 
