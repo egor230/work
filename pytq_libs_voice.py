@@ -155,7 +155,7 @@ class save_key:
     self.flag = value
   
   def update_dict(self):
-   data = "/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/work/list for replacements.json"  # файл настроек.
+   data = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/list for replacements.json"  # файл настроек.
    if os.path.exists(data):  # есть ли этот файл.
     with open(data, encoding="cp1251") as json_file:  # загрузка настроек из файла.
      self.res = json.load(json_file)  # проходимся по каждому элементу словаря
@@ -312,15 +312,16 @@ def get_option():
   option.add_argument("--disable-gpu")
   option.add_argument('--disable-infobars')
   option.add_argument('--disable-web-security')
-  option.add_argument("--disk-cache-size=0")
-  option.add_argument("--media-cache-size=0")
-  option.add_argument("--disable-images")
-  option.add_argument("--automatic-wait-for-preview")
+  # option.add_argument("--disk-cache-size=0")
+  # option.add_argument("--media-cache-size=0")
+  # option.add_argument("--disable-images")
+  # option.add_argument("--automatic-wait-for-preview")
   option.add_argument("--enable-features=WebRtcHideLocalIpsWithMdns")
-  option.add_argument("--disable-extensions")
-  option.add_argument("--disable-autofill")
+  # option.add_argument("--disable-extensions")
+  # option.add_argument("--disable-autofill")
   option.add_argument("--disable-background-timer-throttling")  # Отключение ограничения фоновых таймеров
   option.add_argument("--disable-background-networking")  # Отключение фоновой сетевой активности
+  # option.add_argument('--user-data-dir=/home/egor/.config/google-chrome')
   option.add_argument('--user-data-dir=/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project/google-chrome')
   # option.add_argument("--disable-notifications")
   option.add_experimental_option("useAutomationExtension", False)

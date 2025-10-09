@@ -1,7 +1,7 @@
 import time,json,os,copy,psutil,threading,re,select,glob,subprocess,sys
 from PyQt5.QtWidgets import QApplication,QMainWindow,QWidget,QVBoxLayout,QLineEdit,QScrollArea,QLabel
 from PyQt5.QtCore import Qt  # Импортируем необходимые модули в одну строку
-os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = "/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project/myenv/lib/python3.12/site-packages/PyQt5/Qt5/plugins"
+os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/myenv/lib/python3.12/site-packages/PyQt5/Qt5/plugins"
 
 class SaveDict:
   def __init__(self):

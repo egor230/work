@@ -2,7 +2,7 @@ from pytq_libs_voice import *
 from PyQt5.QtWidgets import QSystemTrayIcon, QAction, QMenu, QDialog, QLabel, QMenu, QAction
 from pynput import keyboard
 from pynput.keyboard import Controller as Contr1
-os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = "/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project/myenv/lib/python3.12/site-packages/PyQt5/Qt5/plugins"
+os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/myenv/lib/python3.12/site-packages/PyQt5/Qt5/plugins"
 subprocess.run(["pactl", "set-source-mute", "54", "0"], check=True)  # вкл микрофон.
 # subprocess.run(['pactl', 'set-source-volume', "54", '65000'])
 
@@ -91,11 +91,15 @@ class MyThread(QtCore.QThread):
  def start_selenium(self):
   try:
    option = get_option()
-   service = Service("/usr/local/bin/chromedriver")  # Указываем путь к chromedriver (если не в PATH, укажите явно)
+   # service = Service("/usr/local/bin/chromedriver")  # Указываем путь к chromedriver (если не в PATH, укажите явно)
    # self.driver = webdriver.Chrome(service=service, options=option) # Инициализация драйвера
    self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=option)
    self.driver.get("https://alice.yandex.ru/chat/01938823-14ea-4000-bd7a-3cca57830d6a/")
    self.url = self.driver.current_url
+   self.driver.refresh()
+   html_content = self.driver.page_source
+   # with open('page_source.txt', 'w', encoding='utf-8') as file:
+   #   file.write(html_content)
    self.driver.implicitly_wait(1)
    selenium_thread = threading.Thread(target=self.selenium_worker, daemon=True)
    selenium_thread.start()
