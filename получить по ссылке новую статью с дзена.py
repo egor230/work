@@ -61,7 +61,7 @@ def simplify_html(html, base_url="https://dzen.ru"):
   show_list_id = '''#!/bin/bash
     sleep 1.9
     copyq select 0  '''
-  # subprocess.run(['bash', '-c', show_list_id])
+  subprocess.run(['bash', '-c', show_list_id])
   if process.returncode == 0:
    print("Полный текст статьи успешно скопирован в буфер обмена.")
    return title_element.get_text(strip=True)
@@ -83,23 +83,17 @@ def main():
  try:# Вызываем функцию прокрутки
   option = get_option()
   driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=option)
-  url = "https://dzen.ru/a/aDlCzRvCfwxp9WIR"
-   # url = str(pyperclip.paste())
+  url = "https://dzen.ru/a/aIXI1UqpY3gfXc-D"
+  # url = str(pyperclip.paste())
   driver.get(url)
-  # response = requests.get(url)
-  # response.raise_for_status()
-  #
-  # source = response.text
-
   # Использование BeautifulSoup для парсинга
   res = {}  # Ваш словарь для результатов
   source = driver.page_source
   res[simplify_html(source)] =url
   # print(res)
   # time.sleep(3)  # Дополнительное время для загрузки контента
-  input()
-  # copy_and_rename_file(res)
-  # open_documents_from_dict(res, driver)
+  copy_and_rename_file(res)
+  open_documents_from_dict(res, driver)
  except Exception as e:
   print(f"Произошла ошибка: {str(e)}")
  # finally:

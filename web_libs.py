@@ -1,6 +1,6 @@
-from libs_voice import *
 from pathlib import Path
-import pyperclip
+import pyperclip, requests
+from libs_voice import *
 backup_script_path = f'''#!/bin/bash
 current_user=$(whoami);
 echo $current_user
@@ -221,6 +221,7 @@ def run_wine_command(name):
   # Формируем команду для запуска
   word = '''#!/bin/bash
      wine \"{0}\"
+     # libreoffice --writer %U \"{0}\"
      exit;
      '''.format(name)
  
@@ -233,13 +234,13 @@ def run_wine_command(name):
   # Ожидание завершения потока
   time.sleep(3)
  
-  # Проверка активного окна
-  while True:
-   time.sleep(0.4)
-   if check_current_active_window("WINWORD"):
-    time.sleep(3)
-    break
-  return thread
+  # # Проверка активного окна
+  # while True:
+  #  time.sleep(0.4)
+  #  if check_current_active_window("WINWORD"):
+  #   time.sleep(3)
+  #   break
+  # return thread
 
 mouse_move_and_click = '''#!/bin/bash
  # Координаты для перемещения мыши и клика
@@ -360,7 +361,6 @@ def copy_and_rename_file(res, source_file="/home/egor/Шаблоны/doc.doc", t
   
    # Проверяем, существует ли исходный файл
    if os.path.exists(source_file):
-    print(f"Исходный файл '{source_file}' найден.")
    
     # Проходим по всем ключам словаря (названиям статей)
     for title in res.keys():
@@ -373,6 +373,7 @@ def copy_and_rename_file(res, source_file="/home/egor/Шаблоны/doc.doc", t
     
      # Формируем новое имя файла (добавляем .doc если его нет)
      new_filename = f"{clean_title}.doc"
+     print(f"Исходный файл '{new_filename}' найден.")
      destination_path = os.path.join(target_folder, new_filename)
     
      try:
@@ -397,12 +398,12 @@ def run_wine_command(name):
   # Формируем полный путь к файлу
   name = os.path.join(os.getcwd(), str(name))
 
-  # Формируем команду для запуска
   word = '''#!/bin/bash
-    wine \"{0}\"
-    exit;  
-    '''.format(name)
-
+     #wine \"{0}\"
+     libreoffice --writer "{0}"
+     exit;
+     '''.format(name)
+  print(1110)
   # Функция для выполнения команды
   run_command = lambda: subprocess.call(['bash', '-c', word])
 
@@ -412,12 +413,12 @@ def run_wine_command(name):
   # Ожидание завершения потока
   time.sleep(3)
 
-  # Проверка активного окна
-  while True:
-    time.sleep(0.4)
-    if check_current_active_window("WINWORD"):
-      time.sleep(3)
-      break
+  # # Проверка активного окна
+  # while True:
+  #   time.sleep(0.4)
+  #   if check_current_active_window("WINWORD"):
+  #     time.sleep(3)
+  #     break
   return thread
 
 def extract_content(html):
