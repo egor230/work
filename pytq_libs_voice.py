@@ -22,7 +22,6 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
-
 from pynput import keyboard
 from pynput.keyboard import Controller as Contr1, Key
 
@@ -49,7 +48,6 @@ def is_text_stable(driver, timeout=5):
    break
  message, counts = get_user_messages(driver)
  return message, counts
-
  
 def get_last_three_messages(driver, class_name):
  messages = driver.find_elements(By.CLASS_NAME, class_name)  # Найти все элементы с заданным классом
@@ -69,7 +67,6 @@ def get_element_attributes(element):  # Получает все атрибуты
             items[item.name] = item.value;
         }
         return items;    """, element) # return attributes
-
 
 # Словарь клавиш из оригинального скрипта
 KEYS = {  "LBUTTON": 0x01, "RBUTTON": 0x02, "CANCEL": 0x03, "MBUTTON": 0x04, "XBUTTON1": 0x05,
@@ -244,11 +241,12 @@ def press_keys(text):  # xte 'keyup Shift_L'
      'n', 'N', 'o', 'O', 'p', 'P', 'q', 'Q', 'r', 'R', 's', 'S', 't', 'T', 'u', 'U', 'v', 'V', 'w', 'W', 'x', 'X', 'y', 'Y', 'z', 'Z']:  # Диапазон от пробела до тильды (ASCII 32-126)#
       subprocess.call(['xdotool', 'type', '--delay', '3', char])
     else:
-     keyboard.press(char)
-     keyboard.release(char)
-    if char.isupper():  # Если символ заглавный
+     if char.isupper():  # Если символ заглавный
       keyboard.press(char.upper())  # Нажимаем строчную версию символа
       keyboard.release(char.upper())
+     else:
+      keyboard.press(char)
+      keyboard.release(char)
     time.sleep(0.04)  # Уменьшение задержки
     keyboard.release(Key.shift)  # Отпустить Shift
   except Exception as ex1:
