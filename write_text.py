@@ -1,9 +1,10 @@
-import sys, os, subprocess, json, queue, wave, io, threading
+import sys, os, subprocess, json, queue, wave, io, threading, re
 from scipy.io.wavfile import write
 os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = "myenv/lib/python3.12/site-packages/PyQt5/Qt5/plugins"
 from PyQt5 import QtCore, QtWidgets, QtGui  # Импорт необходимых модулей из PyQt5
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QSystemTrayIcon, QAction, QMenu, QWidget, QDialog, QLabel, QSystemTrayIcon, QMenu, QAction, QVBoxLayout, QPushButton, QApplication
+from PyQt5.QtCore import QTimer
 import sounddevice as sd
 import numpy as np
 from pathlib import Path
