@@ -49,7 +49,8 @@ threading.Thread(target=run_script, daemon=True).start()
 print("Скрипт запущен заново.")
 
 record = threading.Thread(target=record_audio)
-
+def write_audio():
+ pass
 def update_label(root, label):
  def record_and_process():
   try:
@@ -58,33 +59,31 @@ def update_label(root, label):
    label.config(text="Говорите...")
    root.deiconify()
    root.update()
-   # Новый поток для записи каждый раз!
-   t = threading.Thread(target=record_audio)
-   t.start()
-   t.join()
-   label.config(text="Стоп")
-   root.update()
-   # Проверка звука
-   if is_speech():
+   t1 = threading.Thread(target=record_audio, args=())# субтитры сделал DimaTorzokсубтитры подогнал «Симон»я присядь, Глэшно горячая пыть горишься
+   t1.start()
+   t1.join()
+   t1 = threading.Thread(target=record_audio, args=("temp1.wav",))
+   if is_speech():   # Проверка звука
+    t1.start()# второй
+    label.config(text="продолжай")
+    root.update()
     message = audio(model)
     if message:
-     message = repeat(message)
-     # Автоподгонка ширины окна
-     win_w = min(len(message)*10+10, 600)
-     root.geometry(f"{win_w}x20+700+1025")
-     label.config(text=message)
-     root.update()
+     message = repeat(message) # Автоподгонка ширины окна
      # Отдельный поток для эмуляции ввода
-     threading.Thread(target=press_keys, args=(message,)).start()
-     time.sleep(2)
-    else:
+     threading.Thread(target=press_keys, args=(message,), daemon=True).start()
+     t1.join()
+     # Проверка звука
+     if is_speech("temp1.wav"):
+      message = audio(model, "temp1.wav")
+      if message:
+       message = repeat(message)    # Автоподгонка ширины окна
+      # Отдельный поток для эмуляции ввода
+       threading.Thread(target=press_keys, args=(message,), daemon=True).start()
+   else:
      label.config(text="Речь не распознана")
      root.update()
      time.sleep(2)
-   else:
-    label.config(text="Речь не обнаружена")
-    root.update()
-    time.sleep(3)
 
    root.withdraw()
    root.after(1000, lambda: update_label(root, label))

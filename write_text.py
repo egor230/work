@@ -143,20 +143,18 @@ def press_keys(text):  # xte 'keyup Shift_L'
     print(ex1)
     return
 
-def record_audio(duration=8, fs=44100):  # Запись аудио с микрофона
+def record_audio(audio_file = "temp.wav", duration=10, fs=44100):  # Запись аудио с микрофона
  print("star...")
  recording = sd.rec(int(duration * fs), samplerate=fs, channels=1)
  sd.wait()
- audio_file = "temp.wav"
  # Преобразуем float32 → int16
  recording_int16 = np.int16(recording * 32767)
  write(audio_file, fs, recording_int16)
  print(f"Запись завершена, файл сохранён как {audio_file}")
 
-def audio(model):  # Путь к аудиофайлу
- try:
-  audio_file = "temp.wav"  # Выполняем транскрипцию аудио
-  segments, info = model.transcribe(audio_file, beam_size=4, language="ru")
+def audio(model, audio_file = "temp.wav"):  # Путь к аудиофайлу
+ try:  # Выполняем транскрипцию аудио
+  segments, info = model.transcribe(audio_file, beam_size=10, language="ru")
   message_parts = []
   # Собираем текст из всех сегментов
   for segment in segments:
@@ -198,11 +196,13 @@ def is_speech(audio_data="temp.wav", threshold=0.0308, min_duration=4.5, sample_
    if a.size == 0: print("Ошибка: аудиоданные пусты"); return False
    sr = sample_rate
   if a.size == 0: print("Ошибка: аудиоданные пусты или не загружены"); return False
-  dur = len(a) / sr
-  if dur < min_duration: print(f"Ошибка: длительность аудио ({dur:.2f} сек) меньше минимальной ({min_duration} сек)"); return False
+
   amp = np.mean(np.abs(a));
-  print(f"Средняя амплитуда: {amp:.6f}")
-  return amp > threshold or (print(f"Амплитуда ({amp:.6f}) ниже порога ({threshold})") or False)
+  if amp > threshold:
+   print(f"Средняя амплитуда: {amp:.6f}")
+   return True
+  else:
+   return  False
  except Exception as ex:
   print(f"Ошибка при обработке аудио: {ex}");
   return False
