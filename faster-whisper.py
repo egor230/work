@@ -52,51 +52,51 @@ def write_audio():
 def update_label(root, label):
  def record_and_process():
   try:
-   # Показ окна с начальной надписью
-   root.geometry("100x20+700+1025")
-   label.config(text="Говорите...")
-   root.deiconify()
-   root.update()
-   record.start()
-   record.join()
-   t1 = threading.Thread(target=record_audio, args=("temp1.wav",))
-   if is_speech():   # Проверка звука
-    t1.start()# второй
-    label.config(text="продолжай")
-    root.update()
-    message = audio(model)
+   if not get_mute_status():
+    root.withdraw()
    else:
-    label.config(text="Речь не распознана")
+    # Показ окна с начальной надписью
+    root.geometry("100x20+700+1025")
+    label.config(text="Говорите...")
+    root.deiconify()
     root.update()
-    time.sleep(2)
-   if message:
-     message = repeat(message) # Автоподгонка ширины окна
-     message=message +str(" ")  # Отдельный поток для эмуляции ввода
-     threading.Thread(target=press_keys, args=(message,), daemon=True).start()
-     t1.join()
-     # Проверка звука
-     if is_speech("temp1.wav"):
-      message = audio(model, "temp1.wav")
-      if message:
-       message = repeat(message)    # Автоподгонка ширины окна
-       message=message +str(" ")   # Отдельный поток для эмуляции ввода
-       threading.Thread(target=press_keys, args=(message,), daemon=True).start()
+    record.start()
+    record.join()
+    t1 = threading.Thread(target=record_audio, args=("temp1.wav",))
+    if is_speech():   # Проверка звука
+     t1.start()# второй
+     label.config(text="продолжай")
+     root.update()
+     message = audio(model)
+    else:
+     label.config(text="Речь не распознана")
+     root.update()
+     time.sleep(2)
+    if message:
+      message = repeat(message) # Автоподгонка ширины окна
+      message=message +str(" ")  # Отдельный поток для эмуляции ввода
+      threading.Thread(target=press_keys, args=(message,), daemon=True).start()
+      t1.join()
+      # Проверка звука
+      if is_speech("temp1.wav"):
+       message = audio(model, "temp1.wav")
+       if message:
+        message = repeat(message)    # Автоподгонка ширины окна
+        message=message +str(" ")   # Отдельный поток для эмуляции ввода
+        threading.Thread(target=press_keys, args=(message,), daemon=True).start()
+       else:
+        pass
       else:
-       pass
-     else:
-       pass
-   else:
-     pass
-   root.withdraw()
+        pass
+    else:
+      pass
+    root.withdraw()
    root.after(1000, lambda: update_label(root, label))
 
   except Exception as e:
    print(f"Ошибка: {e}")
-   label.config(text="Ошибка")
-   root.update()
-   time.sleep(2)
-   root.withdraw()
    root.after(1000, lambda: update_label(root, label))
+   pass
 
  # Проверка статуса микрофона
  if get_mute_status():
