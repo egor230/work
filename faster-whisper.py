@@ -14,29 +14,21 @@ model_path = os.path.join(model_dir, snapshot)# Путь к модели и пр
 if not os.path.exists(os.path.join(model_path, "model.bin")):
   print(f"Ошибка: Файл model.bin не найден в {model_path}")
   sys.exit(1)
-try: # Загрузка модели
-  model = WhisperModel(model_path, device="cpu", compute_type="int8")
-  print("Модель загружена успешно.")
-except Exception as e:
-  print(f"Ошибка загрузки модели: {e}")
-  sys.exit(1)
 script_path = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/off mic.py"
 script_dir = os.path.dirname(script_path)
 script_name = os.path.basename(script_path)
-
 # Команда для поиска PID по имени скрипта
 check_cmd = f"pgrep -f '{script_name}'"
 result = subprocess.run(check_cmd, shell=True, capture_output=True, text=True)
-
 # Если процесс найден — убиваем все экземпляры
 if result.returncode == 0 and result.stdout.strip():
   pids = result.stdout.strip().split()
   for pid in pids:
-    try:
-      subprocess.run(["kill", "-9", pid], check=True)
-      print(f"Убит запущенный процесс {script_name} с PID {pid}")
-    except subprocess.CalledProcessError as e:
-      print(f"Не удалось убить PID {pid}: {e}")
+   try:
+    subprocess.run(["kill", "-9", pid], check=True)
+    print(f"Убит запущенный процесс {script_name} с PID {pid}")
+   except subprocess.CalledProcessError as e:
+    print(f"Не удалось убить PID {pid}: {e}")
 
 # Формируем команду запуска
 cmd = f'bash -c "cd \\"{script_dir}\\" && source myenv/bin/activate && python \\"{script_path}\\""'
@@ -48,6 +40,12 @@ def run_script():
 threading.Thread(target=run_script, daemon=True).start()
 print("Скрипт запущен заново.")
 
+try: # Загрузка модели
+  model = WhisperModel(model_path, device="cpu", compute_type="int8")
+  print("Модель загружена успешно.")
+except Exception as e:
+  print(f"Ошибка загрузки модели: {e}")
+  sys.exit(1)
 record = threading.Thread(target=record_audio)
 def write_audio():
  pass
@@ -59,18 +57,21 @@ def update_label(root, label):
    label.config(text="Говорите...")
    root.deiconify()
    root.update()
-   t1 = threading.Thread(target=record_audio, args=())# субтитры сделал DimaTorzokсубтитры подогнал «Симон»я присядь, Глэшно горячая пыть горишься
-   t1.start()
-   t1.join()
+   record.start()
+   record.join()
    t1 = threading.Thread(target=record_audio, args=("temp1.wav",))
    if is_speech():   # Проверка звука
     t1.start()# второй
     label.config(text="продолжай")
     root.update()
     message = audio(model)
-    if message:
+   else:
+    label.config(text="Речь не распознана")
+    root.update()
+    time.sleep(2)
+   if message:
      message = repeat(message) # Автоподгонка ширины окна
-     # Отдельный поток для эмуляции ввода
+     message=message +str(" ")  # Отдельный поток для эмуляции ввода
      threading.Thread(target=press_keys, args=(message,), daemon=True).start()
      t1.join()
      # Проверка звука
@@ -78,13 +79,14 @@ def update_label(root, label):
       message = audio(model, "temp1.wav")
       if message:
        message = repeat(message)    # Автоподгонка ширины окна
-      # Отдельный поток для эмуляции ввода
+       message=message +str(" ")   # Отдельный поток для эмуляции ввода
        threading.Thread(target=press_keys, args=(message,), daemon=True).start()
+      else:
+       pass
+     else:
+       pass
    else:
-     label.config(text="Речь не распознана")
-     root.update()
-     time.sleep(2)
-
+     pass
    root.withdraw()
    root.after(1000, lambda: update_label(root, label))
 
