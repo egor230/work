@@ -70,8 +70,7 @@ def update_label(label):
       message = audio(model)  # Замените "model" на вашу модель
       if message:
           # message = repeat(message)
-        print(f"Сообщение: {message}")
-        label.config(text=message)
+        print(f"Сообщение: {message}")нь
   except Exception as ex1:
       print(f"Ошибка: {ex1}")
   finally:
