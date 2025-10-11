@@ -6,6 +6,8 @@ from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QSystemTrayIcon, QAction, QMenu, QWidget, QDialog, QLabel, QSystemTrayIcon, QMenu, QAction, QVBoxLayout, QPushButton, QApplication
 from PyQt5.QtCore import QTimer
 import sounddevice as sd
+import tkinter as tk
+from tkinter import Frame, Label
 import numpy as np
 from pathlib import Path
 from faster_whisper import WhisperModel
@@ -70,18 +72,18 @@ keyboard_controller = Controller()
 keyboard = Controller()  # Changed Contr1 to Controller
 
 def on_press(key):
-    key = str(key).replace(" ", "")
-    if key == "Key.shift_r":
-        k.set_flag(True)
-        return True
-    if key in ["Key.space", "Key.right", "Key.left", "Key.down", "Key.up"]:
-        k.set_flag(False)
-        return True
-    if key == "Key.alt":
-        driver = k.get_driver()
-        k.update_dict()
-        return True
-    return True
+  key = str(key).replace(" ", "")
+  if key == "Key.shift_r":
+      k.set_flag(True)
+      return True
+  if key in ["Key.space", "Key.right", "Key.left", "Key.down", "Key.up"]:
+      k.set_flag(False)
+      return True
+  if key == "Key.alt":
+      driver = k.get_driver()
+      k.update_dict()
+      return True
+  return True
 
 def on_release(key):
     pass
@@ -140,5 +142,70 @@ def press_keys(text):  # xte 'keyup Shift_L'
   except Exception as ex1:
     print(ex1)
     return
-  
-  
+
+
+def record_audio(duration=8, fs=44100):  # Запись аудио с микрофона
+ print("star...")
+ recording = sd.rec(int(duration * fs), samplerate=fs, channels=1)
+ sd.wait()
+ audio_file = "temp.wav"
+ # Преобразуем float32 → int16
+ recording_int16 = np.int16(recording * 32767)
+ write(audio_file, fs, recording_int16)
+ print(f"Запись завершена, файл сохранён как {audio_file}")
+
+
+def audio(model):  # Путь к аудиофайлу
+ try:
+  audio_file = "temp.wav"
+  segments, info = model.transcribe(audio_file, beam_size=4, language="ru")  # Только русский
+  message_parts = []
+  for segment in segments:
+   text = segment.text.strip()
+   if text:  # Проверяем, что строка не пустая
+    message_parts.append(text)
+  message = ' '.join(message_parts)
+  # На всякий случай принудительно кодируем-раскодируем:
+  # message = str(message)
+  return message
+ except Exception as e:
+  print(e)
+  pass
+
+def is_speech(audio_data="temp.wav", threshold=0.0308, min_duration=4.5, sample_rate=44100):
+ try:
+  if isinstance(audio_data, str):
+   if not os.path.isfile(audio_data):
+    print(f"Ошибка: аудиофайл не найден: {audio_data}");
+    return False
+   with wave.open(audio_data, 'rb') as f:
+    ch, sw, fr, sr = f.getnchannels(), f.getsampwidth(), f.getnframes(), f.getframerate()
+    if fr == 0: print("Ошибка: аудиофайл пустой"); return False
+    data = f.readframes(fr)
+   dtype = np.int16 if sw == 2 else np.uint8 if sw == 1 else None
+   if dtype is None: print(f"Ошибка: неподдерживаемая глубина звука: {sw * 8} бит"); return False
+   a = np.frombuffer(data, dtype=dtype)
+   if ch == 2: a = a.reshape(-1, 2).mean(1)
+   a = a.astype(np.float32);
+   a = a / 32768 if dtype == np.int16 else (a - 128) / 128
+   sr = sr
+  else:
+   a = np.asarray(audio_data)
+   if a.size == 0: print("Ошибка: аудиоданные пусты"); return False
+   sr = sample_rate
+  if a.size == 0: print("Ошибка: аудиоданные пусты или не загружены"); return False
+  dur = len(a) / sr
+  if dur < min_duration: print(f"Ошибка: длительность аудио ({dur:.2f} сек) меньше минимальной ({min_duration} сек)"); return False
+  amp = np.mean(np.abs(a));
+  print(f"Средняя амплитуда: {amp:.6f}")
+  return amp > threshold or (print(f"Амплитуда ({amp:.6f}) ниже порога ({threshold})") or False)
+ except Exception as ex:
+  print(f"Ошибка при обработке аудио: {ex}");
+  return False
+
+def get_mute_status():  # Получает статус Mute для источника '54' с помощью pactl и grep.
+ try:
+  r = subprocess.run(["pactl", "get-source-mute", "54"],  capture_output=True, text=True, check=True)
+  return r.stdout.lower()
+ except:
+  return False
