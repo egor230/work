@@ -1,4 +1,4 @@
-import subprocess, sys, os
+import subprocess, sys, os, signal
 os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = "myenv/lib/python3.12/site-packages/PyQt5/Qt5/plugins"
 from PyQt5 import QtCore, QtWidgets, QtGui  # Импорт необходимых модулей из PyQt5
 from PyQt5.QtGui import QIcon
@@ -43,7 +43,6 @@ class MyWindow(QtWidgets.QWidget):
   self.icon1_path = "stop icon.jpeg"
   self.icon2_path = "голос.png"
   self.tray_icon = QSystemTrayIcon(QtGui.QIcon(self.icon2_path), self)
-  
   menu = QMenu()
   quit_action = QAction("Quit", self)
   quit_action.triggered.connect(self.quit_t)
@@ -78,10 +77,15 @@ class MyWindow(QtWidgets.QWidget):
  
  def quit_t(self):
   try:
-   self.mythread.stop()
-   self.mythread.quit()
-   self.mythread.wait(2000)
+   script_name ="off mic.py"   # Находим PID процесса по имени скрипта
+   pid = int(subprocess.check_output(  f"pgrep -f '{script_name}'",
+    shell=True ).decode().strip())
+   os.kill(pid, signal.SIGTERM)
+   print(f"Процесс '{script_name}' (PID: {pid}) успешно завершён.")
+
+   QApplication.quit()
   except Exception:
+   QApplication.quit()
    pass
   QApplication.quit()
 

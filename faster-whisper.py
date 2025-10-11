@@ -20,50 +20,100 @@ try: # Загрузка модели
 except Exception as e:
   print(f"Ошибка загрузки модели: {e}")
   sys.exit(1)
+script_path = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/off mic.py"
+script_dir = os.path.dirname(script_path)
+script_name = os.path.basename(script_path)
+
+# Команда для поиска PID по имени скрипта
+check_cmd = f"pgrep -f '{script_name}'"
+result = subprocess.run(check_cmd, shell=True, capture_output=True, text=True)
+
+# Если процесс найден — убиваем все экземпляры
+if result.returncode == 0 and result.stdout.strip():
+  pids = result.stdout.strip().split()
+  for pid in pids:
+    try:
+      subprocess.run(["kill", "-9", pid], check=True)
+      print(f"Убит запущенный процесс {script_name} с PID {pid}")
+    except subprocess.CalledProcessError as e:
+      print(f"Не удалось убить PID {pid}: {e}")
+
+# Формируем команду запуска
+cmd = f'bash -c "cd \\"{script_dir}\\" && source myenv/bin/activate && python \\"{script_path}\\""'
+
+# Запускаем скрипт в отдельном демонизированном потоке
+def run_script():
+  subprocess.Popen(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+
+threading.Thread(target=run_script, daemon=True).start()
+print("Скрипт запущен заново.")
 
 record = threading.Thread(target=record_audio)
+
 def update_label(root, label):
- try:
-  mic_on = get_mute_status()
-  if mic_on:
-   root.deiconify()  # показать панель.
+ def record_and_process():
+  try:
+   # Показ окна с начальной надписью
+   root.geometry("100x20+700+1025")
    label.config(text="Говорите...")
-   record.start()
-   record.join()
+   root.deiconify()
+   root.update()
+   # Новый поток для записи каждый раз!
+   t = threading.Thread(target=record_audio)
+   t.start()
+   t.join()
    label.config(text="Стоп")
+   root.update()
+   # Проверка звука
    if is_speech():
-    message = audio(model)  # Замените "model" на вашу модель
+    message = audio(model)
     if message:
      message = repeat(message)
-     print(f" {message}")
-     len_len=len(message)*10+10
-     # len_len=600
-     root.geometry(f"{len_len}x20+700+1025")  #
+     # Автоподгонка ширины окна
+     win_w = min(len(message)*10+10, 600)
+     root.geometry(f"{win_w}x20+700+1025")
      label.config(text=message)
+     root.update()
+     # Отдельный поток для эмуляции ввода
+     threading.Thread(target=press_keys, args=(message,)).start()
+     time.sleep(2)
+    else:
+     label.config(text="Речь не распознана")
+     root.update()
+     time.sleep(2)
+   else:
+    label.config(text="Речь не обнаружена")
+    root.update()
+    time.sleep(3)
 
-     # thread = threading.Thread(target=process_text, args=(message, k))
-     # thread.start()
-     # thread.join()
-     exit(0)
-  else:
-     root.withdraw()  # свернуть панель подсказок.
-   # thread.start()
-   # thread.join()  # Ждем завершения записи
- except Exception as ex1:
-   print(f"Ошибка: {ex1}")
-  # Планируем следующее обновление через 1 секунду
-def wt():# Создаем главное окно
- root = tk.Tk()
- frame = tk.Frame(root)
- label = tk.Label(frame, text="...", font='Times 14', anchor="center")
- label.pack(padx=3, fill=tk.X, expand=True)
- frame.pack(fill=tk.X)
- root.overrideredirect(True)
- root.resizable(True, True)
- root.attributes("-topmost", True)
- # Запускаем периодическое обновление метки
- root.after(1000, lambda: update_label(root, label))
- root.mainloop()  # Запускаем главный цикл
- 
-w1 = threading.Thread(target=wt)
-w1.start()
+   root.withdraw()
+   root.after(1000, lambda: update_label(root, label))
+
+  except Exception as e:
+   print(f"Ошибка: {e}")
+   label.config(text="Ошибка")
+   root.update()
+   time.sleep(2)
+   root.withdraw()
+   root.after(1000, lambda: update_label(root, label))
+
+ # Проверка статуса микрофона
+ if get_mute_status():
+  threading.Thread(target=record_and_process).start()
+ else:
+  root.withdraw()
+  root.after(2000, lambda: update_label(root, label))
+
+
+# ===== Интерфейс =====
+root = tk.Tk()
+frame = tk.Frame(root)
+label = tk.Label(frame, text="...", font='Times 14', anchor="center")
+label.pack(padx=3, fill=tk.X, expand=True)
+frame.pack(fill=tk.X)
+root.overrideredirect(True)
+root.resizable(True, True)
+root.attributes("-topmost", True)
+
+update_label(root, label)
+root.mainloop()

@@ -1,4 +1,4 @@
-import sys, os, subprocess, json, queue, wave, io, threading, re
+import sys, os, subprocess, json, queue, wave, io, threading, re, time
 from scipy.io.wavfile import write
 os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = "myenv/lib/python3.12/site-packages/PyQt5/Qt5/plugins"
 from PyQt5 import QtCore, QtWidgets, QtGui  # Импорт необходимых модулей из PyQt5
@@ -143,7 +143,6 @@ def press_keys(text):  # xte 'keyup Shift_L'
     print(ex1)
     return
 
-
 def record_audio(duration=8, fs=44100):  # Запись аудио с микрофона
  print("star...")
  recording = sd.rec(int(duration * fs), samplerate=fs, channels=1)
@@ -154,24 +153,29 @@ def record_audio(duration=8, fs=44100):  # Запись аудио с микро
  write(audio_file, fs, recording_int16)
  print(f"Запись завершена, файл сохранён как {audio_file}")
 
-
 def audio(model):  # Путь к аудиофайлу
  try:
-  audio_file = "temp.wav"
-  segments, info = model.transcribe(audio_file, beam_size=4, language="ru")  # Только русский
+  audio_file = "temp.wav"  # Выполняем транскрипцию аудио
+  segments, info = model.transcribe(audio_file, beam_size=4, language="ru")
   message_parts = []
+  # Собираем текст из всех сегментов
   for segment in segments:
-   text = segment.text.strip()
-   if text:  # Проверяем, что строка не пустая
+   text = segment.text.strip()  # Удаляем лишние пробелы
+   if text:  # Проверяем, что текст не пустой
+    # Приводим первый символ к нижнему регистру
+    text = text[0].lower() + text[1:] if len(text) > 0 else text
     message_parts.append(text)
-  message = ' '.join(message_parts)
-  # На всякий случай принудительно кодируем-раскодируем:
-  # message = str(message)
-  return message
- except Exception as e:
-  print(e)
-  pass
+  # Формируем итоговое сообщение
+  if message_parts:
+    message = ' '.join(message_parts).replace("?", "").replace(".", "").replace("!", "")
+    return message
+  else:
+    return None  # Возвращаем None, если текст не распознан
 
+ except Exception as e:
+  print(f"Ошибка транскрипции: {e}")
+  return None
+ 
 def is_speech(audio_data="temp.wav", threshold=0.0308, min_duration=4.5, sample_rate=44100):
  try:
   if isinstance(audio_data, str):
