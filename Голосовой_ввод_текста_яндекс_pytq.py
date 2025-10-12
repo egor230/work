@@ -1,35 +1,8 @@
 from pytq_libs_voice import *
 from PyQt5.QtWidgets import QSystemTrayIcon, QAction, QMenu, QDialog, QLabel, QMenu, QAction
-from pynput import keyboard
-from pynput.keyboard import Controller as Contr1
 os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/myenv/lib/python3.12/site-packages/PyQt5/Qt5/plugins"
 subprocess.run(["pactl", "set-source-mute", "54", "0"], check=True)  # вкл микрофон.
 # subprocess.run(['pactl', 'set-source-volume', "54", '65000'])
-
-def on_press(key):
- key = str(key).replace(" ", "")
- if key == "Key.shift_r":
-  k.set_flag(True)
-  return True
- if key in ("Key.space", "Key.right", "Key.left", "Key.down", "Key.up"):
-  k.set_flag(False)
-  return True
- if key == "Key.alt":
-  global driver
-  driver = k.get_driver()
-  k.update_dict()
-  return True
- return True
-
-def on_release(key):
- return True
-
-def start_listener():
- global listener
- listener = keyboard.Listener(on_press=on_press, on_release=on_release)
- listener.start()
-
-start_listener()
 
 class MyThread(QtCore.QThread):
  text_signal = QtCore.pyqtSignal(str, bool)

@@ -56,6 +56,7 @@ def simplify_html(html, base_url="https://dzen.ru"):
   </div>
   """
  try:
+  # subprocess.run(['copyq', 'write', 'text/html', html_content])
   process = subprocess.Popen(['xclip', '-selection', 'clipboard', '-t', 'text/html'], stdin=subprocess.PIPE, stderr=subprocess.PIPE)
   stdout, stderr = process.communicate(input=html_content.encode('utf-8'), timeout=10)
   show_list_id = '''#!/bin/bash
@@ -64,6 +65,7 @@ def simplify_html(html, base_url="https://dzen.ru"):
   subprocess.run(['bash', '-c', show_list_id])
   if process.returncode == 0:
    print("Полный текст статьи успешно скопирован в буфер обмена.")
+   subprocess.run(['copyq', 'write', 'text/html', html_content])
    return title_element.get_text(strip=True)
   else:
    print(f"Ошибка xclip: {stderr.decode('utf-8')}")
@@ -84,7 +86,7 @@ def main():
   option = get_option()
   driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=option)
   url = "https://dzen.ru/a/aIXI1UqpY3gfXc-D"
-  url = str(pyperclip.paste())
+  # url = str(pyperclip.paste())
   driver.get(url)
   # Использование BeautifulSoup для парсинга
   res = {}  # Ваш словарь для результатов

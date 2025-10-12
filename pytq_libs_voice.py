@@ -6,7 +6,6 @@ from bs4 import BeautifulSoup
 from deepdiff import DeepDiff
 from PIL import Image
 from io import BytesIO
-
 from PyQt5 import QtCore, QtWidgets, QtGui
 from PyQt5.QtCore import QObject, pyqtSignal, QTimer, Qt
 from PyQt5.QtWidgets import (QApplication, QWidget, QLabel, QVBoxLayout, QSystemTrayIcon, QMenu,
@@ -21,9 +20,8 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
+from pynput.keyboard import Controller, Key, Listener
 from pynput import keyboard
-from pynput.keyboard import Controller as Contr1, Key
-
 # Исключенные фразы
 excluded_phrases = ["С чего начнём?Нарисовать картинку", "Для звонков телефон как-то удобнее, давайте попробую там.",
                     "Яндекс — с АлисойБыстрый поиск и Алиса всегда рядомПоиск текстом, картинкой или голосомУмная",
@@ -176,8 +174,7 @@ class save_key:
     return self.word
 
 k = save_key()
-k.update_dict()
-time.sleep(2.2)
+k.update_dict()  # Changed Contr1 to Controller
 
 def error_closse(driver): # print("quit")
   subprocess.call(['bash', '-c', script])
@@ -189,7 +186,29 @@ def error_closse(driver): # print("quit")
   driver.quit()
   # Завершение Python-скрипта
   sys.exit()
+keyboard = Controller()
+def on_press(key):
+  key = str(key).replace(" ", "")
+  if key == "Key.shift_r":
+      k.set_flag(True)
+      return True
+  if key in ["Key.space", "Key.right", "Key.left", "Key.down", "Key.up"]:
+      k.set_flag(False)
+      return True
+  if key == "Key.alt":
+      driver = k.get_driver()
+      k.update_dict()
+      return True
+  return True
+def on_release(key):
+  pass
+  return True
 
+def start_listener():
+  global listener
+  listener = Listener(on_press=on_press, on_release=on_release)
+  listener.start()
+start_listener()
 def repeat(text):
   # text = "linux менч установить линукс минт помоги мне установить "
   # print(text)
@@ -221,21 +240,21 @@ def is_connected():
   except OSError:
     pass
   return False
-keyboard = Contr1()
 def press_keys(text):  # xte 'keyup Shift_L'
   try:   #
+   key_s = '''#!/bin/bash
+   xte 'keyup Shift_R'
+   sleep 0.1
+   xte 'keyup Shift_L'
+   xkbset -sticky
+   exit     '''
    print(text)
    # text="lunix mint"
    for char in text:
     if char ==",":
-     key_s = '''#!/bin/bash
-     xte 'keyup Shift_R'
-     sleep 0.1
-     xte 'keyup Shift_L'
-     exit
-     '''
-     # print(char)
-     subprocess.run(['bash', '-c', key_s])
+     # subprocess.run(['bash', '-c', key_s])
+     subprocess.call(['xdotool', 'key', 'comma'])
+     continue
     if  char in ['a', 'A', 'b', 'B', 'c', 'C', 'd', 'D', 'e', 'E', 'f', 'F', 'g', 'G', 'h', 'H', 'i', 'I', 'j', 'J', 'k', 'K', 'l', 'L', 'm', 'M',
      'n', 'N', 'o', 'O', 'p', 'P', 'q', 'Q', 'r', 'R', 's', 'S', 't', 'T', 'u', 'U', 'v', 'V', 'w', 'W', 'x', 'X', 'y', 'Y', 'z', 'Z']:  # Диапазон от пробела до тильды (ASCII 32-126)#
       subprocess.call(['xdotool', 'type', '--delay', '3', char])
@@ -243,11 +262,12 @@ def press_keys(text):  # xte 'keyup Shift_L'
      if char.isupper():  # Если символ заглавный
       keyboard.press(char.upper())  # Нажимаем строчную версию символа
       keyboard.release(char.upper())
+      # keyboard.release(Key.shift)  # Отпустить Shift
+      # subprocess.run(['bash', '-c', key_s])
      else:
       keyboard.press(char)
       keyboard.release(char)
-    time.sleep(0.04)  # Уменьшение задержки
-    keyboard.release(Key.shift)  # Отпустить Shift
+    time.sleep(0.03)  # Уменьшение задержки
   except Exception as ex1:
     print(ex1)
     return

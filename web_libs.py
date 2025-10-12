@@ -283,13 +283,10 @@ mouse_move_and_click = '''#!/bin/bash
      move_and_click $coord
  done'''
 
-def clean_dictionary_keys(res):
-  # Список недопустимых символов в именах файлов
+def clean_dictionary_keys(res):  # Список недопустимых символов в именах файлов
   invalid_chars = ['<', '>', ':', '"', '/', '\\', '|', '?', '*']
- 
-  # Создаем новый словарь
+   # Создаем новый словарь
   cleaned_res = {}
- 
   # Проходим по всем парам ключ-значение в исходном словаре
   for title, link in res.items():
    # Очищаем ключ (название статьи) от недопустимых символов
@@ -298,7 +295,6 @@ def clean_dictionary_keys(res):
     clean_title = clean_title.replace(char, '')
    # Добавляем запись с очищенным ключом в новый словарь
    cleaned_res[clean_title] = link
- 
   return cleaned_res
 
 def find_image(thread):
@@ -401,14 +397,13 @@ def run_wine_command(name):
    FILE_PATH="{0}"
    # 1. Запускаем LibreOffice Writer в фоновом режиме
    libreoffice --writer "$FILE_PATH" &
+   # wine \"{0}\" &
    # 2. Сохраняем ID процесса Writer
    LO_PID=$!
    # 3. Даем LibreOffice время на загрузку и становление активным окном (очень важно!)
    sleep 4
-   # 4. Находим ID окна LibreOffice
-   # Используем команду поиска окна по имени, связанному с файлом
+   # 4. Находим ID окна LibreOffice  Используем команду поиска окна по имени, связанному с файлом
    WINDOW_ID=$(xdotool search --pid "$LO_PID" --name "$(basename "$FILE_PATH")" | head -n 1)
-
    # 5. Если окно найдено, отправляем команду "Вставить" (Ctrl+V)
    if [ ! -z "$WINDOW_ID" ]; then
      xdotool windowactivate "$WINDOW_ID"
@@ -416,10 +411,9 @@ def run_wine_command(name):
      sleep 3
      xte "keydown Control_R" "key S" "keyup Control_R"
      sleep 6   # 6. Завершаем процесс LibreOffice
-     kill $LO_PID
+     # kill $LO_PID
    fi
 
-   wine \"{0}\"
    exit; '''.format(name)
   # Функция для выполнения команды
   run_command = lambda: subprocess.call(['bash', '-c', word])
