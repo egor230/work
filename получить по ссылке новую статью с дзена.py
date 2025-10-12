@@ -84,7 +84,7 @@ def main():
   option = get_option()
   driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=option)
   url = "https://dzen.ru/a/aIXI1UqpY3gfXc-D"
-  # url = str(pyperclip.paste())
+  url = str(pyperclip.paste())
   driver.get(url)
   # Использование BeautifulSoup для парсинга
   res = {}  # Ваш словарь для результатов

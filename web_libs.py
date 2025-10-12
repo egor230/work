@@ -397,34 +397,30 @@ def copy_to_clipboard(html_content):
 def run_wine_command(name):
   # Формируем полный путь к файлу
   name = os.path.join(os.getcwd(), str(name))
-
   word = '''#!/bin/bash
-     #wine \"{0}\"
-     #libreoffice --writer "{0}"
-     FILE_PATH="{0}"
-     
-     # 1. Запускаем LibreOffice Writer в фоновом режиме
-     libreoffice --writer "$FILE_PATH" &
-     
-     # 2. Сохраняем ID процесса Writer
-     LO_PID=$!
-     
-     # 3. Даем LibreOffice время на загрузку и становление активным окном (очень важно!)
+   FILE_PATH="{0}"
+   # 1. Запускаем LibreOffice Writer в фоновом режиме
+   libreoffice --writer "$FILE_PATH" &
+   # 2. Сохраняем ID процесса Writer
+   LO_PID=$!
+   # 3. Даем LibreOffice время на загрузку и становление активным окном (очень важно!)
+   sleep 4
+   # 4. Находим ID окна LibreOffice
+   # Используем команду поиска окна по имени, связанному с файлом
+   WINDOW_ID=$(xdotool search --pid "$LO_PID" --name "$(basename "$FILE_PATH")" | head -n 1)
+
+   # 5. Если окно найдено, отправляем команду "Вставить" (Ctrl+V)
+   if [ ! -z "$WINDOW_ID" ]; then
+     xdotool windowactivate "$WINDOW_ID"
+     xte "keydown Control_R" "key V" "keyup Control_R"
      sleep 3
-     
-     # 4. Находим ID окна LibreOffice
-     # Используем команду поиска окна по имени, связанному с файлом
-     WINDOW_ID=$(xdotool search --pid "$LO_PID" --name "$(basename "$FILE_PATH")" | head -n 1)
-     
-     # 5. Если окно найдено, отправляем команду "Вставить" (Ctrl+V)
-     if [ ! -z "$WINDOW_ID" ]; then
-         xdotool windowactivate "$WINDOW_ID"
-         xte "keydown Control_R" "key V" "keyup Control_R"
-         sleep 2000
-         xte "keydown Control_L" "key S" "keyup Control_L"
-     fi
-     exit;
-     '''.format(name)
+     xte "keydown Control_R" "key S" "keyup Control_R"
+     sleep 6   # 6. Завершаем процесс LibreOffice
+     kill $LO_PID
+   fi
+
+   wine \"{0}\"
+   exit; '''.format(name)
   # Функция для выполнения команды
   run_command = lambda: subprocess.call(['bash', '-c', word])
 
