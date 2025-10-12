@@ -11,8 +11,8 @@ from tkinter import Frame, Label
 import numpy as np
 from pathlib import Path
 from faster_whisper import WhisperModel
-from pynput.keyboard import Controller, Listener
-
+from pynput.keyboard import Controller, Key, Listener
+from pynput import keyboard
 class save_key:
  def __init__(self):
   self.text = ""
@@ -64,13 +64,9 @@ class save_key:
 
  def get_words(self):
   return self.word
-
 k = save_key()
-k.update_dict()
-
-keyboard_controller = Controller()
-keyboard = Controller()  # Changed Contr1 to Controller
-
+k.update_dict()  # Changed Contr1 to Controller
+keyboard = Controller()
 def on_press(key):
   key = str(key).replace(" ", "")
   if key == "Key.shift_r":
@@ -84,16 +80,14 @@ def on_press(key):
       k.update_dict()
       return True
   return True
-
 def on_release(key):
-    pass
-    return True
+  pass
+  return True
 
 def start_listener():
-    global listener
-    listener = Listener(on_press=on_press, on_release=on_release)
-    listener.start()
-
+  global listener
+  listener = Listener(on_press=on_press, on_release=on_release)
+  listener.start()
 start_listener()
 
 def replace(match):
@@ -121,36 +115,53 @@ def repeat(text):  # text = "linux менч установить линукс м
   except Exception as ex:
    print(f"Ошибка: {ex}")  # Выводим ошибку для диагностики
   return text1
+
 def press_keys(text):  # xte 'keyup Shift_L'
   try:   #
    print(text)
    # text="lunix mint"
    for char in text:
-    if char in ['a', 'A', 'b', 'B', 'c', 'C', 'd', 'D', 'e', 'E', 'f', 'F', 'g', 'G', 'h', 'H', 'i', 'I', 'j', 'J', 'k', 'K', 'l', 'L', 'm', 'M',
-     'n', 'N', 'o', 'O', 'p', 'P', 'q', 'Q', 'r', 'R', 's', 'S', 't', 'T', 'u', 'U', 'v', 'V', 'w', 'W', 'x', 'X', 'y', 'Y', 'z', 'Z',' ']:  # Диапазон от пробела до тильды (ASCII 32-126)#
-     subprocess.call(['xdotool', 'type', '--delay', '9', char])
-      # pyautogui.write(char, interval=0.01)
-    else:  # Русский или смешанный вкладку ак
+    if char ==",":
+     key_s = '''#!/bin/bash
+     xte 'keyup Shift_R'
+     sleep 0.1
+     xte 'keyup Shift_L'
+     exit
+     '''
+     # print(char)
+     subprocess.run(['bash', '-c', key_s])
+    if  char in ['a', 'A', 'b', 'B', 'c', 'C', 'd', 'D', 'e', 'E', 'f', 'F', 'g', 'G', 'h', 'H', 'i', 'I', 'j', 'J', 'k', 'K', 'l', 'L', 'm', 'M',
+     'n', 'N', 'o', 'O', 'p', 'P', 'q', 'Q', 'r', 'R', 's', 'S', 't', 'T', 'u', 'U', 'v', 'V', 'w', 'W', 'x', 'X', 'y', 'Y', 'z', 'Z']:  # Диапазон от пробела до тильды (ASCII 32-126)#
+      subprocess.call(['xdotool', 'type', '--delay', '3', char])
+    else:
      if char.isupper():  # Если символ заглавный
       keyboard.press(char.upper())  # Нажимаем строчную версию символа
       keyboard.release(char.upper())
      else:
       keyboard.press(char)
       keyboard.release(char)
-      time.sleep(0.03)  # Уменьшение задержки
-   #
+    time.sleep(0.04)  # Уменьшение задержки
+    keyboard.release(Key.shift)  # Отпустить Shift
   except Exception as ex1:
     print(ex1)
     return
+def process_text(previous_message1):
+  text = previous_message1 + str(" ")
+  text=text[0].lower()+ text[1:]
+  if k.get_flag() == True:
+    k.set_flag(False)
+    text0 = text[0].upper() + text[1:]
+    press_keys(text0)
+  else:
+    press_keys(text)
 
 def record_audio(audio_file = "temp.wav", duration=10, fs=44100):  # Запись аудио с микрофона
  print("star...")
  recording = sd.rec(int(duration * fs), samplerate=fs, channels=1)
  sd.wait()
- # Преобразуем float32 → int16
- recording_int16 = np.int16(recording * 32767)
+ recording_int16 = np.int16(recording * 32767) # Преобразуем float32 → int16
  write(audio_file, fs, recording_int16)
- print(f"Запись завершена, файл сохранён как {audio_file}")
+ # print(f"Запись завершена, файл сохранён как {audio_file}")
 
 def audio(model, audio_file = "temp.wav"):  # Путь к аудиофайлу
  try:  # Выполняем транскрипцию аудио
@@ -163,13 +174,11 @@ def audio(model, audio_file = "temp.wav"):  # Путь к аудиофайлу
     # Приводим первый символ к нижнему регистру
     text = text[0].lower() + text[1:] if len(text) > 0 else text
     message_parts.append(text)
-  # Формируем итоговое сообщение
-  if message_parts:
+  if message_parts: # Формируем итоговое сообщение
     message = ' '.join(message_parts).replace("?", "").replace(".", "").replace("!", "")
     return message
   else:
     return None  # Возвращаем None, если текст не распознан
-
  except Exception as e:
   print(f"Ошибка транскрипции: {e}")
   return None
@@ -196,10 +205,9 @@ def is_speech(audio_data="temp.wav", threshold=0.0308, min_duration=4.5, sample_
    if a.size == 0: print("Ошибка: аудиоданные пусты"); return False
    sr = sample_rate
   if a.size == 0: print("Ошибка: аудиоданные пусты или не загружены"); return False
-
   amp = np.mean(np.abs(a));
   if amp > threshold:
-   print(f"Средняя амплитуда: {amp:.6f}")
+   # print(f"Средняя амплитуда: {amp:.6f}")
    return True
   else:
    return  False

@@ -46,7 +46,6 @@ try: # Загрузка модели
 except Exception as e:
   print(f"Ошибка загрузки модели: {e}")
   sys.exit(1)
-record = threading.Thread(target=record_audio)
 def write_audio():
  pass
 def update_label(root, label):
@@ -60,6 +59,7 @@ def update_label(root, label):
     label.config(text="Говорите...")
     root.deiconify()
     root.update()
+    record = threading.Thread(target=record_audio)
     record.start()
     record.join()
     t1 = threading.Thread(target=record_audio, args=("temp1.wav",))
@@ -74,15 +74,13 @@ def update_label(root, label):
      time.sleep(2)
     if message:
       message = repeat(message) # Автоподгонка ширины окна
-      message=message +str(" ")  # Отдельный поток для эмуляции ввода
-      threading.Thread(target=press_keys, args=(message,), daemon=True).start()
+      threading.Thread(target=process_text, args=(message,), daemon=True).start()
       t1.join()
       # Проверка звука
       if is_speech("temp1.wav"):
        message = audio(model, "temp1.wav")
        if message:
         message = repeat(message)    # Автоподгонка ширины окна
-        message=message +str(" ")   # Отдельный поток для эмуляции ввода
         threading.Thread(target=press_keys, args=(message,), daemon=True).start()
        else:
         pass

@@ -12,7 +12,6 @@ from PyQt5.QtCore import QObject, pyqtSignal, QTimer, Qt
 from PyQt5.QtWidgets import (QApplication, QWidget, QLabel, QVBoxLayout, QSystemTrayIcon, QMenu,
                              QSlider, QMainWindow, QPushButton, QDialog)
 from PyQt5.QtGui import QIcon, QFont
-
 from selenium import webdriver
 from selenium.common import TimeoutException, NoSuchElementException
 from selenium.webdriver.chrome.service import Service
