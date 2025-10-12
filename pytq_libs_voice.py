@@ -243,16 +243,16 @@ def is_connected():
 def press_keys(text):  # xte 'keyup Shift_L'
   try:   #
    key_s = '''#!/bin/bash
-   xte 'keyup Shift_R'
-   sleep 0.1
-   xte 'keyup Shift_L'
+   # xte 'keyup Shift_R'
+   # sleep 0.1
+   # xte 'keyup Shift_L'
    xkbset -sticky
    exit     '''
    print(text)
    # text="lunix mint"
    for char in text:
     if char ==",":
-     # subprocess.run(['bash', '-c', key_s])
+     subprocess.run(['bash', '-c', key_s])
      subprocess.call(['xdotool', 'key', 'comma'])
      continue
     if  char in ['a', 'A', 'b', 'B', 'c', 'C', 'd', 'D', 'e', 'E', 'f', 'F', 'g', 'G', 'h', 'H', 'i', 'I', 'j', 'J', 'k', 'K', 'l', 'L', 'm', 'M',
@@ -268,6 +268,8 @@ def press_keys(text):  # xte 'keyup Shift_L'
       keyboard.press(char)
       keyboard.release(char)
     time.sleep(0.03)  # Уменьшение задержки
+   # Включить sticky keys
+   subprocess.call(['xkbset', 'sticky'])
   except Exception as ex1:
     print(ex1)
     return
