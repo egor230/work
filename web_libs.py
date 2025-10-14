@@ -396,8 +396,8 @@ def run_wine_command(name):
   word = '''#!/bin/bash
    FILE_PATH="{0}"
    # 1. Запускаем LibreOffice Writer в фоновом режиме
-   libreoffice --writer "$FILE_PATH" &
-   # wine \"{0}\" &
+   # libreoffice --writer "$FILE_PATH" &
+   wine \"{0}\" &
    # 2. Сохраняем ID процесса Writer
    LO_PID=$!
    # 3. Даем LibreOffice время на загрузку и становление активным окном (очень важно!)
