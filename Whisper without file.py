@@ -3,12 +3,15 @@ import webrtcvad
 from collections import deque
 from faster_whisper import WhisperModel
 import scipy.io.wavfile as wavfile
+from scipy.signal import butter, lfilter
+import librosa
+from pydub import AudioSegment
 cache_dir = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache/whisper/"
 model_size = "large-v3"
 model_dir = os.path.join(cache_dir, f"models--Systran--faster-whisper-{model_size}", "snapshots")
 if not os.path.exists(model_dir):
-    print(f"Ошибка: Папка snapshots не найдена: {model_dir}. Убедитесь, что модель скачана.")
-    sys.exit(1)
+  print(f"Ошибка: Папка snapshots не найдена: {model_dir}. Убедитесь, что модель скачана.")
+  sys.exit(1)
 snapshot = next((d for d in os.listdir(model_dir) if os.path.isdir(os.path.join(model_dir, d))), None)
 if not snapshot:
     print("Ошибка: Нет snapshots в кэше. Скачайте модель заново.")
@@ -34,11 +37,34 @@ def record_audio_stream(fs=48000, chunk_duration=0.03):
   stream = sd.InputStream(samplerate=fs, channels=1, callback=callback, blocksize=int(fs * chunk_duration))
   return stream, queue
 
+# Функция для bandpass фильтра
+def butter_bandpass(lowcut, highcut, fs, order=5):
+    nyq = 0.5 * fs
+    low = lowcut / nyq
+    high = highcut / nyq
+    b, a = butter(order, [low, high], btype='band')
+    return b, a
+
+def bandpass_filter(data, lowcut=1000, highcut=4000, fs=48000, order=5):
+    b, a = butter_bandpass(lowcut, highcut, fs, order=order)
+    return lfilter(b, a, data)
 def transcribe_audio_segment(speech_segment, model):
  try:   # Сохраняем аудио-сегмент во временный файл
   filename = "temp.wav"
+  # Шаг 1: Шумоподавление
+  # S = np.abs(librosa.stft(speech_segment))
+  # S_clean = librosa.decompose.nn_filter(S, aggregate=np.median, metric='cosine')
+  # speech_segment_clean = librosa.istft(S_clean)
+  # # Шаг 2: Эквализация
+  # speech_segment_eq = bandpass_filter(speech_segment, lowcut=1000, highcut=4000, fs=48000)
+  # # Шаг 4: Нормализация
+  # max_amplitude = np.max(np.abs(speech_segment_compressed))
+  # if max_amplitude > 0:
+  #  speech_segment_compressed = speech_segment_compressed / max_amplitude * 0.95
+
+  # Шаг 5: Сохранение
   wavfile.write(filename, 48000, np.int16(speech_segment * 32767))
-   # Проверка звука
+  # Проверка звука
   if is_speech():
    # Транскрибируем аудио
    segments, info = model.transcribe(filename, beam_size=10, language="ru",
@@ -51,7 +77,8 @@ def transcribe_audio_segment(speech_segment, model):
     if message:
      message = repeat(message)  # Автоподгонка ширины окна
      threading.Thread(target=process_text, args=(message,), daemon=True).start()
-     
+     # print("stop")
+     # input()
  except Exception as e:
    print(f"Ошибка при транскрипции: {e}")
 
@@ -73,10 +100,17 @@ def process_audio_stream(queue):# Функция обработки аудиоп
    audio_int16 = np.int16(audio_chunk * 32767)
    is_speech_chunk = vad.is_speech(audio_int16.tobytes(), sample_rate=48000)
    current_time = time.time()
-   buffer.append(audio_chunk)
-   if is_speech_chunk and not speech_detected:   # Обнаружение начала речи
+   if is_speech_chunk:  # Обнаружение речи
+    # Проверяем максимальную амплитуду текущего чанка
+    mean_amp = np.mean(np.abs(audio_chunk))
+    # print(f"Средняя амплитуда чанка: {mean_amp:.4f}")
+    if mean_amp > 0.0151:  # Сохраняем только громкие чанки
+     buffer.append(audio_chunk)
+
+   if is_speech_chunk and not speech_detected and buffer:   # Обнаружение начала речи
     speech_segment = np.concatenate(buffer).astype(np.float32)
-    if np.max(np.abs(speech_segment)) > 0.7:
+    if np.max(np.abs(speech_segment)) > 0.9:
+     print(np.max(np.abs(speech_segment)))
      print("Начало записи (обнаружена речь)")
      speech_detected = True
      last_speech_time = current_time

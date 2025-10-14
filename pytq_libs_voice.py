@@ -344,6 +344,7 @@ def get_option():
   option.add_argument('--user-data-dir=/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project/google-chrome')
   # option.add_argument("--disable-notifications")
   option.add_experimental_option("useAutomationExtension", False)
+  option.add_argument('--mute-audio')  # Отключаем звук на всех страницах
   # option.add_argument('--ignore-certificate-errors')
   # option.add_argument('--allow-running-insecure-content')
   # option.add_argument("--disable-dev-shm-usage")

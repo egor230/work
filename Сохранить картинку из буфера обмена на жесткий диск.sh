@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Папка для сохранения скриншотов
-save_dir="/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project/Screenshots"
+save_dir="/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/Screenshots"
 
 # Создаем папку, если она не существует
 mkdir -p "$save_dir"
