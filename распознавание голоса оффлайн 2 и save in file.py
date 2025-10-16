@@ -31,7 +31,7 @@ def start_listener():
 
 subprocess.run( ["pactl", "set-source-mute", "54", "0"], check=True)# вкл микрофон.
 start_listener()  # Запускаем слушатель# driver.set_window_position(1, 505)
-cache_dir = Path("/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project/cache")
+cache_dir = Path("/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/cache")
 cache_dir.mkdir(parents=True, exist_ok=True)
 os.environ["XDG_CACHE_HOME"] = str(cache_dir)
 

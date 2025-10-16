@@ -14,6 +14,23 @@ from pathlib import Path
 from faster_whisper import WhisperModel
 from pynput.keyboard import Controller, Key, Listener
 from pynput import keyboard
+from PyQt5 import QtCore, QtWidgets, QtGui  # Импорт необходимых модулей из PyQt5
+from PyQt5.QtGui import QIcon
+from PyQt5.QtWidgets import QSlider, QApplication, QMainWindow, QVBoxLayout, QWidget, QPushButton
+from PyQt5.QtWidgets import QSystemTrayIcon, QMenu, QDialog, QLabel, QMenu, QAction
+from PyQt5.QtCore import QThread, pyqtSignal
+from PyQt5.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QDialog, QVBoxLayout
+import sounddevice as sd
+from pathlib import Path
+import numpy as np
+from pynput import keyboard
+from pynput.keyboard import Controller as Contr1
+
+import webrtcvad
+from scipy.io import wavfile
+from collections import deque
+from queue import Queue
+
 class save_key:
  def __init__(self):
   self.text = ""

@@ -2,7 +2,7 @@ import sounddevice as sd
 import numpy as np
 from pynput import keyboard
 from pathlib import Path
-import os, subprocess, torch, shutil, gigaam, tempfile, torchaudio, time
+import os, sys, subprocess, torch, shutil, gigaam, tempfile, torchaudio, time
 
 # Настройка директории кэша
 

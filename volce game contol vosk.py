@@ -15,7 +15,7 @@ def check(driver):
  except Exception as ex:
   check(driver)
 
-os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = "/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project/myenv/lib/python3.12/site-packages/PyQt5/Qt5/plugins"
+os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/myenv/lib/python3.12/site-packages/PyQt5/Qt5/plugins"
 pres12 = work_key()
 subprocess.run( ["pactl", "set-source-mute", "54", "0"], check=True)# вкл микрофон.
 def web():
@@ -39,12 +39,11 @@ def web():
   option.add_argument("--disable-blink-features=AutomationControlled")
   option.add_experimental_option("useAutomationExtension", True)
   option.add_argument("--disable-dev-shm-usage")  # помогает в Linux с /dev/shm
-  option.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.6367.118 Safari/537.36")
   option.add_argument("--disable-blink-features=AutomationControlled")  # Скрыть признаки автоматизации
   option.add_argument("--disable-notifications")  # Отключить уведомления
   option.add_argument("--use-fake-ui-for-media-stream")  # Разрешить доступ к микрофону
-  option.add_extension('/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project/cache/Browsec VPN.crx')  # Загрузка расширения
-  option.add_argument("--user-data-dir=/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project/cache/chrome_profile")  # Папка для профиля Chrome
+  option.add_extension('/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache/Browsec VPN.crx')  # Загрузка расширения
+  option.add_argument("--user-data-dir=/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/cache/chrome_profile")  # Папка для профиля Chrome
   driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()),
                             options=option)
   check(driver)
@@ -60,8 +59,7 @@ def web():
   # if "closed connection without response" in ex:
   #     driver.quit()
   pass
-  if "code 130" in ex:
-   pass
+
  finally:
   # print(ex)
   # driver.quit()

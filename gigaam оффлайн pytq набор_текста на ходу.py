@@ -1,159 +1,216 @@
-from libs_voice import *
-from PyQt5 import QtCore, QtWidgets, QtGui  # Импорт необходимых модулей из PyQt5
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QSlider, QApplication, QMainWindow, QVBoxLayout, QWidget, QPushButton
-from PyQt5.QtWidgets import QSystemTrayIcon, QAction, QMenu, QDialog, QLabel, QMenu, QAction
-import sounddevice as sd
-import os, subprocess, torch, gigaam, tempfile, torchaudio, time, shutil
-from pathlib import Path
-import numpy as np
-from pynput import keyboard
-from pynput.keyboard import Controller as Contr1
-os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = "/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project/myenv/lib/python3.12/site-packages/PyQt5/Qt5/plugins"
-subprocess.run(["pactl", "set-source-mute", "54", "0"], check=True)  # вкл микрофон.
-# Отключаем предупреждения ALSA и JACK
-os.environ["PYAUDIO_ALSA_WARN"] = "0"
-os.environ["ALSA_LOG_LEVEL"] = "0"  # Подавляем логи ALSA
-os.environ["JACK_NO_START_SERVER"] = "1"  # Отключаем запуск JACK-сервера
+from write_text import *
+import  torch, gigaam, tempfile, torchaudio
+import webrtcvad
+from collections import deque
+import scipy.io.wavfile as wavfile
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-err = os.dup(2)  # Сохраняем оригинальный stderr
-os.dup2(os.open(os.devnull, os.O_WRONLY), 2)  # Перенаправляем вывод ошибок в /dev/null
+try:
+ os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/myenv/lib/python3.12/site-packages/PyQt5/Qt5/plugins"
+ subprocess.run(["pactl", "set-source-mute", "54", "0"], check=True)  # вкл микрофон.
+ # Настройка директории кэша
+ cache_dir = Path("/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache/gigaam")
+ cache_dir.mkdir(parents=True, exist_ok=True)
+ os.environ["XDG_CACHE_HOME"] = str(cache_dir)
 
-# Настройка директории кэша
-cache_dir = Path("/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project/cache")
-cache_dir.mkdir(parents=True, exist_ok=True)
-os.environ["XDG_CACHE_HOME"] = str(cache_dir)
+ os.environ["OMP_NUM_THREADS"] = "8" # Настройка потоков для PyTorch
+ os.environ["MKL_NUM_THREADS"] = "8"
+ torch.set_num_threads(8)
+ # Список доступных моделей
+ models = ["v1_ssl", "v2_ssl", "ssl", "ctc", "v1_ctc", "v2_ctc", "rnnt", "v1_rnnt", "v2_rnnt", "emo"]
+ model_name = models[-2]  # v2_rnnt
 
-os.environ["OMP_NUM_THREADS"] = "8" # Настройка потоков для PyTorch
-os.environ["MKL_NUM_THREADS"] = "8"
-torch.set_num_threads(8)
+ model_path = cache_dir / f"{model_name}" # Путь для модели
+ if not os.path.exists(f"{model_path}.ckpt"):
+   print(f"Ошибка: Файл модели не найден по пути: {model_path}")
+   sys.exit(1)  # Завершаем программу с кодом ошибки
 
-# Список доступных моделей
-models = ["v1_ssl", "v2_ssl", "ssl", "ctc", "v1_ctc", "v2_ctc", "rnnt", "v1_rnnt", "v2_rnnt", "emo"]
-model_name = models[-2]  # v2_rnnt
+ model = gigaam.load_model(model_name)
 
-model_path = cache_dir / "gigaam" / f"{model_name}" # Путь для модели
-if not os.path.exists(f"{model_path}.ckpt"):
-  print(f"Ошибка: Файл модели не найден по пути: {model_path}")
-  sys.exit(1)  # Завершаем программу с кодом ошибки
-
-model = gigaam.load_model(model_name)
-def on_press(key):  # обработчик клави.  # print(key )
- key = str(key).replace(" ", "")
- if key == "Key.shift_r":  #
-  k.set_flag(True)
-  return True
- if key == "Key.space" or key == "Key.right" or key == "Key.left" \
-  or key == "Key.down" or key == "Key.up":
-  k.set_flag(False)
-  return True
- if key == "Key.alt":
-  driver = k.get_driver()
-  k.update_dict()
-  return True
- else:
-  return True
-def on_release(key):
+except Exception as e:
+ print(e)
  pass
- return True
-def start_listener():
- global listener
- listener = keyboard.Listener(on_press=on_press, on_release=on_release)
- listener.start()
-
-start_listener()  # Запускаем слушатель# driver.set_window_position(1, 505)
-
-def is_speech(audio_data, threshold=0.022, min_duration=3.5, sample_rate=44100):#  Определяет, есть ли звук в аудиопотоке.
- # :param audio_data: Массив аудиоданных (например, indata.flatten())
- # :param threshold: Пороговое значение амплитуды, выше которого считается, что есть звук
- # :param min_duration: Минимальная длительность звука в секундах, чтобы считать его значимым
- # :param sample_rate: Частота дискретизации аудио
- # :return: True, если обнаружен звук, иначе False
- # Вычисляем среднюю амплитуду
- avg_amplitude = np.mean(np.abs(audio_data))
- # total_audio_duration = len(audio_data) / sample_rate
- # print(avg_amplitude)
- if avg_amplitude > threshold: # total_audio_duration > min_duration  and# print(f"Общая длительность аудио ({total_audio_duration:.2f}с) меньше min_duration ({min_duration}с)")
-  # Если аудио длинее min_duration, и превышает ли средняя амплитуда порог
-  return True
- else:
-  return False
-
-#Запись аудио с микрофона. Функция обратного вызова для записи аудио
-def audio_callback(indata, frames, time, status):
- if status:
-  print("Ошибка:", status)
- try:
-  audio = indata.flatten().astype(np.float32) # Прямое распознавание без буфера
-  if is_speech(audio):
-   audio_16k = torchaudio.functional.resample( torch.tensor(audio).unsqueeze(0),
-                                               16000, 16000 )[0].numpy()
-   # Сохранение во временный файл
-   with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
-    torchaudio.save(temp_file.name, torch.tensor(audio_16k).unsqueeze(0), 16000)
-    text = model.transcribe(temp_file.name)
-    if text: #and text !="Продолжение следует...":  # Проверяем, что текст не пустой
-     message = repeat(text)
-     thread = threading.Thread(target=process_text, args=(message, k))
-     thread.start()
-     thread.join()
- except Exception as e:
-  print("Ошибка в распознавании:", e)
-  self.error_signal.emit(str(e))
-
-class MyThread(QtCore.QThread):  # Определение класса потока
- mysignal = QtCore.pyqtSignal(str)  # Объявление сигнала
- error_signal = QtCore.pyqtSignal(str)  # Добавлено объявление сигнала ошибки
- icon_signal = QtCore.pyqtSignal(str)  # Сигнал для изменения иконки
+class MyThread(QThread):  # Определение класса потока
+ mysignal = pyqtSignal(str)  # Объявление сигнала
+ error_signal = pyqtSignal(str)  # Добавлено объявление сигнала ошибки
+ icon_signal = pyqtSignal(str)  # Сигнал для изменения иконки
 
  def __init__(self, parent=None):  # Конструктор класса потока
   super(MyThread, self).__init__(parent)  # Вызов конструктора базового класса
-  self.mic = True  # Добавляем переменную mic в поток
-  self.duration = 6.5  # Начальная длительность записи
+  self._mic = True  # Приватная переменная для состояния микрофона
+  self._running = False  # Флаг для управления циклом run
+  self._queue = None
+
+ @property
+ def mic(self):
+  return self._mic
+
+ @mic.setter
+ def mic(self, value):
+  if self._mic != value:
+   self._mic = value
+   # Сигнал run() о необходимости начать/завершить работу
+   if self._mic and not self._running:
+    # Если нужно немедленно начать, но run() еще не успел это сделать,
+    # мы полагаемся на цикл run().
+    pass
+   elif not self._mic and self._running:
+    # Принудительная остановка process_audio_stream через Queue
+    if self._queue:
+     self._queue.put(None)
+
+ def record_audio_stream(self, fs=48000, chunk_duration=0.03):
+  """Создает и запускает поток sounddevice"""
+  queue = Queue()
+
+  def callback(indata, frames, time_info, status):
+   if status:
+    print(f"Статус потока: {status}")
+   queue.put(indata.copy())
+
+  # Создаем поток, но не запускаем его здесь
+  stream = sd.InputStream(samplerate=fs, channels=1, callback=callback, blocksize=int(fs * chunk_duration))
+  return stream, queue
+
+ def process_audio_stream(self, queue):  # Функция обработки аудиопотока
+  vad = webrtcvad.Vad(3)  # Инициализация параметров
+  buffer = deque()
+  silence_time = 0
+  start_time = time.time()
+  speech_detected = False
+  last_speech_time = start_time
+  min_silence_duration = 1.6
+  # print("Начинаю обработку аудиопотока...")
+  try:
+   while self.mic:  # Работаем пока _mic == True
+    audio_chunk = queue.get()
+    if audio_chunk is None:
+     print("Завершение работы process_audio_stream...")
+     break
+    audio_int16 = np.int16(audio_chunk * 32767)
+    # Проверка, что аудио-чанк имеет правильную длину (обычно 0.01, 0.02 или 0.03 сек)
+    # 48000 * 0.03 = 1440 сэмплов, 1440 * 2 байта = 2880 байт
+    if len(audio_int16.tobytes()) not in [320, 640, 960, 1440 * 2]:  # Примеры для 8к, 16к, 32к, 48к
+     print(f"ВНИМАНИЕ: Неправильная длина чанка для VAD: {len(audio_int16.tobytes())} байт")
+     continue
+    try:
+     is_speech_chunk = vad.is_speech(audio_int16.tobytes(), sample_rate=48000)
+    except Exception as vad_err:
+     print(f"Ошибка VAD: {vad_err}")
+     continue
+    current_time = time.time()
+    # print("1") # Закомментировал вывод, чтобы не спамить консоль
+    if is_speech_chunk:  # Обнаружение речи
+     mean_amp = np.mean(np.abs(audio_chunk))
+     # print(f"Средняя амплитуда чанка: {mean_amp:.4f}")
+     if mean_amp > 0.0151:  # Сохраняем только громкие чанки
+      buffer.append(audio_chunk)
+
+    # Логика VAD/записи
+    if is_speech_chunk:
+     if not speech_detected and buffer:  # Обнаружение начала речи
+      # Только если у нас есть достаточно громкие чанки в буфере
+      speech_segment_check = np.concatenate(buffer).astype(np.float32)
+      if np.max(np.abs(speech_segment_check)) > 0.09:  # Проверка на реальную громкость
+       # self.icon_signal.emit("голос.png") # Уже отправлено в run()
+       print("Начало записи (обнаружена речь)")
+       speech_detected = True
+       last_speech_time = current_time
+
+     if speech_detected:
+      last_speech_time = current_time  # Речь продолжается — обнуляем паузу
+      silence_time = 0
+
+    elif speech_detected:  # Тишина, но была речь
+     silence_time = current_time - last_speech_time
+
+    # Конец сегмента
+    if speech_detected and silence_time > min_silence_duration and buffer:  # Проверяем, что буфер не пустой
+     self.icon_signal.emit("stop icon.jpeg")  # Индикация обработки
+     speech_segment = np.concatenate(buffer).astype(np.float32)
+     segment_duration = len(speech_segment) / 48000
+     print(f"Длительность сегмента: {segment_duration:.2f} сек")
+     speech_detected = False
+     silence_time = 0
+     filename = "temp.wav"
+     # Делаем данные записываемыми, чтобы избежать предупреждения PyTorch
+     speech_segment_int16 = np.int16(speech_segment * 32767).copy()
+     wavfile.write(filename, 48000, speech_segment_int16)
+     buffer.clear()
+     result = model.transcribe(filename)  # Для других моделей получаем текст
+     text = str(result).strip().lower()
+     if text:  # Проверяем, что текст не пустой
+      message = repeat(text)  # Автоподгонка ширины окна
+      threading.Thread(target=process_text, args=(message,), daemon=True).start()
+
+  except Exception as e:
+   print(f"Ошибка в process_audio_stream: {e}")
+   self.error_signal.emit(f"Ошибка обработки: {e}")
+  finally:
+   print("process_audio_stream завершен.")
+   # После завершения process_audio_stream (если self.mic стал False) нужно сообщить об этом run()
 
  def run(self):  # Метод, исполняемый потоком
-  while True:  # Чтение данных из потока
-   try:
-    if self.mic: # состояние микрофона.
-     sample_rate = 16000  # Частота дискретизации
-     duration = self.duration  # Используем self.duration
-     block_size = int(sample_rate * duration)  # 16000 * duration
-     buffer = queue.Queue()  # Оставляем для совместимости, но используем напрямую
-     stream = sd.InputStream(samplerate=sample_rate, channels=1,  # Запуск записи
-                             dtype="float32", callback=audio_callback, blocksize=block_size)
-     self.icon_signal.emit("/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project/голос.png")
-     stream.start()
-     time.sleep(duration)  # Ожидание для записи
-     stream.stop()  # Останавливаем поток
-     stream.close()  # Закрываем поток
-     self.icon_signal.emit("/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project/stop icon.jpeg")
-     time.sleep(4)
-   except Exception as ex2:#    print(ex2)  # Лучше видеть ошибки
-    self.error_signal.emit(str(ex2))
+  while True:
+   time.sleep(0.1)  # Короткая пауза для предотвращения 100% загрузки ЦПУ в цикле
+   if self.mic and not self._running:
+    try:
+     self.icon_signal.emit("голос.png")
+     self._running = True
+     stream, queue = self.record_audio_stream()
+     self._queue = queue  # Сохраняем очередь для принудительной остановки
+
+     # КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: Используем контекстный менеджер для sounddevice
+     # Он автоматически вызывает start() и stop()/close() при выходе
+     with stream:
+      self.process_audio_stream(queue)
+
+    except Exception as ex2:
+     print(f"Критическая ошибка в MyThread.run(): {ex2}")
+     self.error_signal.emit(str(ex2))
+    finally:
+     # Логика выполнится, когда process_audio_stream завершится (по queue.get(None) или self.mic=False)
+     self._running = False
+     self._queue = None
+     self.icon_signal.emit("stop icon.jpeg")  # Возвращаем иконку "неактивен"
+     print("Аудиопоток и обработка завершены.")
+
+   elif not self.mic and self._running:
+    # Если self.mic стал False, process_audio_stream уже должен был завершиться,
+    # и self._running должен быть False. Если нет, это значит, что stream не был закрыт.
+    # В этом случае, мы полагаемся на логику в mic.setter, которая посылает None в очередь.
+    pass
+
+
+# ======================================================================================================================
 
 class MyWindow(QtWidgets.QWidget):  # Определение класса главного окна
  def __init__(self, parent=None):  # Конструктор класса окна
   super(MyWindow, self).__init__(parent)  # Вызов конструктора базового класса
 
   # Сохраняем пути к иконкам как атрибуты класса для удобства
-  self.icon1_path = "/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project/stop icon.jpeg"
-  self.icon2_path = "/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project/голос.png"
+  self.icon1_path = "stop icon.jpeg"
+  self.icon2_path = "голос.png"
+
+  # Создание экземпляра потока
+  self.mythread = MyThread()
+
   self.tray_icon = QSystemTrayIcon(QtGui.QIcon(self.icon2_path), self)  # Инициализируем иконку трея
 
   menu = QMenu()  # Создание контекстного меню для иконки в системном трее
-  quit_action = QAction("Quit", self)
-  quit_action.triggered.connect(self.quit_t)  # Используйте метод quit, определённый ниже
-  duration_action = QAction("Длина записи", self)  # Новый пункт меню
-  duration_action.triggered.connect(self.set_duration)  # Подключаем метод для ползунка
-  menu.addAction(duration_action)
-  menu.addAction(quit_action)
+  self.quit_action = QAction("Quit", self)
+  self.quit_action.triggered.connect(self.quit_t)
+  menu.addAction(self.quit_action)
 
-  self.mythread = MyThread()  # Создание экземпляра потока
   self.mythread.icon_signal.connect(self.change_icon)  # Подключаем сигнал изменения иконки
   self.tray_icon.setContextMenu(menu)  # Установка меню в трей
-  self.tray_icon.setToolTip("OFF")  # Установка начальной подсказки
+  self.tray_icon.setToolTip("ON")  # Установка начальной подсказки (по умолчанию True)
   self.tray_icon.activated.connect(self.on_tray_icon_activated)  # Привязываем обработчик к сигналу нажатия
   self.tray_icon.show()
+
+  # Устанавливаем начальное состояние mic в потоке и запускаем его
+  self.mythread.mic = True
   self.mythread.start()
 
  def change_icon(self, icon_path):  # Метод для изменения иконки в системном трее.
@@ -161,40 +218,46 @@ class MyWindow(QtWidgets.QWidget):  # Определение класса гла
   self.tray_icon.show()
 
  def set_duration(self):  # Метод для установки длительности записи
+  # Оставил оригинальную заглушку
   dialog = QDialog(self)
   dialog.setWindowTitle("Длина записи")
   layout = QVBoxLayout()
-  label = QLabel(str(int(self.mythread.duration)))  # Метка с текущим значением
-  slider = QSlider(QtCore.Qt.Horizontal)
-  slider.setMinimum(5)  # Минимальное значение 5 секунд
-  slider.setMaximum(50)  # Максимальное значение 50 секунд
-  slider.setSingleStep(5)  # Шаг 5 секунд
-  slider.setValue(int(self.mythread.duration))  # Текущее значение
-  slider.valueChanged.connect(lambda value: self.mythread.__setattr__('duration', value))
-  slider.valueChanged.connect(lambda value: label.setText(str(value)))  # Обновляем метку
-  layout.addWidget(slider)
-  layout.addWidget(label)  # Добавляем метку в layout
   dialog.setLayout(layout)
   dialog.exec_()
- def on_tray_icon_activated(self):  # Данная функция
+
+ def on_tray_icon_activated(self):  # Переключение состояния микрофона
   try:
-   if self.mic == True:# Состояние микрофона.
-    self.mic = False
-   else:
-    self.mic = True
-   self.tray_icon.setToolTip("ON" if self.mic else "OFF")
-   set_mute("0" if self.mic else "1")
+   # Переключаем состояние в потоке через setter
+   new_mic_state = not self.mythread.mic
+   self.mythread.mic = new_mic_state
+
+   # Обновляем GUI
+   self.tray_icon.setToolTip("ON" if new_mic_state else "OFF")
+   set_mute("0" if new_mic_state else "1")  # Обновление состояния системы
+
+   # Если нужно немедленно обновить иконку при отключении
+   if not new_mic_state:
+    self.change_icon(self.icon1_path)  # "stop icon.jpeg"
+
    self.tray_icon.show()
   except Exception as e:
    print(f"Error in on_tray_icon_activated: {e}")
 
  def quit_t(self):  # Метод обработки события закрытия окна
-  self.mythread.quit()  # Останавливаем поток
-  self.mythread.wait()  # Ждем завершения потока
+  # Устанавливаем mic=False для корректного выхода из потока
+  self.mythread.mic = False
+
+  # Если поток еще работает, принудительно прерываем цикл run
+  if self.mythread.isRunning():
+   self.mythread.quit()  # Останавливаем поток
+   self.mythread.wait(5000)  # Ждем завершения потока (до 5 секунд)
+
   QApplication.quit()
+
 
 if __name__ == "__main__":
  app = QApplication(sys.argv)
+ # Устанавливаем стиль приложения для лучшего отображения
+ app.setQuitOnLastWindowClosed(False)  # Не закрывать при закрытии главного окна
  window = MyWindow()
  sys.exit(app.exec_())
- 
