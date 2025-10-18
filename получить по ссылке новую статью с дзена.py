@@ -1,6 +1,5 @@
 from libs_voice import *
 from web_libs import *
-
 def simplify_html(html, base_url="https://dzen.ru"):
  soup = BeautifulSoup(html, 'html.parser')
  title_element = soup.find('h1', {'data-testid': 'article-title'})
