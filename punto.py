@@ -29,10 +29,10 @@ def find_nemo(): # Проверяет, активно ли окно файлов
 def search_image(): # Ищет изображения на экране и симулирует нажатие Enter, если найдено в Nemo
  try:
   s = f'''#!/bin/bash
-  xte 'keydown Return' 'keyup Return'    '''
+  xte 'keydown Return' 'keyup Return' '''
   region = (1400, 100, 1500, 900) # Область поиска кнопки "Search"
   image_path = 'Search button.png'
-  loc = pyautogui.locateOnScreen(image_path, confidence=0.25, region=region) # Ищем кнопку поиска
+  loc = pyautogui.locateOnScreen(image_path, confidence=0.23, region=region) # Ищем кнопку поиска
   region1 = (268, 44, 182, 108) # Область поиска поля ввода
   image_path1 = 'Search text.png'
   loc1 = pyautogui.locateOnScreen(image_path1, confidence=0.2, region=region1) # Ищем поле ввода

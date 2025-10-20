@@ -133,21 +133,25 @@ def repeat(text):  # text = "linux менч установить линукс м
   except Exception as ex:
    print(f"Ошибка: {ex}")  # Выводим ошибку для диагностики
   return text1
-
 def press_keys(text):  # xte 'keyup Shift_L'
   try:   #
+   key_s = '''#!/bin/bash
+   # xte 'keyup Shift_R'
+   # sleep 0.1
+   # xte 'keyup Shift_L'
+   xkbset -sticky
+   exit     '''
    print(text)
    # text="lunix mint"
    for char in text:
     if char ==",":
-     key_s = '''#!/bin/bash
-     xte 'keyup Shift_R'
-     sleep 0.1
-     xte 'keyup Shift_L'
-     exit
-     '''
-     # print(char)
      subprocess.run(['bash', '-c', key_s])
+     subprocess.call(['xdotool', 'key', 'comma'])
+     continue
+    if char ==":":
+     subprocess.run(['bash', '-c', key_s])
+     subprocess.call(['xdotool', 'key', 'shift+semicolon'])
+     continue
     if  char in ['a', 'A', 'b', 'B', 'c', 'C', 'd', 'D', 'e', 'E', 'f', 'F', 'g', 'G', 'h', 'H', 'i', 'I', 'j', 'J', 'k', 'K', 'l', 'L', 'm', 'M',
      'n', 'N', 'o', 'O', 'p', 'P', 'q', 'Q', 'r', 'R', 's', 'S', 't', 'T', 'u', 'U', 'v', 'V', 'w', 'W', 'x', 'X', 'y', 'Y', 'z', 'Z']:  # Диапазон от пробела до тильды (ASCII 32-126)#
       subprocess.call(['xdotool', 'type', '--delay', '3', char])
@@ -155,14 +159,18 @@ def press_keys(text):  # xte 'keyup Shift_L'
      if char.isupper():  # Если символ заглавный
       keyboard.press(char.upper())  # Нажимаем строчную версию символа
       keyboard.release(char.upper())
+      # keyboard.release(Key.shift)  # Отпустить Shift
+      # subprocess.run(['bash', '-c', key_s])
      else:
       keyboard.press(char)
       keyboard.release(char)
-    time.sleep(0.04)  # Уменьшение задержки
-    keyboard.release(Key.shift)  # Отпустить Shift
+    time.sleep(0.03)  # Уменьшение задержки
+   # Включить sticky keys
+   subprocess.call(['xkbset', 'sticky'])
   except Exception as ex1:
     print(ex1)
     return
+
 def process_text(previous_message1):
   text = previous_message1 + str(" ")
   text=text[0].lower()+ text[1:]
