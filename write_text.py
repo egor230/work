@@ -1,10 +1,11 @@
 import sys, os, subprocess, json,  wave, io, threading, re, time
 from scipy.io.wavfile import write
 os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = "myenv/lib/python3.12/site-packages/PyQt5/Qt5/plugins"
-from PyQt5 import QtCore, QtWidgets, QtGui  # Импорт необходимых модулей из PyQt5
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QSystemTrayIcon, QAction, QMenu, QWidget, QDialog, QLabel, QSystemTrayIcon, QMenu, QAction, QVBoxLayout, QPushButton, QApplication
-from PyQt5.QtCore import QTimer
+from PyQt5 import QtCore, QtWidgets, QtGui
+from PyQt5.QtCore import QTimer, QObject, pyqtSignal, Qt, QThread
+from PyQt5.QtGui import QIcon, QFont
+from PyQt5.QtWidgets import ( QApplication, QWidget, QLabel, QVBoxLayout, QSystemTrayIcon, QMenu,
+ QAction, QSlider, QMainWindow, QPushButton, QDialog)
 from queue import Queue
 import sounddevice as sd
 import tkinter as tk
@@ -14,18 +15,6 @@ from pathlib import Path
 from faster_whisper import WhisperModel
 from pynput.keyboard import Controller, Key, Listener
 from pynput import keyboard
-from PyQt5 import QtCore, QtWidgets, QtGui  # Импорт необходимых модулей из PyQt5
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QSlider, QApplication, QMainWindow, QVBoxLayout, QWidget, QPushButton
-from PyQt5.QtWidgets import QSystemTrayIcon, QMenu, QDialog, QLabel, QMenu, QAction
-from PyQt5.QtCore import QThread, pyqtSignal
-from PyQt5.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QDialog, QVBoxLayout
-import sounddevice as sd
-from pathlib import Path
-import numpy as np
-from pynput import keyboard
-from pynput.keyboard import Controller as Contr1
-
 import webrtcvad
 from scipy.io import wavfile
 from collections import deque
@@ -143,18 +132,17 @@ def press_keys(text):  # xte 'keyup Shift_L'
    exit     '''
    print(text)
    # text="lunix mint"
+   char_to_xdotool = { ",": "comma",
+   ":": "shift+semicolon" }
+   liters_en=['a', 'A', 'b', 'B', 'c', 'C', 'd', 'D', 'e', 'E', 'f', 'F', 'g', 'G', 'h', 'H', 'i', 'I', 'j', 'J', 'k', 'K', 'l', 'L', 'm', 'M',
+     'n', 'N', 'o', 'O', 'p', 'P', 'q', 'Q', 'r', 'R', 's', 'S', 't', 'T', 'u', 'U', 'v', 'V', 'w', 'W', 'x', 'X', 'y', 'Y', 'z', 'Z']  # Диапазон от пробела до тильды (ASCII 32-126)#
    for char in text:
-    if char ==",":
-     subprocess.run(['bash', '-c', key_s])
-     subprocess.call(['xdotool', 'key', 'comma'])
-     continue
-    if char ==":":
-     subprocess.run(['bash', '-c', key_s])
-     subprocess.call(['xdotool', 'key', 'shift+semicolon'])
-     continue
-    if  char in ['a', 'A', 'b', 'B', 'c', 'C', 'd', 'D', 'e', 'E', 'f', 'F', 'g', 'G', 'h', 'H', 'i', 'I', 'j', 'J', 'k', 'K', 'l', 'L', 'm', 'M',
-     'n', 'N', 'o', 'O', 'p', 'P', 'q', 'Q', 'r', 'R', 's', 'S', 't', 'T', 'u', 'U', 'v', 'V', 'w', 'W', 'x', 'X', 'y', 'Y', 'z', 'Z']:  # Диапазон от пробела до тильды (ASCII 32-126)#
-      subprocess.call(['xdotool', 'type', '--delay', '3', char])
+    if char in char_to_xdotool:
+      subprocess.run(['bash', '-c', key_s])
+      subprocess.call(['xdotool', 'key', char_to_xdotool[char]])
+      continue
+    if char in liters_en:
+       subprocess.call(['xdotool', 'type', '--delay', '3', char])
     else:
      if char.isupper():  # Если символ заглавный
       keyboard.press(char.upper())  # Нажимаем строчную версию символа

@@ -1,5 +1,5 @@
 from pytq_libs_voice import *
-from PyQt5.QtWidgets import QSystemTrayIcon, QAction, QMenu, QDialog, QLabel, QMenu, QAction
+from write_text import *
 os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/myenv/lib/python3.12/site-packages/PyQt5/Qt5/plugins"
 subprocess.run(["pactl", "set-source-mute", "54", "0"], check=True)  # вкл микрофон.
 # subprocess.run(['pactl', 'set-source-volume', "54", '65000'])
@@ -148,7 +148,7 @@ class MyThread(QtCore.QThread):
      self.counts = counts1
     if counts1 > self.counts and self.mic and self.message and not any(phrase in self.message for phrase in excluded_phrases):
      self.mic = False
-     thread = threading.Thread(target=process_text, args=(self.message, k,))
+     thread = threading.Thread(target=process_text, args=(self.message, ))
      thread.start()
      thread.join()
      thr = threading.Thread(target=lambda: [time.sleep(4.7), setattr(self, 'mic', True)])
