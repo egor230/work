@@ -103,19 +103,19 @@ def process_audio_stream(queue):# Функция обработки аудиоп
    if is_speech_chunk:  # Обнаружение речи
     # Проверяем максимальную амплитуду текущего чанка
     mean_amp = np.mean(np.abs(audio_chunk))
-    # print(f"Средняя амплитуда чанка: {mean_amp:.4f}")
+    print(f"Средняя амплитуда чанка: {mean_amp:.4f}")
     if mean_amp > 0.0151:  # Сохраняем только громкие чанки
      buffer.append(audio_chunk)
 
    if is_speech_chunk and not speech_detected and buffer:   # Обнаружение начала речи
     speech_segment = np.concatenate(buffer).astype(np.float32)
+    print(np.max(np.abs(speech_segment)))
     if np.max(np.abs(speech_segment)) > 0.9:
-     print(np.max(np.abs(speech_segment)))
      print("Начало записи (обнаружена речь)")
      speech_detected = True
      last_speech_time = current_time
    if speech_detected:
-    if is_speech_chunk:
+    if is_speech_chunk and np.max(np.abs(speech_segment)) > 0.9:
      last_speech_time = current_time # Речь продолжается — обнуляем паузу
      silence_time = 0
     else: # Тишина — накапливаем время

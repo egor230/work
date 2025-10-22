@@ -28,10 +28,31 @@ class MyThread(QtCore.QThread):
   self.chat_list = ".ChatListGroup-List .ChatListItem"
   self.chat_list_more = ".ChatListItem-Button_more"
   self.stream = ".AliceChat-StreamingPlaceholder"
- 
- def get_user_messages(self, driver):
+  self.ready= "chat__streaming-placeholder"
+ def get_latest_message(self, len_c=0):
   try:
-   user_m = WebDriverWait(driver, 3).until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, ".MessageBubble-Container_from-user")) )
+   self.driver.execute_script(
+    "window.scrollTo(0, document.body.scrollHeight);")  # filter_elem = WebDriverWait(driver, 1).until( EC.presence_of_element_located((By.CSS_SELECTOR, ".yamb-oknyx-lottie.svelte-rdfi3w"))).get_attribute("data-testid")
+   # aria_label= mic_button.get_attribute('aria-label')  # Ожидание наличия элемента на странице
+#  element = self.driver.find_element(By.CLASS_NAME,  "AliceChat-Thinking")
+   element = WebDriverWait(self.driver, 3).until(
+    EC.visibility_of_all_elements_located((By.CLASS_NAME, "AliceChat-Thinking"))
+   )
+   if element:  # Проверка видимости элемента
+    message, counts = self.get_user_messages()  # button.click()
+    return message, counts + 1
+   else:
+    return "", len_c
+  except Exception as ex:
+   print(ex)
+   user_m = [message.text.strip() for message in driver.find_elements(By.CLASS_NAME, 'message-bubble_container_from-user')]
+   counts = len(user_m)
+   pass
+   return "", len_c  # Возврат по умолчанию, если ни одно условие не выполнилось    # pass       #
+
+ def get_user_messages(self):
+  try:
+   user_m = WebDriverWait(self.driver, 3).until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, ".MessageBubble-Container_from-user")) )
    if user_m:
     last_user_container = user_m[-1]
     message = last_user_container.find_element(By.CSS_SELECTOR, ".MessageBubble").text.strip()
@@ -41,13 +62,6 @@ class MyThread(QtCore.QThread):
   except Exception as ex:
    print(ex)
    return None, 0
- 
- def get_latest_message(self, driver, stream, len_c=0):
-  driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-  element = WebDriverWait(driver, 10).until(
-   EC.presence_of_element_located((By.CSS_SELECTOR, f"{stream}")) )
-  message, counts = self.get_user_messages(driver)
-  return message, counts
 
  def update_mic_state(self, mic):
   self.mic = mic
@@ -143,7 +157,7 @@ class MyThread(QtCore.QThread):
      self.button.click()
      time.sleep(1)
 
-    self.message, counts1 = self.get_latest_message(self.driver, self.stream, self.counts)
+    self.message, counts1 = self.get_latest_message(self.counts)
     if counts1 ==0:
      self.counts = counts1
     if counts1 > self.counts and self.mic and self.message and not any(phrase in self.message for phrase in excluded_phrases):
@@ -151,7 +165,7 @@ class MyThread(QtCore.QThread):
      thread = threading.Thread(target=process_text, args=(self.message, ))
      thread.start()
      thread.join()
-     thr = threading.Thread(target=lambda: [time.sleep(4.7), setattr(self, 'mic', True)])
+     thr = threading.Thread(target=lambda: [time.sleep(3.7), setattr(self, 'mic', True)])
      thr.daemon = True
      self.counts = counts1
      thr.start()
