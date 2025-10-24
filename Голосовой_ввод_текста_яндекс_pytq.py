@@ -34,17 +34,17 @@ class MyThread(QtCore.QThread):
    self.driver.execute_script(
     "window.scrollTo(0, document.body.scrollHeight);")  # filter_elem = WebDriverWait(driver, 1).until( EC.presence_of_element_located((By.CSS_SELECTOR, ".yamb-oknyx-lottie.svelte-rdfi3w"))).get_attribute("data-testid")
    # aria_label= mic_button.get_attribute('aria-label')  # Ожидание наличия элемента на странице
-#  element = self.driver.find_element(By.CLASS_NAME,  "AliceChat-Thinking")
-   element = WebDriverWait(self.driver, 3).until(
-    EC.visibility_of_all_elements_located((By.CLASS_NAME, "AliceChat-Thinking"))
-   )
+   element = self.driver.find_element(By.CLASS_NAME,  "AliceChat-Thinking")
+   # element = WebDriverWait(self.driver, 3).until(
+   #  EC.visibility_of_all_elements_located((By.CLASS_NAME, "AliceChat-Thinking"))
+   # )
    if element:  # Проверка видимости элемента
     message, counts = self.get_user_messages()  # button.click()
     return message, counts + 1
    else:
     return "", len_c
   except Exception as ex:
-   print(ex)
+   # print(ex)
    user_m = [message.text.strip() for message in driver.find_elements(By.CLASS_NAME, 'message-bubble_container_from-user')]
    counts = len(user_m)
    pass

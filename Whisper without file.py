@@ -20,12 +20,13 @@ model_path = os.path.join(model_dir, snapshot)
 if not os.path.exists(os.path.join(model_path, "model.bin")):
     print(f"Ошибка: Файл model.bin не найден в {model_path}")
     sys.exit(1)
+subprocess.run(["pactl", "set-source-mute", "54", "0"], check=True)  # вкл микрофон.
+subprocess.run(['pactl', 'set-source-volume', "54", '65000'])
 try:# Загрузка модели
     model = WhisperModel(model_path, device="cpu", compute_type="int8")
 except Exception as e:
     print(f"Ошибка загрузки модели: {e}")
     sys.exit(1)
-
 # Функция для потоковой записи аудио
 def record_audio_stream(fs=48000, chunk_duration=0.03):
   queue = Queue()
@@ -92,33 +93,39 @@ def process_audio_stream(queue):# Функция обработки аудиоп
  min_length = 4
  min_silence_duration = 1.6
  print("Начинаю обработку аудиопотока...")
+ mid=0.18
  with sd.InputStream():
   while True:
    audio_chunk = queue.get()
    if audio_chunk is None:#   print("Завершение работы...")
     break
-   audio_int16 = np.int16(audio_chunk * 32767)
+   audio_int16 = np.int16(audio_chunk * 65534)
    is_speech_chunk = vad.is_speech(audio_int16.tobytes(), sample_rate=48000)
    current_time = time.time()
-   if is_speech_chunk:  # Обнаружение речи
-    # Проверяем максимальную амплитуду текущего чанка
-    mean_amp = np.mean(np.abs(audio_chunk))
-    print(f"Средняя амплитуда чанка: {mean_amp:.4f}")
-    if mean_amp > 0.0151:  # Сохраняем только громкие чанки
+   speech_segment = np.concatenate(audio_chunk).astype(np.float32)
+   mean_amp = np.mean(np.abs(speech_segment))
+   max_amp = np.max(np.abs(speech_segment))
+   if mean_amp > mid and not speech_detected:#0.025 and max_amp> 0.9:
+    mid=mean_amp
+    print(f"Средняя амплитуда чанка: {mean_amp:.3f}")
+   #  print(f"max амплитуда чанка: {max_amp:.3f}")
+   if is_speech_chunk and mean_amp > 0.020:  # Обнаружение речи
+    # Проверяем максимальную амплитуду текущего чанка # Сохраняем только громкие чанки
      buffer.append(audio_chunk)
-
-   if is_speech_chunk and not speech_detected and buffer:   # Обнаружение начала речи
-    speech_segment = np.concatenate(buffer).astype(np.float32)
-    print(np.max(np.abs(speech_segment)))
-    if np.max(np.abs(speech_segment)) > 0.9:
+   if not speech_detected and buffer:   # Обнаружение начала речи
+    if mean_amp > 0.25 and max_amp> 0.9:
+     print(max_amp)
      print("Начало записи (обнаружена речь)")
      speech_detected = True
      last_speech_time = current_time
    if speech_detected:
-    if is_speech_chunk and np.max(np.abs(speech_segment)) > 0.9:
+    if is_speech_chunk and mean_amp > 0.0154:
+     # print(max_amp)
+     # print(f"Средняя амплитуда чанка: {mean_amp:.4f}")
      last_speech_time = current_time # Речь продолжается — обнуляем паузу
      silence_time = 0
-    else: # Тишина — накапливаем время
+    else:# Тишина — накапливаем время
+     print("silent")
      silence_time += current_time - last_speech_time
      last_speech_time = current_time
    if (speech_detected and silence_time > min_silence_duration ) and buffer: # Проверяем, что буфер не пустой
@@ -130,6 +137,7 @@ def process_audio_stream(queue):# Функция обработки аудиоп
     t1 = threading.Thread(target=transcribe_audio_segment, args=(speech_segment, model,))# Поток завершится при завершении основной программы
     t1.start()
     buffer.clear()  # Сбрасываем буфер
+    # input()
 # Запуск
 stream, queue = record_audio_stream()
 stream.start()

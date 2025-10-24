@@ -101,7 +101,8 @@ def replace(match):
   res = k.get_dict()
   return res[match.group(0)]
 
-def repeat(text):  # text = "linux менч установить линукс минт помоги мне установить "
+def repeat(text1 : str):  # text = "linux менч установить линукс минт помоги мне установить "
+  text=text1.replace("!","").replace("?","")
   # print(text)
   k.save_text(text)
   text1 = ""
@@ -129,6 +130,9 @@ def press_keys(text):  # xte 'keyup Shift_L'
    # sleep 0.1
    # xte 'keyup Shift_L'
    xkbset -sticky
+   xte "key Num_Lock"
+   # command = 'xte "key Num_Lock"'
+   # subprocess.run(command, shell=True)
    exit     '''
    print(text)
    # text="lunix mint"
