@@ -45,7 +45,7 @@ class MyThread(QtCore.QThread):
     return "", len_c
   except Exception as ex:
    # print(ex)
-   user_m = [message.text.strip() for message in driver.find_elements(By.CLASS_NAME, 'message-bubble_container_from-user')]
+   user_m = [message.text.strip() for message in self.driver.find_elements(By.CLASS_NAME, 'message-bubble_container_from-user')]
    counts = len(user_m)
    pass
    return "", len_c  # Возврат по умолчанию, если ни одно условие не выполнилось    # pass       #
