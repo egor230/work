@@ -29,17 +29,13 @@ if result.returncode == 0 and result.stdout.strip():
     print(f"Убит запущенный процесс {script_name} с PID {pid}")
    except subprocess.CalledProcessError as e:
     print(f"Не удалось убить PID {pid}: {e}")
-
 # Формируем команду запуска
 cmd = f'bash -c "cd \\"{script_dir}\\" && source myenv/bin/activate && python \\"{script_path}\\""'
-
-# Запускаем скрипт в отдельном демонизированном потоке
-def run_script():
+def run_script():# Запускаем скрипт в отдельном демонизированном потоке
   subprocess.Popen(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
 threading.Thread(target=run_script, daemon=True).start()
 print("Скрипт запущен заново.")
-
 try: # Загрузка модели
   model = WhisperModel(model_path, device="cpu", compute_type="int8")
   print("Модель загружена успешно.")
@@ -72,14 +68,14 @@ def update_label(root, label):
      label.config(text="Речь не распознана")
      root.update()
      time.sleep(2)
-    if message:
+    if message != None:
       message = repeat(message) # Автоподгонка ширины окна
       threading.Thread(target=process_text, args=(message,), daemon=True).start()
       t1.join()
       # Проверка звука
       if is_speech("temp1.wav"):
        message = audio(model, "temp1.wav")
-       if message:
+       if message != None:
         message = repeat(message)    # Автоподгонка ширины окна
         threading.Thread(target=press_keys, args=(message,), daemon=True).start()
        else:

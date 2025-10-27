@@ -119,7 +119,7 @@ def process_audio_stream(queue):# Функция обработки аудиоп
      speech_detected = True
      last_speech_time = current_time
    if speech_detected:
-    if is_speech_chunk and mean_amp > 0.0154:
+    if is_speech_chunk and mean_amp > 0.0158:
      # print(max_amp)
      # print(f"Средняя амплитуда чанка: {mean_amp:.4f}")
      last_speech_time = current_time # Речь продолжается — обнуляем паузу
@@ -127,6 +127,7 @@ def process_audio_stream(queue):# Функция обработки аудиоп
     else:# Тишина — накапливаем время
      print("silent")
      silence_time += current_time - last_speech_time
+     print(silence_time)
      last_speech_time = current_time
    if (speech_detected and silence_time > min_silence_duration ) and buffer: # Проверяем, что буфер не пустой
     speech_segment = np.concatenate(buffer).astype(np.float32)  # Финальный сегмент

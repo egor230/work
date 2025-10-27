@@ -28,16 +28,15 @@ class MyThread(QtCore.QThread):
   self.chat_list = ".ChatListGroup-List .ChatListItem"
   self.chat_list_more = ".ChatListItem-Button_more"
   self.stream = ".AliceChat-StreamingPlaceholder"
-  self.ready= "chat__streaming-placeholder"
+  self.ready= "AliceChat-Thinking"
  def get_latest_message(self, len_c=0):
   try:
    self.driver.execute_script(
     "window.scrollTo(0, document.body.scrollHeight);")  # filter_elem = WebDriverWait(driver, 1).until( EC.presence_of_element_located((By.CSS_SELECTOR, ".yamb-oknyx-lottie.svelte-rdfi3w"))).get_attribute("data-testid")
    # aria_label= mic_button.get_attribute('aria-label')  # Ожидание наличия элемента на странице
-   element = self.driver.find_element(By.CLASS_NAME,  "AliceChat-Thinking")
-   # element = WebDriverWait(self.driver, 3).until(
-   #  EC.visibility_of_all_elements_located((By.CLASS_NAME, "AliceChat-Thinking"))
-   # )
+   element = WebDriverWait(self.driver, 3).until(
+    EC.visibility_of_all_elements_located((By.CLASS_NAME, self.ready)) )
+   element = self.driver.find_element(By.CLASS_NAME, self.ready)
    if element:  # Проверка видимости элемента
     message, counts = self.get_user_messages()  # button.click()
     return message, counts + 1

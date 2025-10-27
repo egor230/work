@@ -102,7 +102,7 @@ def replace(match):
   return res[match.group(0)]
 
 def repeat(text1 : str):  # text = "linux менч установить линукс минт помоги мне установить "
-  text=text1.replace("!","").replace("?","")
+  text=text1.replace("?", "").replace(".", "").replace("!", "")
   # print(text)
   k.save_text(text)
   text1 = ""
@@ -173,34 +173,50 @@ def process_text(previous_message1):
   else:
     press_keys(text)
 
-def record_audio(audio_file = "temp.wav", duration=10, fs=44100):  # Запись аудио с микрофона
+def record_audio(filename = "temp.wav", duration=10, fs=48000):  # Запись аудио с микрофона
  print("star...")
- recording = sd.rec(int(duration * fs), samplerate=fs, channels=1)
- sd.wait()
- recording_int16 = np.int16(recording * 32767) # Преобразуем float32 → int16
- write(audio_file, fs, recording_int16)
- # print(f"Запись завершена, файл сохранён как {audio_file}")
+ # Запись аудио
+ audio_data = sd.rec(int(duration * fs), samplerate=fs, channels=1, dtype='float64')
+ sd.wait()  # Ждем окончания записи
+ audio_data = audio_data.flatten().astype(np.float32) # Конвертируем в нужный формат и сохраняем
+ wavfile.write(filename, fs, (audio_data * 32767).astype(np.int16))
 
-def audio(model, audio_file = "temp.wav"):  # Путь к аудиофайлу
- try:  # Выполняем транскрипцию аудио
-  segments, info = model.transcribe(audio_file, beam_size=10, language="ru")
-  message_parts = []
-  # Собираем текст из всех сегментов
-  for segment in segments:
-   text = segment.text.strip()  # Удаляем лишние пробелы
-   if text:  # Проверяем, что текст не пустой
-    # Приводим первый символ к нижнему регистру
-    text = text[0].lower() + text[1:] if len(text) > 0 else text
-    message_parts.append(text)
-  if message_parts: # Формируем итоговое сообщение
-    message = ' '.join(message_parts).replace("?", "").replace(".", "").replace("!", "")
-    return message
-  else:
-    return None  # Возвращаем None, если текст не распознан
- except Exception as e:
-  print(f"Ошибка транскрипции: {e}")
-  return None
- 
+def audio(model, filename = "temp.wav"):  # Путь к аудиофайлу
+  try:    # Выполняем транскрипцию аудио
+    segments, info = model.transcribe( filename,  # Основные параметры качества:
+      beam_size=10,  # Увеличивает точность, но требует больше ресурсов
+      best_of=5,  # Выбирает лучший из нескольких вариантов
+      language="ru",  # Явное указание языка
+      vad_filter=True,  # Фильтрация тишины - ВКЛЮЧИТЬ
+      temperature=0.8,  # Для детерминированного результата
+      condition_on_previous_text=False,  # Избегать зацикливания
+      no_speech_threshold=0.5,  # Порог определения речи
+      log_prob_threshold=-0.8,  # Порог уверенности модели
+      compression_ratio_threshold=2.2,  # Фильтрация бессмыслицы    # Параметры для русского языка:
+      suppress_tokens=None,  # Не подавлять специальные токены
+      word_timestamps=False,  # Выключить для скорости
+      repetition_penalty=1.2,  # Бороться с повторениями     # Оптимизация:
+      patience=2.0,  # Терпимость в поиске
+      chunk_length=30 )  # Длина сегментов# Параллельная обработка
+    message_parts = []
+    for segment in segments:  # Собираем текст из всех сегментов
+      text = segment.text.strip()  # Удаляем лишние пробелы
+      if text:  # Проверяем, что текст не пустой
+        # Приводим первый символ к нижнему регистру
+        text = text[0].lower() + text[1:] if len(text) > 0 else text
+        message_parts.append(text)
+
+    if message_parts:  # Формируем итоговое сообщение
+      message = ' '.join(message_parts)
+      return message
+    else:
+      return None  # Возвращаем None, если текст не распознан
+
+  except Exception as e:
+    print(f"Ошибка транскрипции: {e}")
+    return None
+
+
 def is_speech(audio_data="temp.wav", threshold=0.0308, min_duration=4.5, sample_rate=44100):
  try:
   if isinstance(audio_data, str):
