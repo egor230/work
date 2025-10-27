@@ -1,4 +1,4 @@
-import sys, os, subprocess, json,  wave, io, threading, re, time
+import sys, os, subprocess, json, wave, io, threading, re, time, webrtcvad, warnings
 from scipy.io.wavfile import write
 os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = "myenv/lib/python3.12/site-packages/PyQt5/Qt5/plugins"
 from PyQt5 import QtCore, QtWidgets, QtGui
@@ -15,10 +15,7 @@ from pathlib import Path
 from faster_whisper import WhisperModel
 from pynput.keyboard import Controller, Key, Listener
 from pynput import keyboard
-import webrtcvad
 from scipy.io import wavfile
-from collections import deque
-from queue import Queue
 
 class save_key:
  def __init__(self):
@@ -103,13 +100,11 @@ def replace(match):
 
 def repeat(text1 : str):  # text = "linux менч установить линукс минт помоги мне установить "
   text=text1.replace("?", "").replace(".", "").replace("!", "")
-  # print(text)
   k.save_text(text)
   text1 = ""
   res = k.get_dict()
   k.save_words(res)
-  words = k.get_words()
-  # print(words)
+  words = k.get_words()  # print(words)
   try:
    # Создаем регулярное выражение для всех слов и словосочетаний из словаря
    words_regex = r'\b(' + r'|'.join(map(re.escape, words)) + r')\b'
@@ -117,8 +112,8 @@ def repeat(text1 : str):  # text = "linux менч установить лину
    text1 = re.sub(words_regex, lambda m: res.get(m.group(0).lower(), m.group(0)), k.get_text(), flags=re.IGNORECASE)
    k.save_text(text1)
    # Дополнительная замена для слов из словаря res
-   for word, replacement in res.items():
-    text1 = re.sub(r'\b' + re.escape(word) + r'\b', replacement, text1, flags=re.IGNORECASE)
+   # for word, replacement in res.items():
+   #  text1 = re.sub(r'\b' + re.escape(word) + r'\b', replacement, text1, flags=re.IGNORECASE)
    k.save_text(text1)
   except Exception as ex:
    print(f"Ошибка: {ex}")  # Выводим ошибку для диагностики
