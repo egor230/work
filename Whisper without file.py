@@ -87,9 +87,8 @@ def process_audio_stream(queue):# Функция обработки аудиоп
  vad = webrtcvad.Vad(3) # Инициализация параметров
  buffer = deque()
  silence_time = 0
- start_time = time.time()
  speech_detected = False
- last_speech_time = start_time
+ last_speech_time = time.time()
  min_length = 4
  min_silence_duration = 1.6
  print("Начинаю обработку аудиопотока...")
@@ -107,8 +106,8 @@ def process_audio_stream(queue):# Функция обработки аудиоп
    max_amp = np.max(np.abs(speech_segment))
    if mean_amp > mid and not speech_detected:#0.025 and max_amp> 0.9:
     mid=mean_amp
-    print(f"Средняя амплитуда чанка: {mean_amp:.3f}")
-   #  print(f"max амплитуда чанка: {max_amp:.3f}")
+   # print(f"max амплитуда чанка: {max_amp:.3f}")
+    print(f"Средняя амплитуда чанка: {mean_amp:.4f}")
    if is_speech_chunk and mean_amp > 0.020:  # Обнаружение речи
     # Проверяем максимальную амплитуду текущего чанка # Сохраняем только громкие чанки
      buffer.append(audio_chunk)
@@ -117,18 +116,18 @@ def process_audio_stream(queue):# Функция обработки аудиоп
      print(max_amp)
      print("Начало записи (обнаружена речь)")
      speech_detected = True
-     last_speech_time = current_time
+     last_speech_time = time.time()
    if speech_detected:
-    if is_speech_chunk and mean_amp > 0.0158:
+    # print(f"Средняя амплитуда чанка: {mean_amp:.4f}")
+    if mean_amp > 0.0158:
      # print(max_amp)
      # print(f"Средняя амплитуда чанка: {mean_amp:.4f}")
-     last_speech_time = current_time # Речь продолжается — обнуляем паузу
+     last_speech_time = time.time() # Речь продолжается — обнуляем паузу
      silence_time = 0
     else:# Тишина — накапливаем время
-     print("silent")
-     silence_time += current_time - last_speech_time
+     silence_time +=  time.time() - last_speech_time
      print(silence_time)
-     last_speech_time = current_time
+     last_speech_time =  time.time()
    if (speech_detected and silence_time > min_silence_duration ) and buffer: # Проверяем, что буфер не пустой
     speech_segment = np.concatenate(buffer).astype(np.float32)  # Финальный сегмент
     segment_duration = len(speech_segment) / 48000
