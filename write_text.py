@@ -104,7 +104,7 @@ def repeat(text1 : str):  # text = "linux менч установить лину
   text1 = ""
   res = k.get_dict()
   k.save_words(res)
-  words = k.get_words()  # print(words)
+  words = sorted(k.get_words(), key=len, reverse=True)
   try:
    # Создаем регулярное выражение для всех слов и словосочетаний из словаря
    words_regex = r'\b(' + r'|'.join(map(re.escape, words)) + r')\b'
@@ -120,6 +120,7 @@ def repeat(text1 : str):  # text = "linux менч установить лину
   return text1
 def press_keys(text):  # xte 'keyup Shift_L'
   try:   #
+   text=repeat(text)
    key_s = '''#!/bin/bash
    # xte 'keyup Shift_R'
    # sleep 0.1

@@ -29,6 +29,21 @@ class MyThread(QtCore.QThread):
   self.chat_list_more = ".ChatListItem-Button_more"
   self.stream = ".AliceChat-StreamingPlaceholder"
   self.ready= "AliceChat-Thinking"
+
+ def is_text_stable(self, timeout=3):
+   while True:
+     try:  # Ждём 3 секунды перед повторной проверкой
+       initial_text = self.driver.find_elements(By.CLASS_NAME, 'message-bubble_container_from-user')[-1].text
+       time.sleep(timeout)  # Снова получаем текст и сравниваем
+       final_text = self.driver.find_elements(By.CLASS_NAME, 'message-bubble_container_from-user')[-1].text
+       if initial_text == final_text:
+         break
+     #  placeholder_element = driver.find_element(By.CSS_SELECTOR, '.AliceChat-StreamingPlaceholder')
+     #  if  placeholder_element:
+     #   pass
+     except:
+       break
+   return True
  def get_latest_message(self, len_c=0):
   try:
    self.driver.execute_script(
@@ -41,7 +56,10 @@ class MyThread(QtCore.QThread):
     message, counts = self.get_user_messages()  # button.click()
     return message, counts + 1
    else:
-    return "", len_c
+    self.is_text_stable()
+    print("0300")
+    message, counts = self.get_user_messages()  # button.click()
+    return message, counts
   except Exception as ex:
    # print(ex)
    user_m = [message.text.strip() for message in self.driver.find_elements(By.CLASS_NAME, 'message-bubble_container_from-user')]
@@ -56,7 +74,6 @@ class MyThread(QtCore.QThread):
     last_user_container = user_m[-1]
     message = last_user_container.find_element(By.CSS_SELECTOR, ".MessageBubble").text.strip()
     counts = len(user_m)
-    message = repeat(message)  # Предполагается, что эта функция определена в libs_voice
     return message, counts
   except Exception as ex:
    print(ex)
@@ -84,6 +101,9 @@ class MyThread(QtCore.QThread):
    self.url = self.driver.current_url
    self.driver.refresh()
    html_content = self.driver.page_source
+   # Ожидание полной загрузки DOM
+   WebDriverWait(self.driver, 5).until(  lambda d: d.execute_script("return document.readyState") == "complete"  )
+   #time.sleep(2)  # Пауза для JS-обновлений
    # with open('page_source.txt', 'w', encoding='utf-8') as file:
    #   file.write(html_content)
    self.driver.implicitly_wait(1)

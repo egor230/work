@@ -76,7 +76,6 @@ def transcribe_audio_segment(speech_segment, model):
    else:
     message = " ".join([seg.text.strip() for seg in segments_list])
     if message:
-     message = repeat(message)  # Автоподгонка ширины окна
      threading.Thread(target=process_text, args=(message,), daemon=True).start()
      # print("stop")
      # input()
