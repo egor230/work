@@ -100,30 +100,29 @@ def process_audio_stream(queue):# Функция обработки аудиоп
    audio_int16 = np.int16(audio_chunk * 65534)
    is_speech_chunk = vad.is_speech(audio_int16.tobytes(), sample_rate=48000)
    current_time = time.time()
-   speech_segment = np.concatenate(audio_chunk).astype(np.float32)
-   mean_amp = np.mean(np.abs(speech_segment))
-   max_amp = np.max(np.abs(speech_segment))
-   if mean_amp > mid and not speech_detected:#0.025 and max_amp> 0.9:
-    mid=mean_amp
-   # print(f"max амплитуда чанка: {max_amp:.3f}")
-    print(f"Средняя амплитуда чанка: {mean_amp:.4f}")
-   if is_speech_chunk and mean_amp > 0.020:  # Обнаружение речи
+   speech_segment = np.concatenate(audio_int16).astype(np.float32)
+   mean_amp = np.mean(np.abs(speech_segment))/10
+   max_amp = np.max(np.abs(speech_segment))/1000
+   # if mean_amp > mid and not speech_detected:#0.025 and max_amp> 0.9:
+   #  mid=mean_amp
+   # # print(f"max амплитуда чанка: {max_amp:.3f}")
+   #  print(f"Средняя амплитуда чанка: {mean_amp:.4f}")
+   if is_speech_chunk and mean_amp > 300:  # Обнаружение речи
     # Проверяем максимальную амплитуду текущего чанка # Сохраняем только громкие чанки
-     buffer.append(audio_chunk)
+    buffer.append(audio_chunk)
    if not speech_detected and buffer:   # Обнаружение начала речи
-    if mean_amp > 0.25 and max_amp> 0.9:
-     print(max_amp)
+    if mean_amp > 1700 and max_amp> 29:
      print("Начало записи (обнаружена речь)")
      speech_detected = True
      last_speech_time = time.time()
    if speech_detected:
     # print(f"Средняя амплитуда чанка: {mean_amp:.4f}")
-    if mean_amp > 0.0158:
+    if mean_amp > 200:
      # print(max_amp)
-     # print(f"Средняя амплитуда чанка: {mean_amp:.4f}")
      last_speech_time = time.time() # Речь продолжается — обнуляем паузу
      silence_time = 0
     else:# Тишина — накапливаем время
+     # print(f"Средняя амплитуда чанка: {mean_amp:}")
      silence_time +=  time.time() - last_speech_time
      print(silence_time)
      last_speech_time =  time.time()
