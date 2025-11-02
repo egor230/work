@@ -88,36 +88,34 @@ def process_audio_stream(queue):# Функция обработки аудиоп
  silence_time = 0
  speech_detected = False
  last_speech_time = time.time()
- min_length = 4
- min_silence_duration = 1.6
+ min_silence_duration = 1.1
  print("Начинаю обработку аудиопотока...")
  mid=0.18
  with sd.InputStream():
   while True:
    audio_chunk = queue.get()
-   if audio_chunk is None:#   print("Завершение работы...")
-    break
+   # if audio_chunk is None:#   print("Завершение работы...")
+   #  break
    audio_int16 = np.int16(audio_chunk * 65534)
    is_speech_chunk = vad.is_speech(audio_int16.tobytes(), sample_rate=48000)
-   current_time = time.time()
    speech_segment = np.concatenate(audio_int16).astype(np.float32)
-   mean_amp = np.mean(np.abs(speech_segment))/10
+   mean_amp = np.mean(np.abs(speech_segment))/100
    max_amp = np.max(np.abs(speech_segment))/1000
+   current_time = time.time()
    # if mean_amp > mid and not speech_detected:#0.025 and max_amp> 0.9:
    #  mid=mean_amp
    # # print(f"max амплитуда чанка: {max_amp:.3f}")
    #  print(f"Средняя амплитуда чанка: {mean_amp:.4f}")
-   if is_speech_chunk and mean_amp > 300:  # Обнаружение речи
+   if is_speech_chunk and mean_amp > 30:  # Обнаружение речи
     # Проверяем максимальную амплитуду текущего чанка # Сохраняем только громкие чанки
     buffer.append(audio_chunk)
    if not speech_detected and buffer:   # Обнаружение начала речи
-    if mean_amp > 1700 and max_amp> 29:
+    if mean_amp > 170 and max_amp> 29:
      print("Начало записи (обнаружена речь)")
      speech_detected = True
-     last_speech_time = time.time()
    if speech_detected:
     # print(f"Средняя амплитуда чанка: {mean_amp:.4f}")
-    if mean_amp > 200:
+    if mean_amp > 20:
      # print(max_amp)
      last_speech_time = time.time() # Речь продолжается — обнуляем паузу
      silence_time = 0

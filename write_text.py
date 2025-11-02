@@ -66,6 +66,7 @@ class save_key:
   for i in w:
    self.word.append(i)
 
+  self.word = sorted(self.word, key=len, reverse=True)
  def get_words(self):
   return self.word
 k = save_key()
@@ -103,8 +104,8 @@ def repeat(text1 : str):  # text = "linux менч установить лину
   k.save_text(text)
   text1 = ""
   res = k.get_dict()
+  words = k.get_words()
   k.save_words(res)
-  words = sorted(k.get_words(), key=len, reverse=True)
   try:
    # Создаем регулярное выражение для всех слов и словосочетаний из словаря
    words_regex = r'\b(' + r'|'.join(map(re.escape, words)) + r')\b'

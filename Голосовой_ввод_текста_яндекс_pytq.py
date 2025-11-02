@@ -30,54 +30,39 @@ class MyThread(QtCore.QThread):
   self.stream = ".AliceChat-StreamingPlaceholder"
   self.ready= "AliceChat-Thinking"
 
- def is_text_stable(self, timeout=3):
-   while True:
-     try:  # Ждём 3 секунды перед повторной проверкой
-       initial_text = self.driver.find_elements(By.CLASS_NAME, 'message-bubble_container_from-user')[-1].text
-       time.sleep(timeout)  # Снова получаем текст и сравниваем
-       final_text = self.driver.find_elements(By.CLASS_NAME, 'message-bubble_container_from-user')[-1].text
-       if initial_text == final_text:
-         break
-     #  placeholder_element = driver.find_element(By.CSS_SELECTOR, '.AliceChat-StreamingPlaceholder')
-     #  if  placeholder_element:
-     #   pass
-     except:
-       break
-   return True
- def get_latest_message(self, len_c=0):
-  try:
-   self.driver.execute_script(
-    "window.scrollTo(0, document.body.scrollHeight);")  # filter_elem = WebDriverWait(driver, 1).until( EC.presence_of_element_located((By.CSS_SELECTOR, ".yamb-oknyx-lottie.svelte-rdfi3w"))).get_attribute("data-testid")
-   # aria_label= mic_button.get_attribute('aria-label')  # Ожидание наличия элемента на странице
-   element = WebDriverWait(self.driver, 3).until(
-    EC.visibility_of_all_elements_located((By.CLASS_NAME, self.ready)) )
-   element = self.driver.find_element(By.CLASS_NAME, self.ready)
-   if element:  # Проверка видимости элемента
-    message, counts = self.get_user_messages()  # button.click()
-    return message, counts + 1
-   else:
-    self.is_text_stable()
-    print("0300")
-    message, counts = self.get_user_messages()  # button.click()
-    return message, counts
-  except Exception as ex:
-   # print(ex)
-   user_m = [message.text.strip() for message in self.driver.find_elements(By.CLASS_NAME, 'message-bubble_container_from-user')]
-   counts = len(user_m)
-   pass
-   return "", len_c  # Возврат по умолчанию, если ни одно условие не выполнилось    # pass       #
+ def is_text_stable(self, timeout=8):  # Укоротил таймаут, добавил ретраи
+  retries = 5
+  for attempt in range(retries):
+    try:
+      initial_text = self.driver.find_elements(By.CLASS_NAME, 'message-bubble_container_from-user')[-1].text
+      time.sleep(timeout)
+      final_text = self.driver.find_elements(By.CLASS_NAME, 'message-bubble_container_from-user')[-1].text
+      if initial_text == final_text:
+        # print(f"Текст стабилен после {attempt + 1} попытки: {initial_text}")  # Дебаг
+        return True
+    except:
+      # print(f"Попытка {attempt + 1} стабильности failed, продолжаем...")  # Дебаг
+      time.sleep(0.5)
+      continue
+  # print("Текст не стабилен после всех ретраев, берём как есть")  # Дебаг
+  return False
 
  def get_user_messages(self):
   try:
-   user_m = WebDriverWait(self.driver, 3).until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, ".MessageBubble-Container_from-user")) )
-   if user_m:
-    last_user_container = user_m[-1]
-    message = last_user_container.find_element(By.CSS_SELECTOR, ".MessageBubble").text.strip()
-    counts = len(user_m)
-    return message, counts
+    user_m = WebDriverWait(self.driver, 3).until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, ".MessageBubble-Container_from-user")))
+    if user_m:
+      last_user_container = user_m[-1]
+      message = last_user_container.find_element(By.CSS_SELECTOR, ".MessageBubble").text.strip()
+      if message:
+        counts = len(user_m)
+        return message, counts
+    return "", 0
+  except Exception as ex:
+    print(ex)
+    return "", 0
   except Exception as ex:
    print(ex)
-   return None, 0
+   return "", 0
 
  def update_mic_state(self, mic):
   self.mic = mic
@@ -144,7 +129,29 @@ class MyThread(QtCore.QThread):
   
   except Exception as e:
    print(f"Неожиданная ошибка: {e}")
- 
+
+ def get_latest_message(self, len_c=0):
+  try:
+   self.driver.execute_script( "window.scrollTo(0, document.body.scrollHeight);")  # filter_elem = WebDriverWait(driver, 1).until( EC.presence_of_element_located((By.CSS_SELECTOR, ".yamb-oknyx-lottie.svelte-rdfi3w"))).get_attribute("data-testid")
+   # aria_label= mic_button.get_attribute('aria-label')  # Ожидание наличия элемента на странице
+   element = WebDriverWait(self.driver, 3).until(
+    EC.visibility_of_all_elements_located((By.CLASS_NAME, self.ready)) )
+   element = self.driver.find_element(By.CLASS_NAME, self.ready)
+   if element:  # Проверка видимости элемента
+    message, counts = self.get_user_messages()  # button.click()
+    return message, counts
+   else:
+    self.is_text_stable()
+    print("0300")
+    message, counts = self.get_user_messages()  # button.click()
+    return message, counts
+  except Exception as ex:
+   # print("ex")
+   self.is_text_stable()
+   message, counts = self.get_user_messages()  # button.click()
+   return message, counts
+   # return "", len_c  # Возврат по умолчанию, если ни одно условие не выполнилось    # pass       #
+
  def selenium_worker(self):
   while self._running:
    try:
@@ -156,11 +163,18 @@ class MyThread(QtCore.QThread):
      last_user_container = user_m[-1]
      message = last_user_container.find_element(By.CSS_SELECTOR, ".MessageBubble").text.strip()
      filter_elem = oknyx_core.get_attribute(self.DATA_TESTID_ATTR)
-     classes = self.driver.find_element(By.CSS_SELECTOR, f".{self.OKNYX_CORE_CLASS}").get_attribute("class") # print(aria_label)
+     classes = self.driver.find_element(By.CSS_SELECTOR, f".{self.OKNYX_CORE_CLASS}").get_attribute("class")
      if "lis" in classes and self.mic and "стоп" in aria_label:
       self.show_message(message, self.mic)
      else:
-      self.show_message(None, False)
+      self.show_message(None, False)#скрыт
+      if "think" in classes and self.mic and "стоп" in aria_label:
+       # print(aria_label)
+       # print(classes)
+       time.sleep(2)
+       self.button.click()
+       time.sleep(2)
+    pass
    except Exception as e:#    print(e)
     pass
  
@@ -172,7 +186,7 @@ class MyThread(QtCore.QThread):
     aria_label = self.button.get_attribute(self.alisa)
     oknyx_core = self.button.find_element(By.CSS_SELECTOR, f".{self.OKNYX_CORE_CLASS}")
     filter_elem = oknyx_core.get_attribute(self.DATA_TESTID_ATTR)
-    if self.mic and "слу" in aria_label and ("su" in filter_elem or "th" in filter_elem):
+    if self.mic and "слу" in aria_label and ("su" in filter_elem):
      self.button.click()
      time.sleep(1)
 
