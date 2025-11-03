@@ -69,7 +69,7 @@ def transcribe_audio_segment(speech_segment, model):
   if is_speech():
    # Транскрибируем аудио
    segments, info = model.transcribe(filename, beam_size=10, language="ru",
-                                     vad_filter=True, temperature=0.7, condition_on_previous_text=True)
+                                     vad_filter=True, temperature=0.6, condition_on_previous_text=True)
    segments_list = list(segments)
    if not segments_list:
      return

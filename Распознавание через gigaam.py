@@ -55,48 +55,41 @@ duration = 10.5
 sample_rate = 48000
 block_size = int(sample_rate * duration)
 
-
 def enhance_speech_for_recognition(audio, sample_rate=48000):
   try:
-    audio = audio.flatten().astype(np.float32)
-    if len(audio) == 0 or np.max(np.abs(audio)) == 0:
-      return audio
-
-    # === 1. Мягкое предварительное усиление ===
-    audio *= 2.0
-
-    # === 2. Полосовой фильтр для речи ===
+    audio = audio.astype(np.float32)
     nyquist = sample_rate / 2
-    b, a = signal.butter(1, [70 / nyquist, 8000 / nyquist], btype='band')
+
+    # Более эффективный порядок фильтров
+    # Сначала полосовая фильтрация, потом усиление
+    b, a = signal.butter(2, [100 / nyquist, 6000 / nyquist], btype='band')
     audio = signal.filtfilt(b, a, audio)
 
-    # === 3. Усиление тихих фрагментов (адаптивное AGC) ===
-    frame_len = int(0.08 * sample_rate)  # 80 мс
-    hop = int(frame_len / 2)
-    target_rms = 0.15
-    out = np.copy(audio)
+    # Более умное усиление с нормализацией
+    rms = np.sqrt(np.mean(audio ** 2))
+    if rms > 0:
+      gain = min(3.0, 0.9 / rms)  # Автоматический расчет усиления
+      audio *= gain
 
-    for i in range(0, len(audio) - frame_len, hop):
-      seg = audio[i:i + frame_len]
-      rms = np.sqrt(np.mean(seg ** 2)) + 1e-9
-      if rms < target_rms:
-        gain = min(target_rms / rms, 8.0)  # сильнее для тихих
-        out[i:i + frame_len] = seg * gain
+    # Улучшенная компрессия
+    threshold_db = -12
+    threshold = 10 ** (threshold_db / 20)
+    envelope = np.abs(audio)
 
-    audio = out
+    # Сглаживание огибающей
+    envelope_smooth = np.convolve(envelope, np.ones(100) / 100, mode='same')
+    gain = np.ones_like(audio)
 
-    # === 4. Мягкая нормализация ===
-    peak = np.max(np.abs(audio)) + 1e-9
-    if peak > 0:
-      audio = (audio / peak) * 0.98
+    compression_mask = envelope_smooth > threshold
+    gain[compression_mask] = (threshold / envelope_smooth[compression_mask]) ** 0.25
 
-    # === 5. Лёгкий лимитер (мягкое сглаживание пиков) ===
-    audio = np.tanh(audio * 1.05) * 0.98
+    audio *= gain
+    audio = np.clip(audio, -0.9, 0.9)
 
-    return audio.astype(np.float32)
+    return audio
 
   except Exception as e:
-    print(f"Ошибка улучшения речи: {e}")
+    print(f"Ошибка обработки аудио: {e}")
     return audio
 
 
@@ -116,7 +109,7 @@ def update_label(root, label):
       last_speech_time = time.time()
       min_silence_duration = 1.8
       fs = 48000
-      chunk_duration = 0.03
+      chunk_duration = 0.3
       queue = Queue()
       def callback(indata, frames, time_info, status):
         if status:
@@ -125,7 +118,7 @@ def update_label(root, label):
       stream = sd.InputStream(samplerate=fs, channels=1, callback=callback, blocksize=int(fs * chunk_duration))
       stream.start()
       while True:
-        audio_chunk = queue.get()  # Таймаут, чтобы не блокироваться навсегда
+        audio_chunk = queue.get( )  # Таймаут, чтобы не блокироваться навсегда
         audio_int16 = (audio_chunk * 32767).astype(np.int16)
         mean_amp = np.mean(np.abs(audio_chunk)) * 1000
         # print(mean_amp)
@@ -137,15 +130,19 @@ def update_label(root, label):
           silence_time += time.time() - last_speech_time
           last_speech_time = time.time()
         if silence_time > min_silence_duration and buffer:
-          root.withdraw()#       print("0")
           break
+      root.withdraw()#       print("0")
       # ИЗМЕНЕНО: проверяем что буфер не пуст перед конкатенацией
       speech_segment = np.concatenate(buffer).astype(np.float32)  # Теперь это работает
+      # Очистка буфера
+      buffer.clear()
+      stream.stop()
+      stream.close()
       # segment_duration = len(speech_segment) / 48000
       model = check_model()
       audio = speech_segment.flatten().astype(np.float32)
       if is_speech_audio(audio):  # Ресэмплирование 48k -> 16k
-       # audio = enhance_speech_for_recognition(audio, 48000)
+       audio = enhance_speech_for_recognition(audio, 48000)
        audio_16k = torchaudio.functional.resample(
           torch.tensor(audio).unsqueeze(0), 48000, 16000)[0].numpy()
         # Сохранение во временный файл
@@ -155,14 +152,7 @@ def update_label(root, label):
         os.unlink(temp_file.name)
         if message !=" " and len(message) >0:
          threading.Thread(target=process_text, args=(message,), daemon=True).start()
-
-      # Очистка буфера
-      buffer.clear()
-      stream.stop()
-      stream.close()
-
     root.after(1000, lambda: update_label(root, label))
-
   except Exception as e:
     print(f"Ошибка: {e}")
     # Добавьте остановку потока в случае ошибки

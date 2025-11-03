@@ -214,6 +214,31 @@ def audio(model, filename = "temp.wav"):  # Путь к аудиофайлу
     return None
 
 
+
+    # # === 3. Усиление тихих фрагментов (адаптивное AGC) ===
+    # frame_len = int(0.08 * sample_rate)  # 80 мс
+    # hop = int(frame_len / 2)
+    # target_rms = 0.15
+    # out = np.copy(audio)
+    #
+    # for i in range(0, len(audio) - frame_len, hop):
+    #   seg = audio[i:i + frame_len]
+    #   rms = np.sqrt(np.mean(seg ** 2)) + 1e-9
+    #   if rms < target_rms:
+    #     gain = min(target_rms / rms, 8.0)  # сильнее для тихих
+    #     out[i:i + frame_len] = seg * gain
+    #
+    # audio = out
+    #
+    # # === 4. Мягкая нормализация ===
+    # peak = np.max(np.abs(audio)) + 1e-9
+    # if peak > 0:
+    #   audio = (audio / peak) * 0.98
+    #
+    # # === 5. Лёгкий лимитер (мягкое сглаживание пиков) ===
+    # audio = np.tanh(audio * 1.05) * 0.98
+
+
 def is_speech(audio_data="temp.wav", threshold=0.0308, min_duration=4.5, sample_rate=44100):
  try:
   if isinstance(audio_data, str):

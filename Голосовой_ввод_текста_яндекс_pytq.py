@@ -31,21 +31,28 @@ class MyThread(QtCore.QThread):
   self.ready= "AliceChat-Thinking"
 
  def is_text_stable(self, timeout=8):  # Укоротил таймаут, добавил ретраи
-  retries = 5
-  for attempt in range(retries):
-    try:
-      initial_text = self.driver.find_elements(By.CLASS_NAME, 'message-bubble_container_from-user')[-1].text
-      time.sleep(timeout)
-      final_text = self.driver.find_elements(By.CLASS_NAME, 'message-bubble_container_from-user')[-1].text
-      if initial_text == final_text:
+  try:
+    print("is_text_stable")
+    while 1:
+     time.sleep(timeout)
+     initial_text = self.driver.find_elements(By.CLASS_NAME, 'message-bubble_container_from-user')[-1].text
+     print(initial_text)
+     if "Message:" in initial_text:
+       break
+     time.sleep(timeout)
+     final_text = self.driver.find_elements(By.CLASS_NAME, 'message-bubble_container_from-user')[-1].text
+     print(final_text)
+     if initial_text != final_text:
+        continue
+     else:
         # print(f"Текст стабилен после {attempt + 1} попытки: {initial_text}")  # Дебаг
-        return True
-    except:
+      break
+    return True
+  except:
       # print(f"Попытка {attempt + 1} стабильности failed, продолжаем...")  # Дебаг
       time.sleep(0.5)
-      continue
-  # print("Текст не стабилен после всех ретраев, берём как есть")  # Дебаг
-  return False
+   # print("Текст не стабилен после всех ретраев, берём как есть")  # Дебаг
+      return False
 
  def get_user_messages(self):
   try:
@@ -94,14 +101,14 @@ class MyThread(QtCore.QThread):
    self.driver.implicitly_wait(1)
    selenium_thread = threading.Thread(target=self.selenium_worker, daemon=True)
    selenium_thread.start()
-   self.del_all_chats(self.driver, self.chat_list, self.chat_list_more)  # Находим все чаты
+   # self.del_all_chats(self.driver, self.chat_list, self.chat_list_more)  # Находим все чаты
    new_chat_button = WebDriverWait(self.driver, 5).until( EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Новый чат')]")) )
    self.button = self.driver.find_element(By.CSS_SELECTOR, 'button.StandaloneOknyx[aria-label="Алиса, начни слушать"]')
    self.init_ui_signal.emit()
    self.show_message("Давай поговорите", self.mic)
    self.button.click()
   except Exception as e:
-   print(e)
+   # print(e)
    pass
  def del_all_chats(self, driver, chat_list, chat_list_more):
   try:
@@ -134,10 +141,11 @@ class MyThread(QtCore.QThread):
   try:
    self.driver.execute_script( "window.scrollTo(0, document.body.scrollHeight);")  # filter_elem = WebDriverWait(driver, 1).until( EC.presence_of_element_located((By.CSS_SELECTOR, ".yamb-oknyx-lottie.svelte-rdfi3w"))).get_attribute("data-testid")
    # aria_label= mic_button.get_attribute('aria-label')  # Ожидание наличия элемента на странице
-   element = WebDriverWait(self.driver, 3).until(
+   element = WebDriverWait(self.driver, 4).until(
     EC.visibility_of_all_elements_located((By.CLASS_NAME, self.ready)) )
-   element = self.driver.find_element(By.CLASS_NAME, self.ready)
+   #element = self.driver.find_element(By.CLASS_NAME, self.ready)
    if element:  # Проверка видимости элемента
+    time.sleep(3)
     message, counts = self.get_user_messages()  # button.click()
     return message, counts
    else:
@@ -146,34 +154,38 @@ class MyThread(QtCore.QThread):
     message, counts = self.get_user_messages()  # button.click()
     return message, counts
   except Exception as ex:
-   # print("ex")
-   self.is_text_stable()
-   message, counts = self.get_user_messages()  # button.click()
-   return message, counts
-   # return "", len_c  # Возврат по умолчанию, если ни одно условие не выполнилось    # pass       #
+   # print(ex)
+   # self.is_text_stable()
+   # message, counts = self.get_user_messages()  # button.click()
+   # return message, counts
+   return "", len_c  # Возврат по умолчанию, если ни одно условие не выполнилось    # pass       #
 
  def selenium_worker(self):
   while self._running:
    try:
-    mic_button = self.driver.find_element(By.CSS_SELECTOR, f".{self.MIC_BUTTON_CLASS}")
-    oknyx_core = mic_button.find_element(By.CSS_SELECTOR, f".{self.OKNYX_CORE_CLASS}")
-    aria_label = mic_button.get_attribute(f"{self.alisa}")
-    user_m = self.driver.find_elements(By.CSS_SELECTOR, ".MessageBubble-Container_from-user")
-    if user_m:
-     last_user_container = user_m[-1]
-     message = last_user_container.find_element(By.CSS_SELECTOR, ".MessageBubble").text.strip()
-     filter_elem = oknyx_core.get_attribute(self.DATA_TESTID_ATTR)
-     classes = self.driver.find_element(By.CSS_SELECTOR, f".{self.OKNYX_CORE_CLASS}").get_attribute("class")
-     if "lis" in classes and self.mic and "стоп" in aria_label:
-      self.show_message(message, self.mic)
-     else:
-      self.show_message(None, False)#скрыт
-      if "think" in classes and self.mic and "стоп" in aria_label:
-       # print(aria_label)
-       # print(classes)
-       time.sleep(2)
-       self.button.click()
-       time.sleep(2)
+    if not self.mic:
+     self.show_message(None, False)  # скрыт
+    else:
+      mic_button = self.driver.find_element(By.CSS_SELECTOR, f".{self.MIC_BUTTON_CLASS}")
+      oknyx_core = mic_button.find_element(By.CSS_SELECTOR, f".{self.OKNYX_CORE_CLASS}")
+      aria_label = mic_button.get_attribute(f"{self.alisa}")
+      user_m = self.driver.find_elements(By.CSS_SELECTOR, ".MessageBubble-Container_from-user")
+      if user_m:
+       last_user_container = user_m[-1]
+       message = last_user_container.find_element(By.CSS_SELECTOR, ".MessageBubble").text.strip()
+       filter_elem = oknyx_core.get_attribute(self.DATA_TESTID_ATTR)
+       classes = self.driver.find_element(By.CSS_SELECTOR, f".{self.OKNYX_CORE_CLASS}").get_attribute("class")
+       if "lis" in classes and "стоп" in aria_label:
+        self.show_message(message, self.mic)
+       else:
+        self.show_message(None, False)#скрыт
+        if "think" in classes and "стоп" in aria_label:
+         # print(aria_label)
+         # print(classes)
+         time.sleep(2)
+         self.button.click()
+         time.sleep(2)
+         self.button.click()
     pass
    except Exception as e:#    print(e)
     pass
