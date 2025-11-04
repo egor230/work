@@ -17,6 +17,65 @@ from pynput.keyboard import Controller, Key, Listener
 from pynput import keyboard
 from scipy.io import wavfile
 import soundfile as sf
+
+# -*- coding: utf-8 -*-
+"""
+Модуль для коррекции дикции и исправления речи на русском языке
+с использованием локальной модели LLaMA и пользовательского словаря замен.
+"""
+
+from llama_cpp import Llama
+
+# === 1. Функция загрузки модели ===
+def load_model(  model_path: str,
+  n_ctx: int = 4096,   n_threads: int = 8,) -> None:
+  print("🔄 Загружается модель, подожди пару секунд...")
+
+  llm = Llama(
+      model_path=model_path,
+      n_ctx=n_ctx,
+      n_threads=n_threads,
+      verbose=False    )
+  return llm
+
+def fix_dictation(llm, text: str) -> str:
+  # Улучшенная подсказка для модели: строже требуем только текст, добавлен few-shot пример
+  system_prompt = """Ты эксперт по исправлению речи и дикции. Исправь грамматику, окончания, падежи, порядок слов и пунктуацию.
+Используй контекст, чтобы текст звучал естественно и грамотно. Не меняй смысл и не добавляй ничего нового.
+
+Важно: Ответь ТОЛЬКО исправленным текстом. Никаких заголовков вроде "Ответ:", "Исправленный вариант:", "Обоснование:", объяснений, комментариев или повторений оригинала. Только чистый исправленный текст без лишних символов.
+"""
+
+  full_prompt = f"{system_prompt.strip()}\n\nОригинальный текст:\n{text.strip()}\n\nИсправленный вариант:"
+
+  # Количество слов для max_tokens (примерно соответствует токенам, умножаем на 1.5 для запаса)
+  word_count = int(len(text.split()) * 1.5)
+  print(word_count)
+
+  # Генерация
+  output = llm(    prompt=full_prompt,
+    max_tokens=word_count,
+    temperature=0.05,  # Снижаем температуру для большей предсказуемости
+    top_p=0.9,
+    echo=False
+  )
+
+  result = output["choices"][0]["text"].strip()
+
+  # Усиленная очистка: удаляем markdown, заголовки, обоснования и повторы
+  result = re.sub(r'[*#`~_]', '', result)
+  result = re.sub(r'^[\[\(«"\'<]+|[\]\)»"\' >]+$', '', result)
+  result = re.sub(r'\n+', ' ', result).strip()
+  result = re.sub(r'^[#*+-]\s*', '', result, flags=re.MULTILINE)
+
+  # Удаляем возможные фразы вроде "Обоснование:", "Ответ:" или повторы
+  result = re.sub(r'(Обоснование|Ответ|Исправленный вариант)[:;]?\s*', '', result, flags=re.IGNORECASE)
+  result = re.sub(r'\s+', ' ', result).strip()  # Нормализуем пробелы
+
+  return result.strip()
+MODEL_PATH = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache/ollama/gemma-3-270m-it-F16.gguf"
+
+
 class save_key:
  def __init__(self):
   self.text = ""
@@ -119,9 +178,14 @@ def repeat(text1 : str):  # text = "linux менч установить лину
   except Exception as ex:
    print(f"Ошибка: {ex}")  # Выводим ошибку для диагностики
   return text1
+# llm=load_model(MODEL_PATH)
 def press_keys(text):  # xte 'keyup Shift_L'
-  try:   #
-   # text=repeat(text)
+ try:   #
+   text=repeat(text)
+   # print(text)
+   # if llm != None:
+   #  text= fix_dictation(llm, text)
+
    key_s = '''#!/bin/bash
    # xte 'keyup Shift_R'
    # sleep 0.1
@@ -156,7 +220,7 @@ def press_keys(text):  # xte 'keyup Shift_L'
     time.sleep(0.03)  # Уменьшение задержки
    # Включить sticky keys
    subprocess.call(['xkbset', 'sticky'])
-  except Exception as ex1:
+ except Exception as ex1:
     print(ex1)
     return
 

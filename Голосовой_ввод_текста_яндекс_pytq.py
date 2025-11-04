@@ -101,7 +101,7 @@ class MyThread(QtCore.QThread):
    self.driver.implicitly_wait(1)
    selenium_thread = threading.Thread(target=self.selenium_worker, daemon=True)
    selenium_thread.start()
-   # self.del_all_chats(self.driver, self.chat_list, self.chat_list_more)  # Находим все чаты
+   self.del_all_chats(self.driver, self.chat_list, self.chat_list_more)  # Находим все чаты
    new_chat_button = WebDriverWait(self.driver, 5).until( EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Новый чат')]")) )
    self.button = self.driver.find_element(By.CSS_SELECTOR, 'button.StandaloneOknyx[aria-label="Алиса, начни слушать"]')
    self.init_ui_signal.emit()
@@ -112,8 +112,7 @@ class MyThread(QtCore.QThread):
    pass
  def del_all_chats(self, driver, chat_list, chat_list_more):
   try:
-   WebDriverWait(driver, 5).until(
-    EC.presence_of_element_located((By.CSS_SELECTOR, chat_list))  )
+   WebDriverWait(driver, 2).until(  EC.presence_of_element_located((By.CSS_SELECTOR, chat_list))  )
    while True:
     chats = driver.find_elements(By.CSS_SELECTOR, chat_list)#    print(f"Найдено чатов: {len(chats)}")
     if len(chats) <= 1:
@@ -123,19 +122,20 @@ class MyThread(QtCore.QThread):
     
     # Прокручиваем кнопку в видимую область
     driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", more_button)
-    time.sleep(2.3)
+    time.sleep(1.3)
     more_button.click()
     
     # Ждём появления кнопки "Удалить" и кликаем
-    delete_button = WebDriverWait(driver, 10).until( EC.element_to_be_clickable((
+    delete_button = WebDriverWait(driver, 7).until( EC.element_to_be_clickable((
      By.XPATH, "//div[@role='button' and contains(@class, 'ContextMenuItem')]"
      "[.//span[@class='ContextMenuItem-Text' and text()='Удалить']]"  )) )
     driver.execute_script("arguments[0].click();", delete_button)  # Ждём, пока чат исчезнет из DOM
-    WebDriverWait(driver, 10).until(EC.staleness_of(target_chat))
-    time.sleep(3.3)  # Дополнительная пауза для стабильности
+    WebDriverWait(driver, 7).until(EC.staleness_of(target_chat))
+    time.sleep(1.3)  # Дополнительная пауза для стабильности
   
   except Exception as e:
    print(f"Неожиданная ошибка: {e}")
+   pass
 
  def get_latest_message(self, len_c=0):
   try:
