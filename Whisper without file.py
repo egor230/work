@@ -63,6 +63,7 @@ def transcribe_audio_segment(speech_segment, model):
   # if max_amplitude > 0:
   #  speech_segment_compressed = speech_segment_compressed / max_amplitude * 0.95
 
+  filename = "temp.wav"
   # Шаг 5: Сохранение
   wavfile.write(filename, 48000, np.int16(speech_segment * 32767))
   # Проверка звука

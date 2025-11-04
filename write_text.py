@@ -16,7 +16,7 @@ from faster_whisper import WhisperModel
 from pynput.keyboard import Controller, Key, Listener
 from pynput import keyboard
 from scipy.io import wavfile
-
+import soundfile as sf
 class save_key:
  def __init__(self):
   self.text = ""
@@ -121,7 +121,7 @@ def repeat(text1 : str):  # text = "linux менч установить лину
   return text1
 def press_keys(text):  # xte 'keyup Shift_L'
   try:   #
-   text=repeat(text)
+   # text=repeat(text)
    key_s = '''#!/bin/bash
    # xte 'keyup Shift_R'
    # sleep 0.1
@@ -238,38 +238,20 @@ def audio(model, filename = "temp.wav"):  # Путь к аудиофайлу
     # # === 5. Лёгкий лимитер (мягкое сглаживание пиков) ===
     # audio = np.tanh(audio * 1.05) * 0.98
 
-
-def is_speech(audio_data="temp.wav", threshold=0.0308, min_duration=4.5, sample_rate=44100):
- try:
-  if isinstance(audio_data, str):
-   if not os.path.isfile(audio_data):
-    print(f"Ошибка: аудиофайл не найден: {audio_data}");
+def is_speech(audio_data="temp.wav", threshold=0.0308):
+  try:
+    if not os.path.isfile(audio_data):
+        print(f"Файл не найден: {audio_data}")
+        return False
+    data, sr = sf.read(audio_data, dtype='float32')
+    if len(data) == 0:
+        print("Файл пуст")
+        return False
+    amp = np.mean(np.abs(data))
+    return amp > threshold
+  except Exception as ex:
+    print(f"Ошибка при обработке аудио: {ex}")
     return False
-   with wave.open(audio_data, 'rb') as f:
-    ch, sw, fr, sr = f.getnchannels(), f.getsampwidth(), f.getnframes(), f.getframerate()
-    if fr == 0: print("Ошибка: аудиофайл пустой"); return False
-    data = f.readframes(fr)
-   dtype = np.int16 if sw == 2 else np.uint8 if sw == 1 else None
-   if dtype is None: print(f"Ошибка: неподдерживаемая глубина звука: {sw * 8} бит"); return False
-   a = np.frombuffer(data, dtype=dtype)
-   if ch == 2: a = a.reshape(-1, 2).mean(1)
-   a = a.astype(np.float32);
-   a = a / 32768 if dtype == np.int16 else (a - 128) / 128
-   sr = sr
-  else:
-   a = np.asarray(audio_data)
-   if a.size == 0: print("Ошибка: аудиоданные пусты"); return False
-   sr = sample_rate
-  if a.size == 0: print("Ошибка: аудиоданные пусты или не загружены"); return False
-  amp = np.mean(np.abs(a));
-  if amp > threshold:
-   # print(f"Средняя амплитуда: {amp:.6f}")
-   return True
-  else:
-   return  False
- except Exception as ex:
-  print(f"Ошибка при обработке аудио: {ex}");
-  return False
 
 def get_mute_status():  # Получает статус Mute для источника '54' с помощью pactl и grep.
  try:
