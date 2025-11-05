@@ -1,3 +1,5 @@
+import collections
+
 from write_text import *
 import torch, gigaam, tempfile, torchaudio, math, scipy.signal
 import numpy as np
@@ -103,7 +105,7 @@ def update_label(root, label):
       label.config(text="Говорите...")
       root.deiconify()
       root.update()
-      buffer = []  # ИЗМЕНЕНО: используем список вместо Queue
+      buffer = collections.deque()  # ИЗМЕНЕНО: используем список вместо Queue
       silence_time = 0
       last_speech_time = time.time()
       min_silence_duration = 1.8
