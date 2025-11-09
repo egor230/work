@@ -94,7 +94,7 @@ class MyThread(QtCore.QThread):
    self.driver.refresh()
    html_content = self.driver.page_source
    # Ожидание полной загрузки DOM
-   WebDriverWait(self.driver, 5).until(  lambda d: d.execute_script("return document.readyState") == "complete"  )
+   WebDriverWait(self.driver, 5).until( lambda d: d.execute_script("return document.readyState") == "complete"  )
    #time.sleep(2)  # Пауза для JS-обновлений
    # with open('page_source.txt', 'w', encoding='utf-8') as file:
    #   file.write(html_content)
@@ -212,7 +212,7 @@ class MyThread(QtCore.QThread):
      thread.join()
      thr = threading.Thread(target=lambda: [time.sleep(3.7), setattr(self, 'mic', True)])
      thr.daemon = True
-     self.counts = counts1
+     self.counts =+1# self.counts1
      thr.start()
      print(counts1)
      time.sleep(3.7)

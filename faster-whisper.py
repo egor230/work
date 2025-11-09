@@ -1,3 +1,4 @@
+import collections, math
 from write_text import *
 from faster_whisper import WhisperModel
 cache_dir = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache/whisper/"# Путь к модели
@@ -34,10 +35,13 @@ cmd = f'bash -c "cd \\"{script_dir}\\" && source myenv/bin/activate && python \\
 def run_script():# Запускаем скрипт в отдельном демонизированном потоке
   subprocess.Popen(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
+# Загрузка модели
+# load_model()
 threading.Thread(target=run_script, daemon=True).start()
 print("Скрипт запущен заново.")
 try: # Загрузка модели
-  model = WhisperModel(model_path, device="cpu", compute_type="int8")
+  model = WhisperModel(model_path, device="cpu", compute_type="int8_float32")
+
   print("Модель загружена успешно.")
 except Exception as e:
   print(f"Ошибка загрузки модели: {e}")
@@ -55,36 +59,41 @@ def update_label(root, label):
     label.config(text="Говорите...")
     root.deiconify()
     root.update()
-    record = threading.Thread(target=record_audio)
-    record.start()
-    record.join()
-    t1 = threading.Thread(target=record_audio, args=("temp1.wav",))
-    if is_speech():   # Проверка звука
-     t1.start()# второй
-     label.config(text="продолжай")
-     root.update()
-     message = audio(model)
-    else:
-     label.config(text="Речь не распознана")
-     root.update()
-     time.sleep(2)
-    if message != None:
-      message = repeat(message) # Автоподгонка ширины окна
-      threading.Thread(target=process_text, args=(message,), daemon=True).start()
-      t1.join()
-      # Проверка звука
-      if is_speech("temp1.wav"):
-       message = audio(model, "temp1.wav")
-       if message != None:
-        message = repeat(message)    # Автоподгонка ширины окна
-        threading.Thread(target=press_keys, args=(message,), daemon=True).start()
-       else:
-        pass
+    buffer = collections.deque()  # ИЗМЕНЕНО: используем список вместо Queue
+    silence_time = 0
+    last_speech_time = time.time()
+    min_silence_duration = 3.9
+    print("Начинаю обработку аудиопотока...")
+    fs = 48000
+    filename = "temp.wav"
+    with sd.InputStream(samplerate=fs, channels=1, dtype='float32') as stream:
+     while True:
+      # if audio_chunk is None:#   print("Завершение работы...")
+      audio_chunk, overflowed = stream.read(8096)  # Читаем аудио порциями
+      buffer.extend(audio_chunk.flatten())
+      # max_amp = np.max(np.abs(audio_chunk))/1000
+      mean_amp = np.mean(np.abs(audio_chunk)) * 100
+      mean_amp = math.ceil(mean_amp * 10)  #
+      if mean_amp > 6:
+       last_speech_time = time.time()
+       silence_time = 0
       else:
-        pass
-    else:
-      pass
-    root.withdraw()
+       silence_time += time.time() - last_speech_time
+       last_speech_time = time.time()
+      if silence_time > min_silence_duration and buffer:
+       root.withdraw()
+       recording_array = np.array(buffer)
+       write(filename, fs, recording_array)
+       if is_speech(filename):  # Проверяем, что буфер не пустой
+        buffer.clear()  # Сбрасываем буфер
+        segment_duration = len(recording_array) / 48000
+        print(f" длительность: {segment_duration:.2f} сек ")
+        message = audio(model, filename)
+        if message != None:
+         # if is_model_loaded():
+         #  message = fix_text(message)
+         threading.Thread(target=press_keys, args=(message,), daemon=True).start()
+       break
    root.after(1000, lambda: update_label(root, label))
 
   except Exception as e:

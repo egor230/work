@@ -17,64 +17,74 @@ from pynput.keyboard import Controller, Key, Listener
 from pynput import keyboard
 from scipy.io import wavfile
 import soundfile as sf
-
-# -*- coding: utf-8 -*-
-"""
-Модуль для коррекции дикции и исправления речи на русском языке
-с использованием локальной модели LLaMA и пользовательского словаря замен.
-"""
-
 from llama_cpp import Llama
 
-# === 1. Функция загрузки модели ===
-def load_model(  model_path: str,
-  n_ctx: int = 4096,   n_threads: int = 8,) -> None:
-  print("🔄 Загружается модель, подожди пару секунд...")
+# Укажите путь к модели Meta-Llama-3.1-8B-Instruct (GGUF q4_K)
+model_path = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache/meta-llama-3.1-8b-instruct-q4_k_m.gguf"
+# Глобальная переменная для модели (чтобы не перезагружать)
+llm = None
 
-  llm = Llama(
-      model_path=model_path,
-      n_ctx=n_ctx,
-      n_threads=n_threads,
-      verbose=False    )
+def load_model() -> Llama:    #    Загружает модель Llama один раз и возвращает объект.
+    #Если модель уже загружена, возвращает существующий объект.
+
+  global llm
+  if llm is None:
+      print("Загрузка модели... (это может занять 1-2 минуты)")
+      llm = Llama(
+          model_path=model_path,
+          n_ctx=8192,  # Большой контекст для Llama 3.1 — хватит для длинных текстов
+          n_threads=4,  # Кол-во CPU-ядер; увеличь, если нужно
+          n_gpu_layers=35,  # Если GPU: разгружает на GPU (0 для CPU only)
+          verbose=False  # Без лишнего лога
+      )
+      print("Модель загружена успешно!")
   return llm
 
-def fix_dictation(llm, text: str) -> str:
-  # Улучшенная подсказка для модели: строже требуем только текст, добавлен few-shot пример
-  system_prompt = """Ты эксперт по исправлению речи и дикции. Исправь грамматику, окончания, падежи, порядок слов и пунктуацию.
-Используй контекст, чтобы текст звучал естественно и грамотно. Не меняй смысл и не добавляй ничего нового.
+def is_model_loaded() -> bool:
+    # Проверяет, загружена ли модель (llm не None).
+    global llm
+    return llm is not None
 
-Важно: Ответь ТОЛЬКО исправленным текстом. Никаких заголовков вроде "Ответ:", "Исправленный вариант:", "Обоснование:", объяснений, комментариев или повторений оригинала. Только чистый исправленный текст без лишних символов.
-"""
+def fix_text(text: str) -> str:
+    """
+    Исправляет текст от распознавания речи на русском: звуки (р↔л, ш↔с/х, ж↔з/г, з↔с/дз, щ↔ш/сч),
+    грамматику (падежи, склонения, род, число). Возвращает ТОЛЬКО исправленный текст.
+    Адаптировано для Llama 3.1 Instruct.
 
-  full_prompt = f"{system_prompt.strip()}\n\nОригинальный текст:\n{text.strip()}\n\nИсправленный вариант:"
+    Оптимизация токенов: max_tokens динамически по длине текста (минимум 100, максимум 512).
+    """
+    global llm
+    if not is_model_loaded():
+        raise ValueError("Модель не загружена! Вызовите load_model() сначала.")
 
-  # Количество слов для max_tokens (примерно соответствует токенам, умножаем на 1.5 для запаса)
-  word_count = int(len(text.split()) * 1.5)
-  print(word_count)
+    # Динамический max_tokens: пропорционально длине + запас
+    max_tokens = min(512, max(100, len(text) * 2 + 100))
 
-  # Генерация
-  output = llm(    prompt=full_prompt,
-    max_tokens=word_count,
-    temperature=0.05,  # Снижаем температуру для большей предсказуемости
-    top_p=0.9,
-    echo=False
-  )
+    prompt = f"""<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+Ты — эксперт по исправлению текстов, полученных от систем распознавания речи на русском языке. У меня проблемы с дикцией из-за ДЦП: плохо произносятся звуки "р" (часто заменяется на "л" или пропускается), "л" (искажается), "ш" (может звучать как "с" или "х"), "ж" (как "з" или "г"), "з" (как "с" или "дз"), "щ" (как "ш" или "сч"). Из-за этого слова искажаются, например: "работа" может стать "лабода", "школьник" — "скольник", "жизнь" — "зиснь". Также бывают ошибки в грамматике: неправильные падежи (например, "в дом" вместо "в доме"), склонения (окончания слов), роде, числе и предложениях (смешанные слова или фразы).
 
-  result = output["choices"][0]["text"].strip()
+Твоя задача:
+1. Прочитай предоставленный текст как "грязный" вывод распознавания речи.
+2. Исправь орфографию, учитывая типичные замены звуков (р↔л, ш↔с/х, ж↔з/г, з↔с/дз, щ↔ш/сч). Предполагай, что текст близок к реальному смыслу, но искажён произношением.
+3. Исправь грамматику: подбери правильные падежи, склонения, род, число, времена глаголов. Сделай текст coherentным и естественным на русском.
+4. Если текст неоднозначен, выбери наиболее логичный вариант (предполагай повседневный контекст: разговор о жизни, работе, семье или хобби).
+5. Ответь ТОЛЬКО исправленным текстом, без лишних объяснений, кавычек, скобок. Если оригинал слишком искажён, добавь в конце: [Возможная интерпретация].<|eot_id|><|start_header_id|>user<|end_header_id|>
 
-  # Усиленная очистка: удаляем markdown, заголовки, обоснования и повторы
-  result = re.sub(r'[*#`~_]', '', result)
-  result = re.sub(r'^[\[\(«"\'<]+|[\]\)»"\' >]+$', '', result)
-  result = re.sub(r'\n+', ' ', result).strip()
-  result = re.sub(r'^[#*+-]\s*', '', result, flags=re.MULTILINE)
+Текст: {text}<|eot_id|><|start_header_id|>assistant<|end_header_id|>"""
 
-  # Удаляем возможные фразы вроде "Обоснование:", "Ответ:" или повторы
-  result = re.sub(r'(Обоснование|Ответ|Исправленный вариант)[:;]?\s*', '', result, flags=re.IGNORECASE)
-  result = re.sub(r'\s+', ' ', result).strip()  # Нормализуем пробелы
+    output = llm(  prompt,  max_tokens=max_tokens,  # Динамический: экономит токены на коротких текстах
+        temperature=0.0,  # Детерминированный вывод
+        top_p=0.9, stop=["<|eot_id|>", "</s>"],  # Стоп-токены для Llama 3.1
+        echo=False  ) # Не повторять промпт в выводе
 
-  return result.strip()
-MODEL_PATH = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache/ollama/gemma-3-270m-it-F16.gguf"
+    # Извлекаем чистый ответ (после assistant)
+    response = output["choices"][0]["text"].strip()
 
+    # Убираем [Возможная интерпретация], если есть, или возвращаем как есть
+    if '[Возможная интерпретация]' in response:
+        response = response.split('[Возможная интерпретация]')[0].strip()
+
+    return response
 
 class save_key:
  def __init__(self):
@@ -182,10 +192,6 @@ def repeat(text1 : str):  # text = "linux менч установить лину
 def press_keys(text):  # xte 'keyup Shift_L'
  try:   #
    text=repeat(text)
-   # print(text)
-   # if llm != None:
-   #  text= fix_dictation(llm, text)
-
    key_s = '''#!/bin/bash
    # xte 'keyup Shift_R'
    # sleep 0.1
@@ -244,34 +250,40 @@ def record_audio(filename = "temp.wav", duration=10, fs=48000):  # Запись 
 
 def audio(model, filename = "temp.wav"):  # Путь к аудиофайлу
   try:    # Выполняем транскрипцию аудио
-    segments, info = model.transcribe( filename,  # Основные параметры качества:
-      beam_size=10,  # Увеличивает точность, но требует больше ресурсов
-      best_of=5,  # Выбирает лучший из нескольких вариантов
-      language="ru",  # Явное указание языка
-      vad_filter=True,  # Фильтрация тишины - ВКЛЮЧИТЬ
-      temperature=0.8,  # Для детерминированного результата
-      condition_on_previous_text=False,  # Избегать зацикливания
-      no_speech_threshold=0.5,  # Порог определения речи
-      log_prob_threshold=-0.8,  # Порог уверенности модели
-      compression_ratio_threshold=2.2,  # Фильтрация бессмыслицы    # Параметры для русского языка:
-      suppress_tokens=None,  # Не подавлять специальные токены
-      word_timestamps=False,  # Выключить для скорости
-      repetition_penalty=1.2,  # Бороться с повторениями     # Оптимизация:
-      patience=2.0,  # Терпимость в поиске
-      chunk_length=30 )  # Длина сегментов# Параллельная обработка
-    message_parts = []
-    for segment in segments:  # Собираем текст из всех сегментов
-      text = segment.text.strip()  # Удаляем лишние пробелы
-      if text:  # Проверяем, что текст не пустой
-        # Приводим первый символ к нижнему регистру
-        text = text[0].lower() + text[1:] if len(text) > 0 else text
-        message_parts.append(text)
+   segments, info = model.transcribe(    filename,
+    language="ru",  # Русский язык явно
+    beam_size=20,  # Глубокий поиск — повышает точность
+    best_of=10,  # Выбирает лучший результат из 10 гипотез
+    temperature=0.5,  # Детеминированно, без случайных ошибок
+    vad_filter=True,  # Включено — фильтрует шум и паузы
+    vad_parameters=dict(  min_silence_duration_ms=800,  # Пауза 0.8 секунды — чтобы не обрывал фразы
+     speech_pad_ms=300  ),# 0.3 секунды запаса по краям фразы
+    condition_on_previous_text=False,  # Избегает “залипания” на предыдущем тексте
+    no_speech_threshold=0.35,  # Позволяет улавливать даже очень тихую речь
+    log_prob_threshold=-1.2,  # Терпимее к неуверенным звукам
+    compression_ratio_threshold=2.6,  # Разрешает немного "неидеальные" слова
+    repetition_penalty=1.05,  # Мягко борется с повторами, не убивая естественность
+    patience=4.0,  # Больше терпения при нечетких звуках
+    chunk_length=20,  # Короткие отрезки — лучше для неравномерной речи
+    suppress_tokens=[-1],  word_timestamps=False,   # Новый параметр: отключаем пунктуацию и заглавки
+    #initial_prompt="Transcribe the audio in lowercase letters without any punctuation marks, periods, commas, or capitalization. Write everything as plain lowercase text."
+    # Или на русском:
+    initial_prompt="Транскрибируй аудио маленькими буквами без знаков препинания, точек, запятых или заглавных букв. Пиши всё простым текстом в нижнем регистре."
+           )
 
-    if message_parts:  # Формируем итоговое сообщение
+   message_parts = []
+   for segment in segments:  # Собираем текст из всех сегментов
+     text = segment.text.strip()  # Удаляем лишние пробелы
+     if text:  # Проверяем, что текст не пустой
+      # Приводим первый символ к нижнему регистру
+       text = text[0].lower() + text[1:] if len(text) > 0 else text
+       message_parts.append(text)
+
+   if message_parts:  # Формируем итоговое сообщение
       message = ' '.join(message_parts)
       return message
-    else:
-      return None  # Возвращаем None, если текст не распознан
+   else:
+     return None  # Возвращаем None, если текст не распознан
 
   except Exception as e:
     print(f"Ошибка транскрипции: {e}")
@@ -302,7 +314,7 @@ def audio(model, filename = "temp.wav"):  # Путь к аудиофайлу
     # # === 5. Лёгкий лимитер (мягкое сглаживание пиков) ===
     # audio = np.tanh(audio * 1.05) * 0.98
 
-def is_speech(audio_data="temp.wav", threshold=0.0308):
+def is_speech(audio_data="temp.wav", threshold=0.0042):
   try:
     if not os.path.isfile(audio_data):
         print(f"Файл не найден: {audio_data}")
@@ -312,6 +324,7 @@ def is_speech(audio_data="temp.wav", threshold=0.0308):
         print("Файл пуст")
         return False
     amp = np.mean(np.abs(data))
+    print(amp)
     return amp > threshold
   except Exception as ex:
     print(f"Ошибка при обработке аудио: {ex}")
