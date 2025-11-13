@@ -46,8 +46,7 @@ try: # Загрузка модели
 except Exception as e:
   print(f"Ошибка загрузки модели: {e}")
   sys.exit(1)
-def write_audio():
- pass
+
 def update_label(root, label):
  def record_and_process():
   try:
@@ -63,9 +62,9 @@ def update_label(root, label):
     silence_time = 0
     last_speech_time = time.time()
     min_silence_duration = 3.9
-    print("Начинаю обработку аудиопотока...")
     fs = 48000
     filename = "temp.wav"
+    start= False
     with sd.InputStream(samplerate=fs, channels=1, dtype='float32') as stream:
      while True:
       # if audio_chunk is None:#   print("Завершение работы...")
@@ -73,20 +72,22 @@ def update_label(root, label):
       buffer.extend(audio_chunk.flatten())
       # max_amp = np.max(np.abs(audio_chunk))/1000
       mean_amp = np.mean(np.abs(audio_chunk)) * 100
-      mean_amp = math.ceil(mean_amp * 10)  #
+      mean_amp = math.ceil(mean_amp) #      print(mean_amp)
       if mean_amp > 6:
        last_speech_time = time.time()
        silence_time = 0
+       start =True
       else:
        silence_time += time.time() - last_speech_time
        last_speech_time = time.time()
-      if silence_time > min_silence_duration and buffer:
+      if silence_time > min_silence_duration and start:
        root.withdraw()
-       recording_array = np.array(buffer)
-       write(filename, fs, recording_array)
+       array = np.array(buffer)
+       array = enhance_speech_for_recognition(array)
+       write(filename, fs, array)
        if is_speech(filename):  # Проверяем, что буфер не пустой
         buffer.clear()  # Сбрасываем буфер
-        segment_duration = len(recording_array) / 48000
+        segment_duration = len(array) / 48000
         print(f" длительность: {segment_duration:.2f} сек ")
         message = audio(model, filename)
         if message != None:

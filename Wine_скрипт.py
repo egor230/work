@@ -1,12 +1,12 @@
 import os, subprocess, sys
 def get_paths_file():  #  Получаем аргументы командной строки
-  num_args = len(sys.argv)# Получаем количество аргументов
+  # num_args = len(sys.argv)# Получаем количество аргументов
   url = ""
   for arg in sys.argv[1:]:
     url += str(arg) + " "# Объединяем аргументы через цикл for
 
   url = url.strip()
-  url="/mnt/807EB5FA7EB5E954/games/Splinter Cell/system/SplinterCell.exe"
+  # url="/mnt/807EB5FA7EB5E954/games/Far Cry/Bin32/FarCry.exe"
   directory = os.path.dirname(url)
   filename = os.path.basename(url)
   if '.' in filename:

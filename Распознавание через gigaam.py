@@ -1,9 +1,6 @@
-import collections
-
 from write_text import *
 import torch, gigaam, tempfile, torchaudio, math, scipy.signal
 import numpy as np
-from scipy import signal
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 # Настройка директории кэша
 cache_dir = Path("/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache")
@@ -57,43 +54,6 @@ duration = 10.5
 # sample_rate = 48000
 # block_size = int(sample_rate * duration)
 
-def enhance_speech_for_recognition(audio, sample_rate=48000):
-  try:
-    audio = audio.astype(np.float32)
-    nyquist = sample_rate / 2
-
-    # Более эффективный порядок фильтров
-    # Сначала полосовая фильтрация, потом усиление
-    b, a = signal.butter(2, [100 / nyquist, 6000 / nyquist], btype='band')
-    audio = signal.filtfilt(b, a, audio)
-
-    # Более умное усиление с нормализацией
-    rms = np.sqrt(np.mean(audio ** 2))
-    if rms > 0:
-      gain = min(3.0, 0.9 / rms)  # Автоматический расчет усиления
-      audio *= gain
-
-    # Улучшенная компрессия
-    threshold_db = -12
-    threshold = 10 ** (threshold_db / 20)
-    envelope = np.abs(audio)
-
-    # Сглаживание огибающей
-    envelope_smooth = np.convolve(envelope, np.ones(100) / 100, mode='same')
-    gain = np.ones_like(audio)
-
-    compression_mask = envelope_smooth > threshold
-    gain[compression_mask] = (threshold / envelope_smooth[compression_mask]) ** 0.25
-
-    audio *= gain
-    audio = np.clip(audio, -0.9, 0.9)
-
-    return audio
-
-  except Exception as e:
-    print(f"Ошибка обработки аудио: {e}")
-    return audio
-
 def update_label(root, label):
  def record_and_process():
   try:
@@ -111,22 +71,25 @@ def update_label(root, label):
       min_silence_duration = 1.8
       fs = 48000
       filename = "temp.wav"
+      start= False
       with sd.InputStream(samplerate=fs, channels=1, dtype='float32') as stream:
        while True:
           audio_chunk, overflowed = stream.read(8096)  # Читаем аудио порциями
           buffer.extend(audio_chunk.flatten())
           mean_amp = np.mean(np.abs(audio_chunk)) * 100
-          mean_amp = math.ceil(mean_amp * 10) / 10
+          mean_amp = math.ceil(mean_amp)
           # print(mean_amp)
           if mean_amp > 6:
             last_speech_time = time.time()
             silence_time = 0
+            start =True
           else:
             silence_time += time.time() - last_speech_time
             last_speech_time = time.time()
-          if silence_time > min_silence_duration and buffer:
-            recording_array = np.array(buffer)
-            write(filename, fs, recording_array)
+          if silence_time > min_silence_duration and start:
+            array = np.array(buffer)
+            array=enhance_speech_for_recognition(array)
+            write(filename, fs, array)
             break
       root.withdraw()#       print("0")
       if buffer:  # ✅ проверка, что буфер не пуст

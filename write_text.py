@@ -1,4 +1,4 @@
-import sys, os, subprocess, json, wave, io, threading, re, time, webrtcvad, warnings
+import sys, os, subprocess, json, wave, io, threading, re, time, webrtcvad, warnings, collections
 from scipy.io.wavfile import write
 os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = "myenv/lib/python3.12/site-packages/PyQt5/Qt5/plugins"
 from PyQt5 import QtCore, QtWidgets, QtGui
@@ -18,7 +18,7 @@ from pynput import keyboard
 from scipy.io import wavfile
 import soundfile as sf
 from llama_cpp import Llama
-
+from scipy import signal
 # Укажите путь к модели Meta-Llama-3.1-8B-Instruct (GGUF q4_K)
 model_path = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache/meta-llama-3.1-8b-instruct-q4_k_m.gguf"
 # Глобальная переменная для модели (чтобы не перезагружать)
@@ -191,6 +191,7 @@ def repeat(text1 : str):  # text = "linux менч установить лину
 # llm=load_model(MODEL_PATH)
 def press_keys(text):  # xte 'keyup Shift_L'
  try:   #
+   print(text)
    text=repeat(text)
    key_s = '''#!/bin/bash
    # xte 'keyup Shift_R'
@@ -201,7 +202,6 @@ def press_keys(text):  # xte 'keyup Shift_L'
    # command = 'xte "key Num_Lock"'
    # subprocess.run(command, shell=True)
    exit     '''
-   print(text)
    # text="lunix mint"
    char_to_xdotool = { ",": "comma",
    ":": "shift+semicolon" }
@@ -248,10 +248,45 @@ def record_audio(filename = "temp.wav", duration=10, fs=48000):  # Запись 
  audio_data = audio_data.flatten().astype(np.float32) # Конвертируем в нужный формат и сохраняем
  wavfile.write(filename, fs, (audio_data * 32767).astype(np.int16))
 
+def enhance_speech_for_recognition(audio, sample_rate=48000):
+  try:
+    audio = audio.astype(np.float32)
+    nyquist = sample_rate / 2
+
+    # Более эффективный порядок фильтров
+    # Сначала полосовая фильтрация, потом усиление
+    b, a = signal.butter(2, [100 / nyquist, 6000 / nyquist], btype='band')
+    audio = signal.filtfilt(b, a, audio)
+
+    # Более умное усиление с нормализацией
+    rms = np.sqrt(np.mean(audio ** 2))
+    if rms > 0:
+      gain = min(3.0, 0.9 / rms)  # Автоматический расчет усиления
+      audio *= gain
+
+    # Улучшенная компрессия
+    threshold_db = -12
+    threshold = 10 ** (threshold_db / 20)
+    envelope = np.abs(audio)
+
+    # Сглаживание огибающей
+    envelope_smooth = np.convolve(envelope, np.ones(100) / 100, mode='same')
+    gain = np.ones_like(audio)
+
+    compression_mask = envelope_smooth > threshold
+    gain[compression_mask] = (threshold / envelope_smooth[compression_mask]) ** 0.25
+
+    audio *= gain
+    audio = np.clip(audio, -0.9, 0.9)
+
+    return audio
+
+  except Exception as e:
+    print(f"Ошибка обработки аудио: {e}")
+    return audio
 def audio(model, filename = "temp.wav"):  # Путь к аудиофайлу
   try:    # Выполняем транскрипцию аудио
-   segments, info = model.transcribe(    filename,
-    language="ru",  # Русский язык явно
+   segments, info = model.transcribe( filename, language="ru",  # Русский язык явно
     beam_size=20,  # Глубокий поиск — повышает точность
     best_of=10,  # Выбирает лучший результат из 10 гипотез
     temperature=0.5,  # Детеминированно, без случайных ошибок
@@ -265,31 +300,58 @@ def audio(model, filename = "temp.wav"):  # Путь к аудиофайлу
     repetition_penalty=1.05,  # Мягко борется с повторами, не убивая естественность
     patience=4.0,  # Больше терпения при нечетких звуках
     chunk_length=20,  # Короткие отрезки — лучше для неравномерной речи
-    suppress_tokens=[-1],  word_timestamps=False,   # Новый параметр: отключаем пунктуацию и заглавки
+    suppress_tokens=[-1],  word_timestamps=False   # Новый параметр: отключаем пунктуацию и заглавки
     #initial_prompt="Transcribe the audio in lowercase letters without any punctuation marks, periods, commas, or capitalization. Write everything as plain lowercase text."
     # Или на русском:
-    initial_prompt="Транскрибируй аудио маленькими буквами без знаков препинания, точек, запятых или заглавных букв. Пиши всё простым текстом в нижнем регистре."
-           )
+    # , initial_prompt="Транскрибируй аудио маленькими буквами без знаков препинания, точек, запятых или заглавных букв. Пиши всё простым текстом в нижнем регистре."
+    #                  "Все числа записывай словами (например, 23 → двадцать три). Пиши всё простым текстом в нижнем регистре."
+    )
 
    message_parts = []
-   for segment in segments:  # Собираем текст из всех сегментов
-     text = segment.text.strip()  # Удаляем лишние пробелы
-     if text:  # Проверяем, что текст не пустой
-      # Приводим первый символ к нижнему регистру
-       text = text[0].lower() + text[1:] if len(text) > 0 else text
-       message_parts.append(text)
+   for segment in segments:
+    text = segment.text
+    if not text:
+     continue
+    text = str(text).strip().lower()
+    if not text:
+     continue
 
-   if message_parts:  # Формируем итоговое сообщение
-      message = ' '.join(message_parts)
-      return message
-   else:
-     return None  # Возвращаем None, если текст не распознан
+    # Разбиваем на слова и гарантируем, что каждое — строка
+    words = text.split()
+    for word in words:
+     # Даже если это число — превратим в строку
+     message_parts.append(str(word))
+
+    # Финальная защита: все элементы — строки
+   message_parts = [str(part) for part in message_parts if str(part).strip()]
+   return ' '.join(message_parts) if message_parts else None
 
   except Exception as e:
-    print(f"Ошибка транскрипции: {e}")
-    return None
+   print(f"Ошибка транскрипции: {e}")
+   return None
 
+  except Exception as e:
+     print(f"Ошибка транскрипции: {e}")
+     return None
 
+def is_speech(audio_data="temp.wav", threshold=0.044):
+ try:
+  if not os.path.isfile(audio_data):
+   print(f"Файл не найден: {audio_data}")
+   return False
+  data, sr = sf.read(audio_data, dtype='float32')
+  if len(data) == 0:
+   print("Файл пуст")
+   return False
+  amp = np.mean(np.abs(data))
+  print(f"amp {amp}")
+  if amp > threshold:
+   return True
+  else:
+   return False
+ except Exception as ex:
+  print(f"Ошибка при обработке аудио: {ex}")
+  return False
 
     # # === 3. Усиление тихих фрагментов (адаптивное AGC) ===
     # frame_len = int(0.08 * sample_rate)  # 80 мс
@@ -314,7 +376,7 @@ def audio(model, filename = "temp.wav"):  # Путь к аудиофайлу
     # # === 5. Лёгкий лимитер (мягкое сглаживание пиков) ===
     # audio = np.tanh(audio * 1.05) * 0.98
 
-def is_speech(audio_data="temp.wav", threshold=0.0042):
+def is_speech(audio_data="temp.wav", threshold=0.046):
   try:
     if not os.path.isfile(audio_data):
         print(f"Файл не найден: {audio_data}")

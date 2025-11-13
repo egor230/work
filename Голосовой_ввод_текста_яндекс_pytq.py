@@ -92,9 +92,9 @@ class MyThread(QtCore.QThread):
    self.driver.get("https://alice.yandex.ru/chat/01938823-14ea-4000-bd7a-3cca57830d6a/")
    self.url = self.driver.current_url
    self.driver.refresh()
-   html_content = self.driver.page_source
    # Ожидание полной загрузки DOM
    WebDriverWait(self.driver, 5).until( lambda d: d.execute_script("return document.readyState") == "complete"  )
+   html_content = self.driver.page_source
    #time.sleep(2)  # Пауза для JS-обновлений
    # with open('page_source.txt', 'w', encoding='utf-8') as file:
    #   file.write(html_content)
