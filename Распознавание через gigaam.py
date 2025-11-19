@@ -91,7 +91,6 @@ def update_label(root, label):
       root.withdraw()#
       model = check_model()
       if is_speech(0.07):
-       print("0")
        message = model.transcribe(filename)
           # os.unlink(filename)
        if message !=" " and len(message) >0:
