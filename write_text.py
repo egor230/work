@@ -183,7 +183,6 @@ def repeat(text1 : str):  # text = "linux менч установить лину
    # Дополнительная замена для слов из словаря res
    # for word, replacement in res.items():
    #  text1 = re.sub(r'\b' + re.escape(word) + r'\b', replacement, text1, flags=re.IGNORECASE)
-   k.save_text(text1)
   except Exception as ex:
    print(f"Ошибка: {ex}")  # Выводим ошибку для диагностики
   return text1

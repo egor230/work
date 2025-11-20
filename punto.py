@@ -26,20 +26,98 @@ def find_nemo(): # Проверяет, активно ли окно файлов
  except:
   return False
 
-def search_image(): # Ищет изображения на экране и симулирует нажатие Enter, если найдено в Nemo
+def get_nemo_search_regions():
+ """
+ Находит окно Nemo, рассчитывает абсолютные координаты двух областей
+ поиска для PyAutoGUI и возвращает их.
+
+ Возвращает:
+     (region_button, region_text) или None, если Nemo не найден.
+     region_button: Абсолютные координаты (left, top, width, height) для кнопки поиска (лупы).
+     region_text: Абсолютные координаты (left, top, width, height) для текста поиска ("Поиск файлов:").
+ """
+
+ # --- 1. ПОЛУЧЕНИЕ ГЕОМЕТРИИ ОКНА NEMO ---
  try:
-  s = f'''#!/bin/bash
-  xte 'keydown Return' 'keyup Return' '''
-  region = (1400, 100, 1500, 900) # Область поиска кнопки "Search"
-  image_path = 'Search button.png'
-  loc = pyautogui.locateOnScreen(image_path, confidence=0.23, region=region) # Ищем кнопку поиска
-  region1 = (268, 44, 182, 108) # Область поиска поля ввода
-  image_path1 = 'Search text.png'
-  loc1 = pyautogui.locateOnScreen(image_path1, confidence=0.2, region=region1) # Ищем поле ввода
-  if loc and loc1 and find_nemo(): # Если найдены оба элемента и активно окно Nemo   print("1")
-   subprocess.call(['bash', '-c', s, '_']) # Симулируем нажатие Enter
- except:
-  pass
+  # Найти ID окна Nemo по классу
+  window_id_cmd = "wmctrl -l -x | grep 'Nemo' | head -n 1 | awk '{print $1}'"
+  window_id = subprocess.check_output(window_id_cmd, shell=True, text=True).strip()
+
+  if not window_id:
+   return None
+
+  # Получить геометрию окна
+  geometry_cmd = f"xdotool getwindowgeometry --shell {window_id}"
+  geometry_output = subprocess.check_output(geometry_cmd, shell=True, text=True)
+
+  # Распарсить вывод
+  base_x = int(re.search(r'X=(\d+)', geometry_output).group(1))
+  base_y = int(re.search(r'Y=(\d+)', geometry_output).group(1))
+  base_width = int(re.search(r'WIDTH=(\d+)', geometry_output).group(1))
+  base_height = int(re.search(r'HEIGHT=(\d+)', geometry_output).group(1))
+
+ except Exception:
+  # Сюда попадают ошибки subprocess.CalledProcessError и AttributeError
+  return None
+
+ # --- 2. НАСТРОЙКИ ОТНОСИТЕЛЬНЫХ СМЕЩЕНИЙ ---
+
+ # Смещения для Кнопки Поиска (привязка к правому верхнему углу)
+ REGION_BUTTON_WIDTH = 100
+ REGION_BUTTON_HEIGHT = 100
+
+ # Смещения для Текста Поиска (привязка к левому верхнему углу)
+ REGION_TEXT_OFFSET_X = 200  # Смещение от левого края Nemo
+ REGION_TEXT_OFFSET_Y = 80  # Смещение от верхнего края Nemo
+ REGION_TEXT_WIDTH = 300
+ REGION_TEXT_HEIGHT = 150
+
+ # --- 3. РАСЧЕТ АБСОЛЮТНЫХ КООРДИНАТ ---
+
+ # Расчет области для Кнопки Поиска (лупы)
+ region_button = (
+  base_x + base_width - REGION_BUTTON_WIDTH,  # left: привязка к правому краю
+  base_y,  # top: привязка к верхнему краю
+  REGION_BUTTON_WIDTH,
+  REGION_BUTTON_HEIGHT
+ )
+
+ # Расчет области для Текста Поиска ("Поиск файлов:")
+ region_text = (
+  base_x + REGION_TEXT_OFFSET_X,  # left: смещение от левого края
+  base_y + REGION_TEXT_OFFSET_Y,  # top: смещение от верхнего края
+  REGION_TEXT_WIDTH,
+  REGION_TEXT_HEIGHT
+ )
+
+ return region_button, region_text
+
+def search_image():
+  try:
+    s = f'''#!/bin/bash
+    xte 'keydown Return' 'keyup Return'
+    '''
+    region = (1400, 100, 1500, 900)  # Пример области
+
+    region1 = (268, 44, 182, 108)  # (left, top, width, height)
+    # 1. Получаем динамические области поиска
+    search_regions = get_nemo_search_regions()
+
+    if search_regions:
+     # Распаковываем полученные кортежи
+     region, region1 = search_regions
+
+    image_path = 'Search button.png'    # Укажите путь к вашему изображению
+
+    loc = pyautogui.locateOnScreen(image_path, confidence=0.25, region=region)  # Проверяем, есть ли изображение на экране
+
+    image_path1 = 'Search text.png'    # Укажите путь к вашему изображению
+    loc1 = pyautogui.locateOnScreen(image_path1, confidence=0.2, region=region1)  # Проверяем, есть ли изображение на экране
+    if loc and loc1 and find_nemo(): #
+      # print("22")
+      subprocess.call(['bash', '-c', s, '_'])
+  except:
+    pass
 
 class ToolTip: # Класс для отображения подсказок
  def __init__(self, widget, text):
