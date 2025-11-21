@@ -145,7 +145,8 @@ class MyThread(QtCore.QThread):
     EC.visibility_of_all_elements_located((By.CLASS_NAME, self.ready)) )
    #element = self.driver.find_element(By.CLASS_NAME, self.ready)
    if element:  # Проверка видимости элемента
-    time.sleep(3)
+    # time.sleep(3)
+
     message, counts = self.get_user_messages()  # button.click()
     return message, counts
    else:
@@ -175,7 +176,7 @@ class MyThread(QtCore.QThread):
        message = last_user_container.find_element(By.CSS_SELECTOR, ".MessageBubble").text.strip()
        filter_elem = oknyx_core.get_attribute(self.DATA_TESTID_ATTR)
        classes = self.driver.find_element(By.CSS_SELECTOR, f".{self.OKNYX_CORE_CLASS}").get_attribute("class")
-       if "lis" in classes and "стоп" in aria_label:
+       if "lis" in classes and "thinking" not in classes and "стоп" in aria_label and "standby" not in classes:
         self.show_message(message, self.mic)
        else:
         self.show_message(None, False)#скрыт

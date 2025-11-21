@@ -26,96 +26,61 @@ def find_nemo(): # Проверяет, активно ли окно файлов
  except:
   return False
 
-def get_nemo_search_regions():
+import subprocess
+import cv2
+import numpy as np
+from PIL import ImageGrab  # для скриншота
+
+
+def get_nemo_search_regions(image_path, image_path1):
  """
- Находит окно Nemo, рассчитывает абсолютные координаты двух областей
- поиска для PyAutoGUI и возвращает их.
+ Проверяет, видны ли на экране два заданных элемента интерфейса Nemo
+ (кнопка поиска и текст поиска) с помощью поиска по изображению.
+
+ Аргументы:
+     image_path: Путь к изображению Кнопки Поиска.
+     image_path1: Путь к изображению Текста Поиска.
 
  Возвращает:
-     (region_button, region_text) или None, если Nemo не найден.
-     region_button: Абсолютные координаты (left, top, width, height) для кнопки поиска (лупы).
-     region_text: Абсолютные координаты (left, top, width, height) для текста поиска ("Поиск файлов:").
+     True, если оба изображения найдены на экране.
+     False, в противном случае.
  """
 
- # --- 1. ПОЛУЧЕНИЕ ГЕОМЕТРИИ ОКНА NEMO ---
- try:
-  # Найти ID окна Nemo по классу
-  window_id_cmd = "wmctrl -l -x | grep 'Nemo' | head -n 1 | awk '{print $1}'"
-  window_id = subprocess.check_output(window_id_cmd, shell=True, text=True).strip()
+ # ВАЖНО: Предполагается, что библиотека pyautogui доступна.
+ CONFIDENCE = 0.8  # Уровень точности совпадения (можно изменить)
 
-  if not window_id:
-   return None
+ # 1. Поиск Кнопки Поиска (лупы)
+ # Если элемент не найден, loc_button будет None
+ loc_button = pyautogui.locateOnScreen(image_path, confidence=CONFIDENCE)
 
-  # Получить геометрию окна
-  geometry_cmd = f"xdotool getwindowgeometry --shell {window_id}"
-  geometry_output = subprocess.check_output(geometry_cmd, shell=True, text=True)
+ # 2. Поиск Текста Поиска ("Поиск файлов:")
+ loc_text = pyautogui.locateOnScreen(image_path1, confidence=CONFIDENCE)
 
-  # Распарсить вывод
-  base_x = int(re.search(r'X=(\d+)', geometry_output).group(1))
-  base_y = int(re.search(r'Y=(\d+)', geometry_output).group(1))
-  base_width = int(re.search(r'WIDTH=(\d+)', geometry_output).group(1))
-  base_height = int(re.search(r'HEIGHT=(\d+)', geometry_output).group(1))
-
- except Exception:
-  # Сюда попадают ошибки subprocess.CalledProcessError и AttributeError
-  return None
-
- # --- 2. НАСТРОЙКИ ОТНОСИТЕЛЬНЫХ СМЕЩЕНИЙ ---
-
- # Смещения для Кнопки Поиска (привязка к правому верхнему углу)
- REGION_BUTTON_WIDTH = 100
- REGION_BUTTON_HEIGHT = 100
-
- # Смещения для Текста Поиска (привязка к левому верхнему углу)
- REGION_TEXT_OFFSET_X = 200  # Смещение от левого края Nemo
- REGION_TEXT_OFFSET_Y = 80  # Смещение от верхнего края Nemo
- REGION_TEXT_WIDTH = 300
- REGION_TEXT_HEIGHT = 150
-
- # --- 3. РАСЧЕТ АБСОЛЮТНЫХ КООРДИНАТ ---
-
- # Расчет области для Кнопки Поиска (лупы)
- region_button = (
-  base_x + base_width - REGION_BUTTON_WIDTH,  # left: привязка к правому краю
-  base_y,  # top: привязка к верхнему краю
-  REGION_BUTTON_WIDTH,
-  REGION_BUTTON_HEIGHT
- )
-
- # Расчет области для Текста Поиска ("Поиск файлов:")
- region_text = (
-  base_x + REGION_TEXT_OFFSET_X,  # left: смещение от левого края
-  base_y + REGION_TEXT_OFFSET_Y,  # top: смещение от верхнего края
-  REGION_TEXT_WIDTH,
-  REGION_TEXT_HEIGHT
- )
-
- return region_button, region_text
-
+ # 3. Возврат результата
+ # Если оба элемента найдены (то есть loc_button и loc_text не являются None)
+ if loc_button is not None and loc_text is not None:
+  return True
+ else:
+  return False
 def search_image():
   try:
     s = f'''#!/bin/bash
     xte 'keydown Return' 'keyup Return'
     '''
-    region = (1400, 100, 1500, 900)  # Пример области
-
-    region1 = (268, 44, 182, 108)  # (left, top, width, height)
+    # region = (1400, 100, 1500, 900)  # Пример области
+    #
+    # region1 = (268, 44, 182, 108)  # (left, top, width, height)
     # 1. Получаем динамические области поиска
-    search_regions = get_nemo_search_regions()
-
-    if search_regions:
-     # Распаковываем полученные кортежи
-     region, region1 = search_regions
 
     image_path = 'Search button.png'    # Укажите путь к вашему изображению
 
-    loc = pyautogui.locateOnScreen(image_path, confidence=0.25, region=region)  # Проверяем, есть ли изображение на экране
-
     image_path1 = 'Search text.png'    # Укажите путь к вашему изображению
-    loc1 = pyautogui.locateOnScreen(image_path1, confidence=0.2, region=region1)  # Проверяем, есть ли изображение на экране
-    if loc and loc1 and find_nemo(): #
-      # print("22")
-      subprocess.call(['bash', '-c', s, '_'])
+    if get_nemo_search_regions(image_path, image_path1):
+   # loc = pyautogui.locateOnScreen(image_path, confidence=0.25, region=region)  # Проверяем, есть ли изображение на экране
+    #
+    # loc1 = pyautogui.locateOnScreen(image_path1, confidence=0.2, region=region1)  # Проверяем, есть ли изображение на экране
+    #if loc :# and find_nemo(): #and loc1     print("22")
+     subprocess.call(['bash', '-c', s, '_'])
   except:
     pass
 
