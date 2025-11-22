@@ -182,7 +182,7 @@ class MyThread(QtCore.QThread):
         self.show_message(None, False)#скрыт
         if "think" in classes and "стоп" in aria_label:
          # print(aria_label)
-         # print(classes)
+         print(classes)
          time.sleep(2)
          self.button.click()
          time.sleep(2)
@@ -207,13 +207,13 @@ class MyThread(QtCore.QThread):
     if counts1 ==0:
      self.counts = counts1
     if counts1 > self.counts and self.mic and self.message and not any(phrase in self.message for phrase in excluded_phrases):
+     self.counts =+1# self.counts1
      self.mic = False
      thread = threading.Thread(target=process_text, args=(self.message, ))
      thread.start()
      thread.join()
      thr = threading.Thread(target=lambda: [time.sleep(3.7), setattr(self, 'mic', True)])
      thr.daemon = True
-     self.counts =+1# self.counts1
      thr.start()
      print(counts1)
      time.sleep(3.7)

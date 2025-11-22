@@ -75,11 +75,10 @@ def search_image():
     image_path = 'Search button.png'    # Укажите путь к вашему изображению
 
     image_path1 = 'Search text.png'    # Укажите путь к вашему изображению
-    if get_nemo_search_regions(image_path, image_path1):
+    if get_nemo_search_regions(image_path, image_path1) and find_nemo():
    # loc = pyautogui.locateOnScreen(image_path, confidence=0.25, region=region)  # Проверяем, есть ли изображение на экране
-    #
     # loc1 = pyautogui.locateOnScreen(image_path1, confidence=0.2, region=region1)  # Проверяем, есть ли изображение на экране
-    #if loc :# and find_nemo(): #and loc1     print("22")
+    #if loc :#and loc1     print("22")
      subprocess.call(['bash', '-c', s, '_'])
   except:
     pass
