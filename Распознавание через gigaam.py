@@ -1,10 +1,11 @@
+from omegaconf import omegaconf
 from write_text import *
-import torch, gigaam, tempfile, torchaudio, math, scipy.signal
-import numpy as np
 from omegaconf.base import ContainerMetadata
-
+import torch, gigaam, tempfile, torchaudio, math, scipy.signal
 # Шаг 1: Добавить класс в белый список безопасных глобальных объектов PyTorch
 torch.serialization.add_safe_globals([ContainerMetadata])
+import numpy as np
+
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 # Настройка директории кэша
 cache_dir = Path("/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache")

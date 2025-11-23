@@ -189,8 +189,8 @@ def repeat(text1 : str):  # text = "linux менч установить лину
 # llm=load_model(MODEL_PATH)
 def press_keys(text):  # xte 'keyup Shift_L'
  try:   #
-   print(text)
    text=repeat(text)
+   print(text)
    key_s = '''#!/bin/bash
    # xte 'keyup Shift_R'
    # sleep 0.1

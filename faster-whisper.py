@@ -13,9 +13,8 @@ os.environ["ALSA_LOG_LEVEL"] = "0"  # Подавляем логи ALSA
 os.environ["JACK_NO_START_SERVER"] = "1"  # Отключаем запуск JACK-сервера
 err = os.dup(2)  # Сохраняем оригинальный stderr
 os.dup2(os.open(os.devnull, os.O_WRONLY), 2)  # Перенаправляем вывод ошибок в /dev/null
-subprocess.run(["pactl", "set-source-mute", "54", "0"], check=True)  # вкл микрофон.
-subprocess.run(['pactl', 'set-source-volume', "54", '65000'])
-
+source_id = get_webcam_source_id()      # ← твоя функция
+set_mute("0", source_id)
 if not os.path.exists(model_dir):# Проверка существования папки snapshots
   print(f"Ошибка: Папка snapshots не найдена: {model_dir}. Убедитесь, что модель скачана.")
   sys.exit(1)
@@ -58,10 +57,10 @@ except Exception as e:
   print(f"Ошибка загрузки модели: {e}")
   sys.exit(1)
 
-def update_label(root, label):
+def update_label(root, label, source_id):
  def record_and_process():
   try:
-   if not get_mute_status():
+   if not get_mute_status(source_id):
     root.withdraw()
    else:
     # Показ окна с начальной надписью
@@ -107,19 +106,19 @@ def update_label(root, label):
       #  message = fix_text(message)
       threading.Thread(target=process_text, args=(message,), daemon=True).start()
 
-   root.after(1000, lambda: update_label(root, label))
+   root.after(1000, lambda: update_label(root, label, source_id))
 
   except Exception as e:
    print(f"Ошибка: {e}")
-   root.after(1000, lambda: update_label(root, label))
+   root.after(1000, lambda: update_label(root, label, source_id))
    pass
 
  # Проверка статуса микрофона
- if get_mute_status():
+ if get_mute_status(source_id):
   threading.Thread(target=record_and_process).start()
  else:
   root.withdraw()
-  root.after(2000, lambda: update_label(root, label))
+  root.after(2000, lambda: update_label(root, label, source_id))
 
 
 # ===== Интерфейс =====
@@ -132,5 +131,5 @@ root.overrideredirect(True)
 root.resizable(True, True)
 root.attributes("-topmost", True)
 
-update_label(root, label)
+update_label(root, label, source_id)
 root.mainloop()

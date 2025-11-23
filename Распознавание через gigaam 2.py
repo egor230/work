@@ -3,8 +3,6 @@ from write_text import *
 import torch, gigaam, tempfile, torchaudio, math, scipy.signal
 import numpy as np
 warnings.filterwarnings("ignore", category=DeprecationWarning)
-model = AutoModel.from_pretrained(    "ai-sage/GigaAM-v3",
-    revision="e2e_rnnt",    trust_remote_code=True)
 print("Модель загружена! Если ошибок нет — проверь папку заново.")
 source_id = get_webcam_source_id()
 # Настройка директории кэша
@@ -41,7 +39,8 @@ threading.Thread(target=run_script, daemon=True).start()
 # ← Загружаем только модель (processor НЕ нужен и НЕ существует)
 model = AutoModel.from_pretrained(
     "ai-sage/GigaAM-v3",
-    revision="e2e_rnnt",        # или "rnnt" — обе работают
+    revision="e2e_rnnt",        # или "rnnt" — обе работают,
+    device_map="cpu",
     trust_remote_code=True,     # ← без этого вообще ничего не будет
 )
 def update_label(root, label, source_id):
@@ -67,22 +66,23 @@ def update_label(root, label, source_id):
         audio_chunk, overflowed = stream.read(8096)  # Читаем аудио порциями
         mean_amp = np.mean(np.abs(audio_chunk)) * 100
         mean_amp = math.ceil(mean_amp)#        print(mean_amp)
-        buffer.extend(audio_chunk.flatten())
+ #       buffer.extend(audio_chunk.flatten())
         if mean_amp > 2:
          last_speech_time = time.time()
          silence_time = 0
          start = True
         if start:
+         buffer.extend(audio_chunk.flatten())
          if silence_time > min_silence_duration:
           root.withdraw()
           array = np.array(buffer)
           array = enhance_speech_for_recognition(array)
           write(filename, fs, array)
-          buffer.clear()  # Сбрасываем буфер
           break
          else:
           silence_time += time.time() - last_speech_time
           last_speech_time = time.time()
+      buffer.clear()  # Сбрасываем буфер
       root.withdraw()#
       if is_speech(0.07):
        message = model.transcribe(filename)
