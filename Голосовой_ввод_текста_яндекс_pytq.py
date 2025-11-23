@@ -1,9 +1,8 @@
 from pytq_libs_voice import *
 from write_text import *
 # os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/myenv/lib/python3.12/site-packages/PyQt5/Qt5/plugins"
-subprocess.run(["pactl", "set-source-mute", "54", "0"], check=True)  # вкл микрофон.
-# subprocess.run(['pactl', 'set-source-volume', "54", '65000'])
-
+source_id = get_webcam_source_id()      # ← твоя функция
+set_mute("0", source_id)
 class MyThread(QtCore.QThread):
  text_signal = QtCore.pyqtSignal(str, bool)
  icon_signal = QtCore.pyqtSignal(str)
@@ -282,12 +281,12 @@ class MyWindow(QtWidgets.QWidget):
    self.tray_icon.show()
   except Exception as e:
    print(f"change_icon error: {e}")
- 
+
  def on_tray_icon_activated(self):
   try:
    self.mic = not getattr(self, "mic", True)
    self.tray_icon.setToolTip("ON" if self.mic else "OFF")
-   set_mute("0" if self.mic else "1")
+   set_mute("0" if self.mic else "1", source_id)
    self.tray_icon.show()
    self.mythread.icon_signal.emit(self.icon2_path if self.mic else self.icon1_path)
    self.mythread.update_mic_state(self.mic)

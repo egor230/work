@@ -4,15 +4,9 @@ from PyQt5 import QtCore, QtWidgets, QtGui  # Импорт необходимы�
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QSystemTrayIcon, QAction, QMenu, QWidget, QDialog, QLabel, QSystemTrayIcon, QMenu, QAction, QVBoxLayout, QPushButton, QApplication
 from PyQt5.QtCore import QTimer
-def set_mute(mute: str):
- subprocess.run(["pactl", "set-source-mute", "54", mute], check=True)
-
-def get_mute_status():  # Получает статус Mute для источника '54' с помощью pactl и grep.
- try:
-  r = subprocess.run(["pactl", "get-source-mute", "54"],  capture_output=True, text=True, check=True)
-  return r.stdout.lower()
- except:
-  return False
+from write_text import *
+source_id = get_webcam_source_id()
+set_mute("0", source_id)
 class MyThread(QtCore.QThread):
  text_signal = QtCore.pyqtSignal(str, bool)
  icon_signal = QtCore.pyqtSignal(str)
@@ -30,7 +24,7 @@ class MyThread(QtCore.QThread):
  def run(self):
   while self._running:
    try:
-    self.mic = get_mute_status()
+    self.mic = get_mute_status(source_id)
     pass
    except Exception as ex1:
     pass
@@ -38,7 +32,7 @@ class MyThread(QtCore.QThread):
 class MyWindow(QtWidgets.QWidget):
  def __init__(self, parent=None):
   super(MyWindow, self).__init__(parent)
-  self.mic = get_mute_status()
+  self.mic = get_mute_status(source_id)
   self.mythread = MyThread(parent=self)
   self.icon1_path = "stop.png"
   self.icon2_path = "voice.png"
@@ -68,7 +62,7 @@ class MyWindow(QtWidgets.QWidget):
   try:
    self.mic = not getattr(self, "mic", True)
    self.tray_icon.setToolTip("ON" if self.mic else "OFF")
-   set_mute("0" if self.mic else "1")
+   set_mute("0" if self.mic else "1", source_id)
    self.tray_icon.show()
    self.mythread.icon_signal.emit(self.icon2_path if self.mic else self.icon1_path)
    self.mythread.update_mic_state(self.mic)
@@ -78,7 +72,7 @@ class MyWindow(QtWidgets.QWidget):
  def quit_t(self):
   try:
    script_name ="off mic.py"   # Находим PID процесса по имени скрипта
-   pid = int(subprocess.check_output(  f"pgrep -f '{script_name}'",
+   pid = int(subprocess.check_output( f"pgrep -f '{script_name}'",
     shell=True ).decode().strip())
    os.kill(pid, signal.SIGTERM)
    print(f"Процесс '{script_name}' (PID: {pid}) успешно завершён.")

@@ -380,10 +380,43 @@ def is_speech(threshold=0.074, audio_data="temp.wav"):
     # # === 5. Лёгкий лимитер (мягкое сглаживание пиков) ===
     # audio = np.tanh(audio * 1.05) * 0.98
 
-
-def get_mute_status():  # Получает статус Mute для источника '54' с помощью pactl и grep.
+def get_webcam_source_id():# Определяет текущий Source ID (например, '53') для HD Webcam C525,
+ # Постоянное имя вашего микрофона с веб-камеры (из вашего вывода)
+ TARGET_NAME = "alsa_input.usb-046d_HD_Webcam_C525_79588C20-00.mono-fallback"
  try:
-  r = subprocess.run(["pactl", "get-source-mute", "54"],  capture_output=True, text=True, check=True)
+  # Самый быстрый способ — использовать pactl list sources в "short" формате
+  result = subprocess.run(  ['pactl', 'list', 'sources', 'short'],
+   capture_output=True, text=True, check=True  )
+
+  # Формат строки: 53    alsa_input.usb-046d_HD_Webcam_C525_...mono-fallback    PipeWire    s16le 1ch 4800Hz    RUNNING
+  for line in result.stdout.splitlines():
+   fields = line.split()
+   if len(fields) >= 2 and TARGET_NAME in fields[1]:
+    return fields[0]  # это и есть ID источника
+
+  print("Webcam C525 не найдена в pactl list sources short", file=sys.stderr)
+  return None
+
+ except FileNotFoundError:
+  print("pactl не найден. Установлен PipeWire/PulseAudio?", file=sys.stderr)
+  return None
+ except subprocess.CalledProcessError as e:
+  print(f"pactl вернул ошибку: {e}", file=sys.stderr)
+  return None
+
+
+def set_mute(mute: str, source_id: str):
+ if source_id is None:
+  print("source_id = None → ничего не делаем", file=sys.stderr)
+  return # mute = "1" или "0"
+ subprocess.run(["pactl", "set-source-mute", source_id, mute], check=True)
+ # Опционально — сразу ставим нормальную громкость
+ subprocess.run(["pactl", "set-source-volume", source_id, "99%"], check=True)
+source_id = get_webcam_source_id()      # ← твоя функция
+set_mute("1", source_id)
+def get_mute_status(source_id):  # Получает статус Mute для источника '54' с помощью pactl и grep.
+ try:
+  r = subprocess.run(["pactl", "get-source-mute", source_id],  capture_output=True, text=True, check=True)
   return r.stdout.lower()
  except:
   return False
