@@ -181,7 +181,7 @@ class MyThread(QtCore.QThread):
         self.show_message(None, False)#скрыт
         if "think" in classes and "стоп" in aria_label:
          # print(aria_label)
-         print(classes)
+         # print(classes)
          time.sleep(2)
          self.button.click()
          time.sleep(2)

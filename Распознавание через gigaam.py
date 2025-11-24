@@ -1,10 +1,12 @@
 from omegaconf import omegaconf
-from write_text import *
 from omegaconf.base import ContainerMetadata
-import torch, gigaam, tempfile, torchaudio, math, scipy.signal
-# Шаг 1: Добавить класс в белый список безопасных глобальных объектов PyTorch
-torch.serialization.add_safe_globals([ContainerMetadata])
+from omegaconf.dictconfig import DictConfig # <--- ИСПРАВЛЕНИЕ ОШИБКИ #1
+import torch, gigaam, tempfile, torchaudio, math, scipy.signal, typing
+# Разрешаем необходимые типы для загрузки чекпоинта
+torch.serialization.add_safe_globals([ContainerMetadata, DictConfig, typing.Any])
 import numpy as np
+from write_text import *
+#pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 # Настройка директории кэша
@@ -26,8 +28,11 @@ def check_model():
  if not os.path.exists(f"{model_path}.ckpt"):
   print(f"Ошибка: Файл модели не найден по пути: {model_path}")
   sys.exit(1)  # Завершаем программу с кодом ошибки
- model = gigaam.load_model(model_name)
- return gigaam.load_model(model_name)
+ try:
+  model = gigaam.load_model(model_name)
+  return model
+ except Exception as e:
+  print(e)
 script_path = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/off mic.py"
 script_dir = os.path.dirname(script_path)
 script_name = os.path.basename(script_path)
@@ -51,7 +56,8 @@ def run_script():# Запускаем скрипт в отдельном дем�
 threading.Thread(target=run_script, daemon=True).start()
 # print("Скрипт запущен заново.")
 
-def update_label(root, label, source_id):
+model = check_model()
+def update_label(root, label, model, source_id):
  def record_and_process():
   try:
     if not get_mute_status(source_id):
@@ -91,13 +97,12 @@ def update_label(root, label, source_id):
           silence_time += time.time() - last_speech_time
           last_speech_time = time.time()
       root.withdraw()#
-      model = check_model()
       if is_speech(0.07):
        message = model.transcribe(filename)
           # os.unlink(filename)
        if message !=" " and len(message) >0:
         threading.Thread(target=process_text, args=(message,), daemon=True).start()
-    root.after(1000, lambda: update_label(root, label, source_id))
+    root.after(1000, lambda: update_label(root, label, model, source_id))
        # audio = enhance_speech_for_recognition(audio, 48000)
   except Exception as e:
     print(f"Ошибка: {e}")
@@ -107,7 +112,7 @@ def update_label(root, label, source_id):
       stream.close()
     except:
       pass
-    root.after(1000, lambda: update_label(root, label, source_id))
+    root.after(1000, lambda: update_label(root, label, model, source_id))
     pass
 
  # Проверка статуса микрофона
@@ -115,7 +120,7 @@ def update_label(root, label, source_id):
   threading.Thread(target=record_and_process).start()
  else:
   root.withdraw()
-  root.after(2000, lambda: update_label(root, label, source_id))
+  root.after(2000, lambda: update_label(root, label, model, source_id))
 
 # ===== Интерфейс =====
 root = tk.Tk()
@@ -127,5 +132,5 @@ root.overrideredirect(True)
 root.resizable(True, True)
 root.attributes("-topmost", True)
 
-update_label(root, label, source_id)
+update_label(root, label, model, source_id)
 root.mainloop()

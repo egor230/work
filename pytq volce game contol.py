@@ -13,11 +13,11 @@ cache_dir = Path("/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/pyt
 os.environ["PYAUDIO_ALSA_WARN"] = "0"
 os.environ["ALSA_LOG_LEVEL"] = "0"  # Подавляем логи ALSA
 os.environ["JACK_NO_START_SERVER"] = "1"  # Отключаем запуск JACK-сервера
-err = os.dup(2)  # Сохраняем оригинальный stderr
-os.dup2(os.open(os.devnull, os.O_WRONLY), 2)  # Перенаправляем вывод ошибок в /dev/null
+# err = os.dup(2)  # Сохраняем оригинальный stderr
+# os.dup2(os.open(os.devnull, os.O_WRONLY), 2)  # Перенаправляем вывод ошибок в /dev/null
 torch.set_num_threads(8)
-subprocess.run(["pactl", "set-source-mute", "54", "0"], check=True)  # вкл микрофон.
-subprocess.run(['pactl', 'set-source-volume', "54", '65000'])
+source_id = get_webcam_source_id()      # ← твоя функция
+set_mute("0", source_id)
 # Проверка и загрузка модели GigaAM
 def check_model():
  models = ["v1_ssl", "v2_ssl", "ssl", "ctc", "v1_ctc", "v2_ctc", "rnnt", "v1_rnnt", "v2_rnnt", "emo"]
@@ -47,9 +47,11 @@ def web():
  option.add_experimental_option("excludeSwitches", ['enable-automation'])  # убрать окно
  option.add_argument("--use-fake-ui-for-media-stream")  # звук
  option.add_argument("--disable-popup-blocking")  # блок всплывающих окон.
- # # option.add_argument("--disable-extensions")  # отключить расширения.
- # option.add_argument('--disable-web-security')
- # option.add_argument('--disable-notifications')
+ # option.add_argument("--disable-extensions")  # отключить расширения.
+ option.add_argument('--disable-web-security')
+ option.add_argument('--disable-notifications')
+ option.add_argument('--user-data-dir=/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/google-chrome')
+ option.add_extension("/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache/Browsec VPN.crx")
  # # - Отключить загрузку картинок:
  # option.add_argument("--blink-settings=imagesEnabled=false")
  option.binary_location = "/usr/bin/google-chrome"  # Стандартный путь
@@ -70,7 +72,6 @@ def web():
   time.sleep(2)
   # driver.delete_all_cookies()  # Удалить cookies
   driver.get("https://www.speechtexter.com")  # открыть сайт
-  #  driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()),  options=option)
   # check(driver)
   # driver.minimize_window()
   WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.ID, 'mic')))
@@ -170,7 +171,7 @@ class VoiceControlThread(QThread):
    self.stopped = False
 
   def run(self):
-   if get_mute_status():
+   if get_mute_status(source_id):
     if self.profile_name == "Vosk":
      check_model()
     if self.profile_name == "internet":
