@@ -1,0 +1,14 @@
+# requirements.txt
+pynput
+sounddevice
+numpy
+scipy
+PyQt5
+llama-cpp-python
+faster-whisper
+soundfile
+webrtcvad
+transformers
+gigaam
+torch
+torchaudio

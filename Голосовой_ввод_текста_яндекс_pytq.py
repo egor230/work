@@ -185,7 +185,7 @@ class MyThread(QtCore.QThread):
          time.sleep(2)
          self.button.click()
          time.sleep(2)
-         self.button.click()
+         # self.button.click()
     pass
    except Exception as e:#    print(e)
     pass
@@ -203,10 +203,8 @@ class MyThread(QtCore.QThread):
      time.sleep(1)
 
     self.message, counts1 = self.get_latest_message(self.counts)
-    if counts1 ==0:
-     self.counts = counts1
     if counts1 > self.counts and self.mic and self.message and not any(phrase in self.message for phrase in excluded_phrases):
-     self.counts =+1# self.counts1
+     self.counts =self.counts+1# self.counts1
      self.mic = False
      thread = threading.Thread(target=process_text, args=(self.message, ))
      thread.start()
@@ -216,6 +214,8 @@ class MyThread(QtCore.QThread):
      thr.start()
      print(counts1)
      time.sleep(3.7)
+    if counts1 ==0:
+     self.counts = counts1
     pass
    except Exception as ex1:
     pass
