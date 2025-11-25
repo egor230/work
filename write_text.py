@@ -294,7 +294,7 @@ def audio(model, filename = "temp.wav"):  # Путь к аудиофайлу
     beam_size=20,  # Глубокий поиск — повышает точность
     best_of=10,  # Выбирает лучший результат из 10 гипотез
     temperature=0.55,  # Детеминированно, без случайных ошибок
-    vad_filter=True,  # Включено — фильтрует шум и паузы
+    vad_filter=False,  # Включено — фильтрует шум и паузы
     vad_parameters=dict(  min_silence_duration_ms=800,  # Пауза 0.8 секунды — чтобы не обрывал фразы
      speech_pad_ms=300  ),# 0.3 секунды запаса по краям фразы
     condition_on_previous_text=False,  # Избегает “залипания” на предыдущем тексте

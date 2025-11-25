@@ -71,7 +71,7 @@ def update_label(root, label, source_id):
     buffer = collections.deque()  # ИЗМЕНЕНО: используем список вместо Queue
     silence_time = 0
     last_speech_time = time.time()
-    min_silence_duration = 3.9
+    min_silence_duration = 1.9
     fs = 48000
     filename = "temp.wav"
     start = False

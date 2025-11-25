@@ -6,7 +6,7 @@ MODEL_PATH = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_
 os.environ["HF_HOME"] = MODEL_PATH
 os.environ["HUGGINGFACE_HUB_CACHE"] = os.path.join(MODEL_PATH, "hub")
 os.environ["TRANSFORMERS_CACHE"] = os.path.join(MODEL_PATH, "transformers")
-
+# pip install torch==2.8.0+cpu torchaudio==2.8.0+cpu --index-url https://download.pytorch.org/whl/cpu
 # ==================== Загружаем модель ====================
 print("Загружаем GigaAM-v3 (e2e_rnnt)...")
 

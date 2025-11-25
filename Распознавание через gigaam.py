@@ -6,7 +6,7 @@ import torch, gigaam, tempfile, torchaudio, math, scipy.signal, typing
 torch.serialization.add_safe_globals([ContainerMetadata, DictConfig, typing.Any])
 import numpy as np
 from write_text import *
-#pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1
+#pip install torch==2.5.1+cpu torchvision==0.20.1+cpu torchaudio==2.5.1+cpu --index-url https://download.pytorch.org/whl/cpu
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 # Настройка директории кэша
