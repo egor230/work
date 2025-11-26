@@ -22,9 +22,16 @@ with open("requirements.sh", "w") as file:
 
         # ИСПРАВЛЕННОЕ УСЛОВИЕ:
         # Если нужно пропустить некоторые пакеты, то пишем правильно:
-        if "huggingface" in package_name or "gigaam" in package_name:
+        if "huggingface" or "gigaam" or "nvidia" in package_name:
             continue  # пропускаем
-
+        if package_name in ("torch", "torchvision", "torchaudio"):
+         if package_name == "torch":         # Пишем фиксированный CPU-вариант
+          file.write("pip install torch==2.5.1+cpu --index-url https://download.pytorch.org/whl/cpu;\n")
+         elif package_name == "torchvision":
+          file.write("pip install torchvision==0.20.1+cpu --index-url https://download.pytorch.org/whl/cpu;\n")
+         elif package_name == "torchaudio":
+          file.write("pip install torchaudio==2.5.1+cpu --index-url https://download.pytorch.org/whl/cpu;\n")
+         continue
         # Записываем команду pip install с указанием версии
         file.write(f"pip install {package};\n")
 

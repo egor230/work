@@ -182,7 +182,7 @@ class MyThread(QtCore.QThread):
         if "think" in classes and "стоп" in aria_label:
          # print(aria_label)
          # print(classes)
-         time.sleep(2)
+         time.sleep(3)
          self.button.click()
          time.sleep(2)
          # self.button.click()
@@ -249,7 +249,7 @@ class MyWindow(QtWidgets.QWidget):
   self.setStyleSheet("background-color: rgba(255, 255, 255, 255); border-radius: 3px;")
   self.mythread.init_ui_signal.connect(self.QL)
   self.mythread.start()
-  # QTimer.singleShot(0, self.hide)
+  QTimer.singleShot(0, self.hide)
  
  def QL(self):
   layout = QVBoxLayout()

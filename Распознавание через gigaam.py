@@ -92,6 +92,7 @@ def update_label(root, label, model, source_id):
           array = enhance_speech_for_recognition(array)
           write(filename, fs, array)
           buffer.clear()  # Сбрасываем буфер
+          start= False
           break
          else:
           silence_time += time.time() - last_speech_time

@@ -1,7 +1,5 @@
-import time, json, os,  subprocess, psutil, pyperclip, sys, re, io
+import time, json, os, subprocess, psutil, pyperclip, sys, re, io, pyautogui
 from os import path
-
-import pyautogui
 # import pytesseract
 # Загрузите изображение с использованием PIL
 from PIL import Image, ImageFilter, ImageEnhance
@@ -11,11 +9,6 @@ import pkg_resources
 import sys, urllib.parse
 import base64
 from transformers import AutoTokenizer, AutoModelForCausalLM
-
-import subprocess
-import re
-import sys
-
 
 def get_webcam_source_id():# Определяет текущий Source ID (например, '53') для HD Webcam C525,
  # Постоянное имя вашего микрофона с веб-камеры (из вашего вывода)
