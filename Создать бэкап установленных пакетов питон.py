@@ -1,6 +1,4 @@
-import subprocess
-import os
-
+import subprocess, os
 # Открываем файл для записи
 with open("requirements.sh", "w") as file:
     # Шебанг и запуск терминала
@@ -17,21 +15,25 @@ with open("requirements.sh", "w") as file:
 
     # Записываем команды для установки пакетов
     for package in packages:
-        # Строка имеет вид "package==version"
-        package_name = package.split("==")[0]
+        # Разбиваем строку на имя и версию
+        if "==" not in package:
+            continue  # пропускаем строки без версии
+        package_name, package_version = package.split("==", 1)
 
-        # ИСПРАВЛЕННОЕ УСЛОВИЕ:
-        # Если нужно пропустить некоторые пакеты, то пишем правильно:
-        if "huggingface" or "gigaam" or "nvidia" in package_name:
+        # Проверяем, нужно ли пропустить пакет
+        if any(bad in package_name for bad in ["huggingface", "gigachat", "nvidia"]):
             continue  # пропускаем
+
+        # Обрабатываем PyTorch-пакеты
         if package_name in ("torch", "torchvision", "torchaudio"):
-         if package_name == "torch":         # Пишем фиксированный CPU-вариант
-          file.write("pip install torch==2.5.1+cpu --index-url https://download.pytorch.org/whl/cpu;\n")
-         elif package_name == "torchvision":
-          file.write("pip install torchvision==0.20.1+cpu --index-url https://download.pytorch.org/whl/cpu;\n")
-         elif package_name == "torchaudio":
-          file.write("pip install torchaudio==2.5.1+cpu --index-url https://download.pytorch.org/whl/cpu;\n")
-         continue
+            if package_name == "torch":
+                file.write("pip install torch==2.5.1+cpu --index-url https://download.pytorch.org/whl/cpu;\n")
+            elif package_name == "torchvision":
+                file.write("pip install torchvision==0.20.1+cpu --index-url https://download.pytorch.org/whl/cpu;\n")
+            elif package_name == "torchaudio":
+                file.write("pip install torchaudio==2.5.1+cpu --index-url https://download.pytorch.org/whl/cpu;\n")
+            continue
+
         # Записываем команду pip install с указанием версии
         file.write(f"pip install {package};\n")
 
@@ -40,5 +42,4 @@ with open("requirements.sh", "w") as file:
 
 # Делаем файл исполняемым
 os.chmod("requirements.sh", 0o755)
-
 print("Файл 'requirements.sh' успешно создан.")

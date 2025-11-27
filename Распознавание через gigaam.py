@@ -89,7 +89,7 @@ def update_label(root, label, model, source_id):
          if silence_time > min_silence_duration:
           root.withdraw()
           array = np.array(buffer)
-          array = enhance_speech_for_recognition(array)
+          # array = enhance_speech_for_recognition(array)
           write(filename, fs, array)
           buffer.clear()  # Сбрасываем буфер
           start= False
