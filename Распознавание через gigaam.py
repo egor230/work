@@ -53,10 +53,10 @@ cmd = f'bash -c "cd \\"{script_dir}\\" && source myenv/bin/activate && python \\
 def run_script():# Запускаем скрипт в отдельном демонизированном потоке
   subprocess.Popen(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
+model = check_model()
 threading.Thread(target=run_script, daemon=True).start()
 # print("Скрипт запущен заново.")
 
-model = check_model()
 def update_label(root, label, model, source_id):
  def record_and_process():
   try:
