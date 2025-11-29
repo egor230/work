@@ -268,7 +268,7 @@ class MyWindow(QtWidgets.QWidget):
     width = max(250, len(text) * 12)
     height = 45
     self.setFixedSize(width, height)
-    self.move(610, 1070)
+    self.move(660, 1070)
     self.show()
    else:
     self.hide()

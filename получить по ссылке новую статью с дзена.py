@@ -79,27 +79,17 @@ def simplify_html(html, base_url="https://dzen.ru"):
  except Exception as e:
   print(f"Неожиданная ошибка при копировании: {e}")
 
-def main():
- 
- try:# Вызываем функцию прокрутки
-  option = get_option()
-  driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=option)
-  # url = "https://dzen.ru/a/aIXI1UqpY3gfXc-D"
-  url = str(pyperclip.paste())
-  driver.get(url)
-  # Использование BeautifulSoup для парсинга
-  res = {}  # Ваш словарь для результатов
-  source = driver.page_source
-  res[simplify_html(source)] =url
-  # print(res)
-  # time.sleep(3)  # Дополнительное время для загрузки контента
-  copy_and_rename_file(res)
-  open_documents_from_dict(res, driver)
- except Exception as e:
-  print(f"Произошла ошибка: {str(e)}")
- # finally:
-  # driver.quit()
-
-
-if __name__ == "__main__":
- main()
+option = get_option()
+driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=option)
+# url = "https://dzen.ru/a/aIXI1UqpY3gfXc-D"
+url = str(pyperclip.paste())
+driver.get(url)
+# Использование BeautifulSoup для парсинга
+res = {}  # Ваш словарь для результатов
+source = driver.page_source
+res[simplify_html(source)] =url
+# print(res)
+# time.sleep(3)  # Дополнительное время для загрузки контента
+copy_and_rename_file(res)
+open_documents_from_dict(res, driver)
+driver.quit()

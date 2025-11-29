@@ -67,6 +67,8 @@ def update_label(root, label, source_id):
         mean_amp = np.mean(np.abs(audio_chunk)) * 100
         mean_amp = math.ceil(mean_amp)#        print(mean_amp)
  #       buffer.extend(audio_chunk.flatten())
+        if not get_mute_status(source_id):
+          break
         if mean_amp > 2:
          last_speech_time = time.time()
          silence_time = 0
