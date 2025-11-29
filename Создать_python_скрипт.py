@@ -15,7 +15,6 @@ def get_paths_file():  # Получаем аргументы командной 
     filename_without_extension = filename  # extension = None
   return directory, filename_without_extension, filename
 
-
 # Применяем функцию и сохраняем результаты в соответствующие переменные
 directory, filename_without_extension, filename = get_paths_file()
 
@@ -23,7 +22,14 @@ directory, filename_without_extension, filename = get_paths_file()
 file1 = str(os.path.join(directory, filename)).replace('\'','')
 show_list_id = '''#!/bin/bash
 #gnome-terminal -- bash -c '
-cd \"/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project\" && source myenv/bin/activate && python \"{1}\";
+
+# Прямой путь к интерпретатору внутри myenv
+PYTHON_EXECUTABLE="/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/myenv/bin/python"
+
+# Путь к скрипту
+SCRIPT_PATH=\"{1}\";
+# Команда для запуска:
+"$PYTHON_EXECUTABLE" "$SCRIPT_PATH";
 exit;
 #exec bash'
  '''.format(directory,file1)  #

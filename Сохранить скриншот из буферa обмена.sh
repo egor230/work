@@ -1,16 +1,19 @@
 #!/bin/bash 
 #gnome-terminal -- bash -c '
 
-cd "/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project";
+cd "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project";
 image_url=$(copyq read 0)    # Получаем  из буфера обмена  
 if [ ! -f "$(copyq clipboard)" ] && [[ -z "$(copyq clipboard)" ]]; then  
  #echo "$image_url"
  sleep 0.8
  copyq select 0  
 fi
-
+if xclip -selection clipboard -t image/png -o > /dev/null 2>&1 || xclip -selection clipboard -t image/jpeg -o > /dev/null 2>&1 || xclip -selection clipboard -t image/bmp -o > /dev/null 2>&1 || xclip -selection clipboard -t image/svg+xml -o > /dev/null 2>&1 ; then
+  sleep 0.8
+  copyq select 0
+fi
 if [ ! -f "$(copyq clipboard)" ] && [[ "$image_url" == http* && ! "$image_url" =~ "vk.com" ]] && ! ( xclip -selection clipboard -t image/png -o > /dev/null 2>&1 || xclip -selection clipboard -t image/jpeg -o > /dev/null 2>&1 || xclip -selection clipboard -t image/bmp -o > /dev/null 2>&1 || xclip -selection clipboard -t image/svg+xml -o > /dev/null 2>&1 ); then  # Проверяем, есть ли в буфере обмена URL изображения
-  source myenv/bin/activate && python "Дополнительные функции буфер обмена.py"
+  source myenv/bin/activate && python "Дополнительные функции буфера обмена.py"
   exit 0
 fi
 exit 0
