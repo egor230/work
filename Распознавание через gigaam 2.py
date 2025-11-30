@@ -35,14 +35,11 @@ cmd = f'bash -c "cd \\"{script_dir}\\" && source myenv/bin/activate && python \\
 def run_script():# Запускаем скрипт в отдельном демонизированном потоке
   subprocess.Popen(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
-threading.Thread(target=run_script, daemon=True).start()
 # ← Загружаем только модель (processor НЕ нужен и НЕ существует)
-model = AutoModel.from_pretrained(
-    "ai-sage/GigaAM-v3",
+model = AutoModel.from_pretrained("ai-sage/GigaAM-v3",
     revision="e2e_rnnt",        # или "rnnt" — обе работают,
-    device_map="cpu",
-    trust_remote_code=True,     # ← без этого вообще ничего не будет
-)
+    device_map="cpu",    trust_remote_code=True,   )  # ← без этого вообще ничего не будет
+threading.Thread(target=run_script, daemon=True).start()
 def update_label(root, label, source_id):
  def update_label(root, label, model, source_id):
   def record_and_process():
