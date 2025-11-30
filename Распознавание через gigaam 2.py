@@ -44,58 +44,56 @@ model = AutoModel.from_pretrained(
     trust_remote_code=True,     # ← без этого вообще ничего не будет
 )
 def update_label(root, label, source_id):
- def record_and_process():
-  try:
+ def update_label(root, label, model, source_id):
+  def record_and_process():
+   try:
     if not get_mute_status(source_id):
-      root.withdraw()
+     root.withdraw()
     else:
-      # Показ окна с начальной надписью
-      root.geometry("100x20+700+1025")
-      label.config(text="Говорите...")
-      root.deiconify()
-      root.update()
-      buffer = collections.deque()  # ИЗМЕНЕНО: используем список вместо Queue
-      silence_time = 0
-      last_speech_time = time.time()
-      min_silence_duration = 1.8
-      fs = 48000
-      filename = "temp.wav"
-      start= False
-      with sd.InputStream(samplerate=fs, channels=1, dtype='float32') as stream:
-       while True:
-        audio_chunk, overflowed = stream.read(8096)  # Читаем аудио порциями
-        mean_amp = np.mean(np.abs(audio_chunk)) * 100
-        mean_amp = math.ceil(mean_amp)#        print(mean_amp)
- #       buffer.extend(audio_chunk.flatten())
-        if not get_mute_status(source_id):
-          break
-        if mean_amp > 2:
+     # Показ окна с начальной надписью
+     root.geometry("100x20+700+1025")
+     label.config(text="Говорите...")
+     root.deiconify()
+     root.update()
+     buffer = collections.deque()  # ИЗМЕНЕНО: используем список вместо Queue
+     silence_time = 0
+     last_speech_time = time.time()
+     min_silence_duration = 1.8
+     fs = 48000
+     filename = "temp.wav"
+     start = False
+     with sd.InputStream(samplerate=fs, channels=1, dtype='float32') as stream:
+      while True:
+       audio_chunk, overflowed = stream.read(8096)  # Читаем аудио порциями
+       mean_amp = np.mean(np.abs(audio_chunk)) * 100
+       mean_amp = math.ceil(mean_amp)  # print(mean_amp)
+       if mean_amp > 2:
+        last_speech_time = time.time()
+        silence_time = 0
+        start = True
+       if start:
+        buffer.extend(audio_chunk.flatten())
+        if silence_time > min_silence_duration:
+         root.withdraw()
+         array = np.array(buffer)
+         array = enhance_speech_for_recognition(array)
+         start = False
+         break
+        else:
+         silence_time += time.time() - last_speech_time
          last_speech_time = time.time()
-         silence_time = 0
-         start = True
-        if start:
-         buffer.extend(audio_chunk.flatten())
-         if silence_time > min_silence_duration:
-          root.withdraw()
-          array = np.array(buffer)
-          array = enhance_speech_for_recognition(array)
-          write(filename, fs, array)
-          break
-         else:
-          silence_time += time.time() - last_speech_time
-          last_speech_time = time.time()
-      buffer.clear()  # Сбрасываем буфер
-      root.withdraw()#
-      if is_speech(0.07):
-       message = model.transcribe(filename)
-          # os.unlink(filename)
-       if message !=" " and len(message) >0:
-        threading.Thread(target=process_text, args=(message,), daemon=True).start()
-    root.after(1000, lambda: update_label(root, label, source_id))
-       # audio = enhance_speech_for_recognition(audio, 48000)
-  except Exception as e:
-    print(f"Ошибка: {e}")
-    # Добавьте остановку потока в случае ошибки
+     root.withdraw()  #
+     if is_speech(0.07, array):
+      write(filename, fs, array)
+      message = model.transcribe(filename)
+      # os.unlink(filename)
+      if message != " " and len(message) > 0:
+       threading.Thread(target=process_text, args=(message,), daemon=True).start()
+     buffer.clear()  # Сбрасываем буфер
+    root.after(1000, lambda: update_label(root, label, model, source_id))
+    # audio = enhance_speech_for_recognition(audio, 48000)
+   except Exception as e:
+    print(f"Ошибка: {e}")  # Добавьте остановку потока в случае ошибки
     try:
       stream.stop()
       stream.close()

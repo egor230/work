@@ -89,20 +89,20 @@ def update_label(root, label, model, source_id):
          if silence_time > min_silence_duration:
           root.withdraw()
           array = np.array(buffer)
-          # array = enhance_speech_for_recognition(array)
-          write(filename, fs, array)
-          buffer.clear()  # Сбрасываем буфер
+          array = enhance_speech_for_recognition(array)
           start= False
           break
          else:
           silence_time += time.time() - last_speech_time
           last_speech_time = time.time()
       root.withdraw()#
-      if is_speech(0.07):
+      if is_speech(0.077, array):
+       write(filename, fs, array)
        message = model.transcribe(filename)
           # os.unlink(filename)
        if message !=" " and len(message) >0:
         threading.Thread(target=process_text, args=(message,), daemon=True).start()
+      buffer.clear()  # Сбрасываем буфер
     root.after(1000, lambda: update_label(root, label, model, source_id))
        # audio = enhance_speech_for_recognition(audio, 48000)
   except Exception as e:

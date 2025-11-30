@@ -338,25 +338,36 @@ def audio(model, filename = "temp.wav"):  # Путь к аудиофайлу
      print(f"Ошибка транскрипции: {e}")
      return None
 
-def is_speech(threshold=0.074, audio_data="temp.wav"):
+def is_speech(threshold=0.074, audio_source="temp.wav"):
  try:
-  if not os.path.isfile(audio_data):
-   print(f"Файл не найден: {audio_data}")
-   return False
-  data, sr = sf.read(audio_data, dtype='float32')
-  if len(data) == 0:
-   print("Файл пуст")
-   return False
-  amp = np.mean(np.abs(data))
-  print(f"amp {amp:.3f}")
-  if amp > threshold:
-   return True
-  else:
-   return False
- except Exception as ex:
-  print(f"Ошибка при обработке аудио: {ex}")
-  return False
+  # Если передана строка — читаем файл
+  if isinstance(audio_source, (str, bytes, os.PathLike)):
+   if not os.path.isfile(audio_source):
+    print(f"Файл не найден: {audio_source}")
+    return False
+   data, sr = sf.read(audio_source, dtype='float32')
 
+  # Если уже массив numpy
+  elif isinstance(audio_source, np.ndarray):
+   data = audio_source.astype('float32')  # на всякий случай приводим тип
+
+  else:
+   print("Неподдерживаемый тип данных")
+   return False
+
+  if len(data) == 0:
+   print("Аудио пустое")
+   return False
+
+  # Средняя амплитуда
+  amp = np.mean(np.abs(data))
+  print(f"amp {amp:.5f}")
+
+  return amp > threshold
+
+ except Exception as ex:
+  print(f"Ошибка в is_speech: {ex}")
+  return False
     # # === 3. Усиление тихих фрагментов (адаптивное AGC) ===
     # frame_len = int(0.08 * sample_rate)  # 80 мс
     # hop = int(frame_len / 2)

@@ -243,13 +243,11 @@ class MyWindow(QtWidgets.QWidget):
   self.tray_icon.setToolTip("OFF")
   self.tray_icon.activated.connect(self.on_tray_icon_activated)
   self.tray_icon.show()
-  
   self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
   self.setAttribute(Qt.WA_TranslucentBackground)
   self.setStyleSheet("background-color: rgba(255, 255, 255, 255); border-radius: 3px;")
   self.mythread.init_ui_signal.connect(self.QL)
   self.mythread.start()
-  QTimer.singleShot(0, self.hide)
  
  def QL(self):
   layout = QVBoxLayout()
@@ -260,15 +258,16 @@ class MyWindow(QtWidgets.QWidget):
   self.label.setWordWrap(False)
   layout.addWidget(self.label)
   self.setLayout(layout)
+  QTimer.singleShot(0, self.hide)
  
  def _update_label_from_thread(self, text, mic):
   try:
    if text and mic:
     self.label.setText(text)
-    width = max(250, len(text) * 12)
+    width = max(250, len(text) * 11)
     height = 45
     self.setFixedSize(width, height)
-    self.move(660, 1070)
+    self.move(630, 1070)
     self.show()
    else:
     self.hide()
