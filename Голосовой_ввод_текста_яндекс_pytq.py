@@ -248,7 +248,7 @@ class MyWindow(QtWidgets.QWidget):
   self.setStyleSheet("background-color: rgba(255, 255, 255, 255); border-radius: 3px;")
   self.mythread.init_ui_signal.connect(self.QL)
   self.mythread.start()
- 
+  QTimer.singleShot(0, self.hide)
  def QL(self):
   layout = QVBoxLayout()
   self.label = QLabel(" ")
@@ -258,7 +258,6 @@ class MyWindow(QtWidgets.QWidget):
   self.label.setWordWrap(False)
   layout.addWidget(self.label)
   self.setLayout(layout)
-  QTimer.singleShot(0, self.hide)
  
  def _update_label_from_thread(self, text, mic):
   try:

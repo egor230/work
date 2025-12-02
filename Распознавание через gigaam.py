@@ -44,18 +44,15 @@ if result.returncode == 0 and result.stdout.strip():
   pids = result.stdout.strip().split()
   for pid in pids:
    try:
-    subprocess.run(["kill", "-9", pid], check=True)
-    # print(f"Убит запущенный процесс {script_name} с PID {pid}")
+    subprocess.run(["kill", "-9", pid], check=True)    # print(f"Убит запущенный процесс {script_name} с PID {pid}")
    except subprocess.CalledProcessError as e:
     print(f"Не удалось убить PID {pid}: {e}")
 # Формируем команду запуска
 cmd = f'bash -c "cd \\"{script_dir}\\" && source myenv/bin/activate && python \\"{script_path}\\""'
 def run_script():# Запускаем скрипт в отдельном демонизированном потоке
   subprocess.Popen(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
-
 model = check_model()
-threading.Thread(target=run_script, daemon=True).start()
-# print("Скрипт запущен заново.")
+threading.Thread(target=run_script, daemon=True).start()# print("Скрипт запущен заново.")
 
 def update_label(root, label, model, source_id):
  def record_and_process():
@@ -115,7 +112,6 @@ def update_label(root, label, model, source_id):
       pass
     root.after(1000, lambda: update_label(root, label, model, source_id))
     pass
-
  # Проверка статуса микрофона
  if get_mute_status(source_id):
   threading.Thread(target=record_and_process).start()

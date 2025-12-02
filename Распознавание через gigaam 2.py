@@ -34,10 +34,9 @@ if result.returncode == 0 and result.stdout.strip():
 cmd = f'bash -c "cd \\"{script_dir}\\" && source myenv/bin/activate && python \\"{script_path}\\""'
 def run_script():# Запускаем скрипт в отдельном демонизированном потоке
   subprocess.Popen(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
-
 # ← Загружаем только модель (processor НЕ нужен и НЕ существует)
 model = AutoModel.from_pretrained("ai-sage/GigaAM-v3",
-    revision="e2e_rnnt",        # или "rnnt" — обе работают,
+    revision="e2e_rnnt",   # или "rnnt" — обе работают,
     device_map="cpu",    trust_remote_code=True,   )  # ← без этого вообще ничего не будет
 threading.Thread(target=run_script, daemon=True).start()
 def update_label(root, label, source_id):

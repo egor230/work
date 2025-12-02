@@ -26,42 +26,42 @@ import os
 import torch
 from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
 
-# Путь к твоему safetensors-файлу
-local_model_path = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache/whisper_files"
-
-# Если хочешь, можешь переименовать папку в просто "whisper-large-v3-turbo"
-# mv cache/whisper_files whisper-large-v3-turbo
-
-# Загружаем процессор (токенизатор + feature extractor) с HF (он маленький, ~500 МБ)
-processor = AutoProcessor.from_pretrained("openai/whisper-large-v3-turbo")
-
-# Загружаем модель с локального safetensors (ОЧЕНЬ БЫСТРО, без скачивания!)
-model = AutoModelForSpeechSeq2Seq.from_pretrained(
-    local_model_path,          # ← вот сюда указываем свою папку
-    torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-    low_cpu_mem_usage=True,    # важно на CPU, экономит ОЗУ
-    device_map="auto",         # "cuda" если есть GPU, иначе "cpu"
-    local_files_only=True,     # ← обязательно, иначе опять полезет в интернет
-)
-
-# Создаём пайплайн — самый удобный способ использовать Whisper
-pipe = pipeline(
-    "automatic-speech-recognition",
-    model=model,
-    tokenizer=processor.tokenizer,
-    feature_extractor=processor.feature_extractor,
-    max_new_tokens=128,
-    chunk_length_s=30,               # для длинных аудио
-    batch_size=16,                   # увеличь до 24–32 если есть ≥16 ГБ RAM
-    torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-    device_map="auto",
-)
-
-# Пример использования
-audio_path = "temp.wav"  # ← положи сюда свой wav/mp3/m4a и т.д.
-
-result = pipe(audio_path, generate_kwargs={"language": "russian", "task": "transcribe"})
-# result = pipe(audio_path)  # если язык автоопределение
-
-print("Распознано:")
-print(result["text"])
+# # Путь к твоему safetensors-файлу
+# local_model_path = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache/whisper_files"
+#
+# # Если хочешь, можешь переименовать папку в просто "whisper-large-v3-turbo"
+# # mv cache/whisper_files whisper-large-v3-turbo
+#
+# # Загружаем процессор (токенизатор + feature extractor) с HF (он маленький, ~500 МБ)
+# processor = AutoProcessor.from_pretrained("openai/whisper-large-v3-turbo")
+#
+# # Загружаем модель с локального safetensors (ОЧЕНЬ БЫСТРО, без скачивания!)
+# model = AutoModelForSpeechSeq2Seq.from_pretrained(
+#     local_model_path,          # ← вот сюда указываем свою папку
+#     torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+#     low_cpu_mem_usage=True,    # важно на CPU, экономит ОЗУ
+#     device_map="auto",         # "cuda" если есть GPU, иначе "cpu"
+#     local_files_only=True,     # ← обязательно, иначе опять полезет в интернет
+# )
+#
+# # Создаём пайплайн — самый удобный способ использовать Whisper
+# pipe = pipeline(
+#     "automatic-speech-recognition",
+#     model=model,
+#     tokenizer=processor.tokenizer,
+#     feature_extractor=processor.feature_extractor,
+#     max_new_tokens=128,
+#     chunk_length_s=30,               # для длинных аудио
+#     batch_size=16,                   # увеличь до 24–32 если есть ≥16 ГБ RAM
+#     torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+#     device_map="auto",
+# )
+#
+# # Пример использования
+# audio_path = "temp.wav"  # ← положи сюда свой wav/mp3/m4a и т.д.
+#
+# result = pipe(audio_path, generate_kwargs={"language": "russian", "task": "transcribe"})
+# # result = pipe(audio_path)  # если язык автоопределение
+#
+# print("Распознано:")
+# print(result["text"])
