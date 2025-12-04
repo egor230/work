@@ -1,5 +1,4 @@
 import os
-from transformers import AutoModel
 
 # ==================== КЭШ ====================
 MODEL_PATH = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache"
@@ -8,21 +7,40 @@ os.environ["HUGGINGFACE_HUB_CACHE"] = os.path.join(MODEL_PATH, "hub")
 os.environ["TRANSFORMERS_CACHE"] = os.path.join(MODEL_PATH, "transformers")
 # pip install torch==2.8.0 torchaudio==2.8.0
 # ==================== Загружаем модель ====================
-print("Загружаем GigaAM-v3 (e2e_rnnt)...")
+# print("Загружаем GigaAM-v3 (e2e_rnnt)...")
 
-revision = "e2e_rnnt"  # can be any v3 model: ssl, ctc, rnnt, e2e_ctc, e2e_rnnt
-try:
- model = AutoModel.from_pretrained(
-  "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache/hub/models--ai-sage--GigaAM-v3/snapshots/7655ad717f8122257385bb4b2f373db3697e8680",  # ← сюда указывай свою локальную папку
-    revision="e2e_rnnt",                 # всё равно можно указать, если в папке несколько веток
-    local_files_only=True,               # ← ЭТО ГЛАВНОЕ! Без интернета вообще
-    trust_remote_code=True,              # обязательно для GigaAM, т.к. у неё кастомный код
-    device_map="cpu",                    # или "auto", или "cuda"
-    torch_dtype="auto",                  # опционально, но рекомендуется
- )
-except Exception as e:
- print(e)
-print("Модель загружена на CPU")
+# revision = "e2e_rnnt"  # can be any v3 model: ssl, ctc, rnnt, e2e_ctc, e2e_rnnt
+# try:
+#
+#   model = AutoModel.from_pretrained("ai-sage/GigaAM-v3",
+#                                     revision="e2e_rnnt",  # или "rnnt" — обе работают,
+#                                     device_map="cpu", trust_remote_code=True, )  # ← без этого вообще ничего не будет
+#   message = model.transcribe("temp.wav")
+#   print(message)
+# except Exception as e:
+#  print(e)
+# print("Модель загружена на CPU")
+
+
+
+# Audio embeddings
+# model_name = "v3_ssl"       # Options: `v1_ssl`, `v2_ssl`, `v3_ssl`
+# model = gigaam.load_model(model_name)
+# transcription = model.transcribe("temp.wav")
+# print(embedding)
+from my_gaam import GigaASR
+#
+# asr = GigaASR("/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache/gigaam/v2_rnnt.ckpt")
+# print(asr.transcribe("/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/temp.wav"))
+
+# import gigaam
+# model_name = "v3_e2e_rnnt"  # Options: any model version with suffix `_ctc` or `_rnnt`
+# model = gigaam.load_model(model_name)
+# # ASR
+# transcription = model.transcribe("/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/temp.wav")
+# print(transcription)
+# #
+
 
 
 

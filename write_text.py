@@ -1,6 +1,6 @@
-import sys, os, subprocess, json, wave, io, threading, re, time, webrtcvad, warnings, collections
+import sys, os, subprocess, json, wave, io, threading, re, time, warnings, collections#, webrtcvad
 from scipy.io.wavfile import write
-# os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = "myenv/lib/python3.12/site-packages/PyQt5/Qt5/plugins"
+os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = "myenv/lib/python3.12/site-packages/PyQt5/Qt5/plugins"
 from PyQt5 import QtCore, QtWidgets, QtGui
 from PyQt5.QtCore import QTimer, QObject, pyqtSignal, Qt, QThread
 from PyQt5.QtGui import QIcon, QFont

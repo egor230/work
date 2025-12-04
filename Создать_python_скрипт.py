@@ -21,11 +21,8 @@ directory, filename_without_extension, filename = get_paths_file()
 # Формируем полный путь к файлу, соединяя директорию и имя файла, и убираем лишние символы
 file1 = str(os.path.join(directory, filename)).replace('\'','')
 show_list_id = '''#!/bin/bash
-#gnome-terminal -- bash -c '
-
-# Прямой путь к интерпретатору внутри myenv
-PYTHON_EXECUTABLE="/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/myenv/bin/python"
-
+#gnome-terminal -- bash -c ' 
+cd "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project" && source 
 # Путь к скрипту
 SCRIPT_PATH=\"{1}\";
 # Команда для запуска:

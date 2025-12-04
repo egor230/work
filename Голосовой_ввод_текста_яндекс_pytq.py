@@ -223,6 +223,7 @@ class MyThread(QtCore.QThread):
 class MyWindow(QtWidgets.QWidget):
  def __init__(self, parent=None):
   super(MyWindow, self).__init__(parent)
+  QTimer.singleShot(0, self.hide)
   self.mic = True
   self.mythread = MyThread(parent=self)
 
@@ -248,7 +249,6 @@ class MyWindow(QtWidgets.QWidget):
   self.setStyleSheet("background-color: rgba(255, 255, 255, 255); border-radius: 3px;")
   self.mythread.init_ui_signal.connect(self.QL)
   self.mythread.start()
-  QTimer.singleShot(0, self.hide)
  def QL(self):
   layout = QVBoxLayout()
   self.label = QLabel(" ")
