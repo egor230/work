@@ -22,14 +22,12 @@ directory, filename_without_extension, filename = get_paths_file()
 file1 = str(os.path.join(directory, filename)).replace('\'','')
 show_list_id = '''#!/bin/bash
 #gnome-terminal -- bash -c ' 
-cd "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project" && source 
-# Путь к скрипту
-SCRIPT_PATH=\"{1}\";
-# Команда для запуска:
+PYTHON_EXECUTABLE="/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/myvenv/bin/python" # Путь к скрипту
+SCRIPT_PATH=\"{0}\"; # Команда для запуска:
 "$PYTHON_EXECUTABLE" "$SCRIPT_PATH";
 exit;
 #exec bash'
- '''.format(directory,file1)  #
+ '''.format(file1)  #
 file=str(os.path.join(directory, filename_without_extension))+".sh"
 with open(file, 'w') as file:    # Записываем текст в файл
     file.write(show_list_id)

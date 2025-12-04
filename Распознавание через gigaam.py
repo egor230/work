@@ -48,7 +48,7 @@ if result.returncode == 0 and result.stdout.strip():
    except subprocess.CalledProcessError as e:
     print(f"Не удалось убить PID {pid}: {e}")
 # Формируем команду запуска
-cmd = f'bash -c "cd \\"{script_dir}\\" && source myenv/bin/activate && python \\"{script_path}\\""'
+cmd = f'#!/bin/bash\n"/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/myvenv/bin/python\" \"{script_path}\"'
 def run_script():# Запускаем скрипт в отдельном демонизированном потоке
   subprocess.Popen(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 model = check_model()

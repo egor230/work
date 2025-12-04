@@ -361,7 +361,8 @@ def is_speech(threshold=0.074, audio_source="temp.wav"):
 
   # Средняя амплитуда
   amp = np.mean(np.abs(data))
-  print(f"amp {amp:.5f}")
+  if amp > threshold:
+   print(f"amp {amp:.5f}")
 
   return amp > threshold
 

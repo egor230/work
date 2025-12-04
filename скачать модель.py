@@ -8,18 +8,18 @@ os.environ["TRANSFORMERS_CACHE"] = os.path.join(MODEL_PATH, "transformers")
 # pip install torch==2.8.0 torchaudio==2.8.0
 # ==================== Загружаем модель ====================
 # print("Загружаем GigaAM-v3 (e2e_rnnt)...")
+from transformers import AutoModel
+revision = "e2e_rnnt"  # can be any v3 model: ssl, ctc, rnnt, e2e_ctc, e2e_rnnt
+try:
 
-# revision = "e2e_rnnt"  # can be any v3 model: ssl, ctc, rnnt, e2e_ctc, e2e_rnnt
-# try:
-#
-#   model = AutoModel.from_pretrained("ai-sage/GigaAM-v3",
-#                                     revision="e2e_rnnt",  # или "rnnt" — обе работают,
-#                                     device_map="cpu", trust_remote_code=True, )  # ← без этого вообще ничего не будет
-#   message = model.transcribe("temp.wav")
-#   print(message)
-# except Exception as e:
-#  print(e)
-# print("Модель загружена на CPU")
+  model = AutoModel.from_pretrained("ai-sage/GigaAM-v3",
+                                    revision="e2e_rnnt",  # или "rnnt" — обе работают,
+                                    device_map="cpu", trust_remote_code=True, )  # ← без этого вообще ничего не будет
+  message = model.transcribe("/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/temp.wav")
+  print(message)
+except Exception as e:
+ print(e)
+print("Модель загружена на CPU")
 
 
 

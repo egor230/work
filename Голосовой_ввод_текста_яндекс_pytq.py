@@ -185,7 +185,7 @@ class MyThread(QtCore.QThread):
          time.sleep(3)
          self.button.click()
          time.sleep(2)
-         # self.button.click()
+         self.button.click()
     pass
    except Exception as e:#    print(e)
     pass
