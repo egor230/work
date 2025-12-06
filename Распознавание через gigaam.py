@@ -1,12 +1,11 @@
 from omegaconf import omegaconf
 from omegaconf.base import ContainerMetadata
 from omegaconf.dictconfig import DictConfig # <--- ИСПРАВЛЕНИЕ ОШИБКИ #1
+from write_text import *
 import torch, gigaam, tempfile, torchaudio, math, scipy.signal, typing
 # Разрешаем необходимые типы для загрузки чекпоинта
 torch.serialization.add_safe_globals([ContainerMetadata, DictConfig, typing.Any])
-import numpy as np
-from write_text import *
-#pip install torch==2.5.1+cpu torchvision==0.20.1+cpu torchaudio==2.5.1+cpu --index-url https://download.pytorch.org/whl/cpu
+#pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 # Настройка директории кэша
@@ -24,7 +23,7 @@ set_mute("0", source_id)
 def check_model():
  models = ["v1_ssl", "v2_ssl", "ssl", "ctc", "v1_ctc", "v2_ctc", "rnnt", "v1_rnnt", "v2_rnnt", "emo"]
  model_name = models[-2]  # v2_rnnt
- model_path = cache_dir / "gigaam" / f"{model_name}"
+ model_path = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache/gigaam/v3_e2e_rnnt"#cache_dir / "gigaam" / f"{model_name}"
  if not os.path.exists(f"{model_path}.ckpt"):
   print(f"Ошибка: Файл модели не найден по пути: {model_path}")
   sys.exit(1)  # Завершаем программу с кодом ошибки
@@ -74,24 +73,27 @@ def update_label(root, label, model, source_id):
       start= False
       with sd.InputStream(samplerate=fs, channels=1, dtype='float32') as stream:
        while True:
-        audio_chunk, overflowed = stream.read(8096)  # Читаем аудио порциями
-        mean_amp = np.mean(np.abs(audio_chunk)) * 100
-        mean_amp = math.ceil(mean_amp)#        print(mean_amp)
-        if mean_amp > 2:
-         last_speech_time = time.time()
-         silence_time = 0
-         start = True
-        if start:
-         buffer.extend(audio_chunk.flatten())
-         if silence_time > min_silence_duration:
+        if not get_mute_status(source_id):
           root.withdraw()
-          array = np.array(buffer)
-          array = enhance_speech_for_recognition(array)
-          start= False
-          break
-         else:
-          silence_time += time.time() - last_speech_time
+        else:
+         audio_chunk, overflowed = stream.read(8096)  # Читаем аудио порциями
+         mean_amp = np.mean(np.abs(audio_chunk)) * 100
+         mean_amp = math.ceil(mean_amp)#        print(mean_amp)
+         if mean_amp > 2:
           last_speech_time = time.time()
+          silence_time = 0
+          start = True
+         if start:
+          buffer.extend(audio_chunk.flatten())
+          if silence_time > min_silence_duration:
+           root.withdraw()
+           array = np.array(buffer)
+           array = enhance_speech_for_recognition(array)
+           start= False
+           break
+          else:
+           silence_time += time.time() - last_speech_time
+           last_speech_time = time.time()
       root.withdraw()#
       if is_speech(0.077, array):
        write(filename, fs, array)

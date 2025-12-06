@@ -106,6 +106,7 @@ class MyThread(QtCore.QThread):
    self.init_ui_signal.emit()
    self.show_message("Давай поговорите", self.mic)
    self.button.click()
+   self.driver.minimize_window()
   except Exception as e:
    # print(e)
    pass
@@ -183,7 +184,7 @@ class MyThread(QtCore.QThread):
          # print(aria_label)
          # print(classes)
          time.sleep(3)
-         self.button.click()
+         # self.button.click()
          time.sleep(2)
          self.button.click()
     pass
@@ -223,7 +224,6 @@ class MyThread(QtCore.QThread):
 class MyWindow(QtWidgets.QWidget):
  def __init__(self, parent=None):
   super(MyWindow, self).__init__(parent)
-  QTimer.singleShot(0, self.hide)
   self.mic = True
   self.mythread = MyThread(parent=self)
 
@@ -249,6 +249,7 @@ class MyWindow(QtWidgets.QWidget):
   self.setStyleSheet("background-color: rgba(255, 255, 255, 255); border-radius: 3px;")
   self.mythread.init_ui_signal.connect(self.QL)
   self.mythread.start()
+  QTimer.singleShot(0, self.hide)
  def QL(self):
   layout = QVBoxLayout()
   self.label = QLabel(" ")

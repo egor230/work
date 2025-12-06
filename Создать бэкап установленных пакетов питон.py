@@ -4,9 +4,8 @@ with open("requirements.sh", "w") as file:
     # Шебанг и запуск терминала
     file.write("#!/bin/bash\n")
     file.write(
-        'gnome-terminal -- bash -c \'cd "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project";\n'
+    'gnome-terminal -- bash -c \'source "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/myvenv/bin/activate";\n'
     )
-    file.write('source myenv/bin/activate;\n')
     file.write('pip install --upgrade pip;\n')
 
     # Получаем список установленных пакетов через pip freeze
