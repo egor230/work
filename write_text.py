@@ -266,7 +266,7 @@ def enhance_speech_for_recognition(audio, sample_rate=48000):
 
   ## 3. Улучшенная, более мягкая компрессия
   # Понижаем порог (-18dB вместо -12dB), чтобы захватить более тихие звуки
-  threshold_db = -18
+  threshold_db = -28
   threshold = 10 ** (threshold_db / 20)
   envelope = np.abs(audio)
 
