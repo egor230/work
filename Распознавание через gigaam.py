@@ -3,10 +3,9 @@ from omegaconf.base import ContainerMetadata
 from omegaconf.dictconfig import DictConfig # <--- ИСПРАВЛЕНИЕ ОШИБКИ #1
 from write_text import *
 import torch, gigaam, tempfile, torchaudio, math, scipy.signal, typing
-# Разрешаем необходимые типы для загрузки чекпоинта
-torch.serialization.add_safe_globals([ContainerMetadata, DictConfig, typing.Any])
 #pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1
-
+torch.serialization.add_safe_globals([ContainerMetadata, DictConfig, typing.Any])
+# Разрешаем необходимые типы для загрузки чекпоинта
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 # Настройка директории кэша
 cache_dir = Path("/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache")
@@ -78,8 +77,9 @@ def update_label(root, label, model, source_id):
         else:
          audio_chunk, overflowed = stream.read(8096)  # Читаем аудио порциями
          mean_amp = np.mean(np.abs(audio_chunk)) * 100
-         mean_amp = math.ceil(mean_amp)#        print(mean_amp)
-         if mean_amp > 2:
+         mean_amp = math.ceil(mean_amp)#
+         if mean_amp > 5:
+          print(mean_amp)
           last_speech_time = time.time()
           silence_time = 0
           start = True
@@ -104,7 +104,6 @@ def update_label(root, label, model, source_id):
        if message !=" " and len(message) >0:
         threading.Thread(target=process_text, args=(message,), daemon=True).start()
     root.after(1000, lambda: update_label(root, label, model, source_id))
-       # audio = enhance_speech_for_recognition(audio, 48000)
   except Exception as e:
     print(f"Ошибка: {e}")
     # Добавьте остановку потока в случае ошибки

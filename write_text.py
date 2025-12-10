@@ -18,6 +18,22 @@ from pathlib import Path
 # from faster_whisper import WhisperModel
 from pynput.keyboard import Controller, Key, Listener
 from pynput import keyboard
+from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor
+import torch, librosa, math
+import logging
+warnings.filterwarnings("ignore")
+# --- Конфигурация модели ---
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+# Полное отключение мусора
+os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
+os.environ["BITSANDBYTES_NOWELCOME"] = "1"
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+logging.getLogger("librosa").setLevel(logging.ERROR)
+logging.getLogger("audioread").setLevel(logging.ERROR)
+logging.getLogger("paramiko").setLevel(logging.ERROR)
 # from llama_cpp import Llama
 # Укажите путь к модели Meta-Llama-3.1-8B-Instruct (GGUF q4_K)
 model_path = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache/meta-llama-3.1-8b-instruct-q4_k_m.gguf"
@@ -192,23 +208,21 @@ def press_keys(text):  # xte 'keyup Shift_L'
    text=repeat(text)
    print(text)
    key_s = '''#!/bin/bash
-   # xte 'keyup Shift_R'
-   # sleep 0.1
-   # xte 'keyup Shift_L'
+   xte 'keyup Shift_R'
+   sleep 0.1
+   xte 'keyup Shift_L'
    xkbset -sticky
    xte "key Num_Lock"
    # command = 'xte "key Num_Lock"'
    # subprocess.run(command, shell=True)
-   exit     '''
-   # text="lunix mint"
-   char_to_xdotool = { ",": "comma",
-   ":": "shift+semicolon" }
+   exit '''   # text="lunix mint"
+   char_to_xdotool = { ",": "comma",  ":": "colon"}  # Без shift, а сам символ
    liters_en=['a', 'A', 'b', 'B', 'c', 'C', 'd', 'D', 'e', 'E', 'f', 'F', 'g', 'G', 'h', 'H', 'i', 'I', 'j', 'J', 'k', 'K', 'l', 'L', 'm', 'M',
      'n', 'N', 'o', 'O', 'p', 'P', 'q', 'Q', 'r', 'R', 's', 'S', 't', 'T', 'u', 'U', 'v', 'V', 'w', 'W', 'x', 'X', 'y', 'Y', 'z', 'Z']  # Диапазон от пробела до тильды (ASCII 32-126)#
    for char in text:
     if char in char_to_xdotool:
-      subprocess.run(['bash', '-c', key_s])
       subprocess.call(['xdotool', 'key', char_to_xdotool[char]])
+      # subprocess.run(['bash', '-c', key_s])
       continue
     if char in liters_en:
        subprocess.call(['xdotool', 'type', '--delay', '3', char])
@@ -294,17 +308,17 @@ def audio(model, filename = "temp.wav"):  # Путь к аудиофайлу
     beam_size=20,  # Глубокий поиск — повышает точность
     best_of=10,  # Выбирает лучший результат из 10 гипотез
     temperature=0.55,  # Детеминированно, без случайных ошибок
-    vad_filter=False,  # Включено — фильтрует шум и паузы
-    vad_parameters=dict(  min_silence_duration_ms=800,  # Пауза 0.8 секунды — чтобы не обрывал фразы
-     speech_pad_ms=300  ),# 0.3 секунды запаса по краям фразы
-    condition_on_previous_text=False,  # Избегает “залипания” на предыдущем тексте
-    no_speech_threshold=0.35,  # Позволяет улавливать даже очень тихую речь
-    log_prob_threshold=-1.2,  # Терпимее к неуверенным звукам
-    compression_ratio_threshold=2.6,  # Разрешает немного "неидеальные" слова
-    repetition_penalty=1.05,  # Мягко борется с повторами, не убивая естественность
-    patience=4.0,  # Больше терпения при нечетких звуках
-    chunk_length=20,  # Короткие отрезки — лучше для неравномерной речи
-    suppress_tokens=[-1],  word_timestamps=False   # Новый параметр: отключаем пунктуацию и заглавки
+    vad_filter=False  # Включено — фильтрует шум и паузы
+    # ,vad_parameters=dict(  min_silence_duration_ms=800,  # Пауза 0.8 секунды — чтобы не обрывал фразы
+    #  speech_pad_ms=300  ),# 0.3 секунды запаса по краям фразы
+    # condition_on_previous_text=False,  # Избегает “залипания” на предыдущем тексте
+    # no_speech_threshold=0.35,  # Позволяет улавливать даже очень тихую речь
+    # log_prob_threshold=-1.2,  # Терпимее к неуверенным звукам
+    # compression_ratio_threshold=2.6,  # Разрешает немного "неидеальные" слова
+    # repetition_penalty=1.05,  # Мягко борется с повторами, не убивая естественность
+    # patience=4.0,  # Больше терпения при нечетких звуках
+    # chunk_length=20,  # Короткие отрезки — лучше для неравномерной речи
+    # suppress_tokens=[-1],  word_timestamps=False   # Новый параметр: отключаем пунктуацию и заглавки
     #initial_prompt="Transcribe the audio in lowercase letters without any punctuation marks, periods, commas, or capitalization. Write everything as plain lowercase text."
     # Или на русском:
     # , initial_prompt="Транскрибируй аудио маленькими буквами без знаков препинания, точек, запятых или заглавных букв. Пиши всё простым текстом в нижнем регистре."

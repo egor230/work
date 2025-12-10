@@ -34,8 +34,8 @@ class MyWindow(QtWidgets.QWidget):
   super(MyWindow, self).__init__(parent)
   self.mic = get_mute_status(source_id)
   self.mythread = MyThread(parent=self)
-  self.icon1_path = "stop.png"
-  self.icon2_path = "voice.png"
+  self.icon1_path = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/stop.png"
+  self.icon2_path = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/voice.png"
   self.tray_icon = QSystemTrayIcon(QtGui.QIcon(self.icon2_path), self)
   menu = QMenu()
   quit_action = QAction("Quit", self)

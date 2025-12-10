@@ -9,18 +9,69 @@ os.environ["TRANSFORMERS_CACHE"] = os.path.join(MODEL_PATH, "transformers")
 # ==================== Загружаем модель ====================
 # print("Загружаем GigaAM-v3 (e2e_rnnt)...")
 from transformers import AutoModel
-revision = "e2e_rnnt"  # can be any v3 model: ssl, ctc, rnnt, e2e_ctc, e2e_rnnt
-try:
+# revision = "e2e_rnnt"  # can be any v3 model: ssl, ctc, rnnt, e2e_ctc, e2e_rnnt
+# try:
+#
+#   model = AutoModel.from_pretrained("ai-sage/GigaAM-v3",
+#                                     revision="e2e_rnnt",  # или "rnnt" — обе работают,
+#                                     device_map="cpu", trust_remote_code=True, )  # ← без этого вообще ничего не будет
+#   message = model.transcribe("/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/temp.wav")
+#   print(message)
+# except Exception as e:
+#  print(e)
+# print("Модель загружена на CPU")
 
-  model = AutoModel.from_pretrained("ai-sage/GigaAM-v3",
-                                    revision="e2e_rnnt",  # или "rnnt" — обе работают,
-                                    device_map="cpu", trust_remote_code=True, )  # ← без этого вообще ничего не будет
-  message = model.transcribe("/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/temp.wav")
-  print(message)
-except Exception as e:
- print(e)
-print("Модель загружена на CPU")
+import torch
+import soundfile as sf
+from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor
 
+import torch
+import librosa
+from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor
+
+MODEL_DIR = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache/podlodka_model"
+AUDIO_FILE = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/temp.wav"
+
+print("Загружаю модель Turbo...")
+processor = AutoProcessor.from_pretrained(MODEL_DIR)
+model = AutoModelForSpeechSeq2Seq.from_pretrained(
+    MODEL_DIR,
+    dtype=torch.float32,       # CPU
+    low_cpu_mem_usage=True
+)
+model = model.to("cpu")
+
+# --------------------------
+# 1. Загружаем аудио
+# --------------------------
+audio, sr = librosa.load(AUDIO_FILE, sr=16000, mono=True)
+
+# --------------------------
+# 2. Готовим вход
+# --------------------------
+inputs = processor(
+    audio,
+    sampling_rate=16000,
+    return_tensors="pt"
+)
+
+# --------------------------
+# 3. Генерируем текст
+# --------------------------
+with torch.no_grad():
+    generated_ids = model.generate(
+        inputs["input_features"],
+        max_new_tokens=256,
+        num_beams=5,
+    )
+
+# --------------------------
+# 4. Декодируем
+# --------------------------
+text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+
+print("\nРезультат:")
+print(text)
 
 
 # Audio embeddings
@@ -28,7 +79,7 @@ print("Модель загружена на CPU")
 # model = gigaam.load_model(model_name)
 # transcription = model.transcribe("temp.wav")
 # print(embedding)
-from my_gaam import GigaASR
+# from my_gaam import GigaASR
 #
 # asr = GigaASR("/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache/gigaam/v2_rnnt.ckpt")
 # print(asr.transcribe("/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/temp.wav"))
