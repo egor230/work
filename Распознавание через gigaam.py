@@ -20,14 +20,19 @@ source_id = get_webcam_source_id()      # ← твоя функция
 set_mute("0", source_id)
 # Проверка и загрузка модели GigaAM
 def check_model():
- models = ["v1_ssl", "v2_ssl", "ssl", "ctc", "v1_ctc", "v2_ctc", "rnnt", "v1_rnnt", "v2_rnnt", "emo", "v3_e2e_rnnt"]
- model_name = models[-1]  # v2_rnnt
+ models = ["v1_ssl", "v2_ssl", "ssl", "ctc", "v1_ctc", "v2_ctc", "rnnt", "v1_rnnt", "v2_rnnt", "emo", "v3_e2e_rnnt", "v3-e2e_ctc"]
+ model_name = models[-2]  # v2_rnnt
  model_path = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache/gigaam/v3_e2e_rnnt"#cache_dir / "gigaam" / f"{model_name}"
  if not os.path.exists(f"{model_path}.ckpt"):
   print(f"Ошибка: Файл модели не найден по пути: {model_path}")
   sys.exit(1)  # Завершаем программу с кодом ошибки
- try:
-  model = gigaam.load_model(model_name)
+ try:  # Проверка наличия файла (указываем полный путь, как это делает gigaam)
+  model = gigaam.load_model(  model_name,  # 1. Отключаем FP16, так как это полезно только на GPU
+   fp16_encoder=False,   # 2. Отключаем FlashAttention, так как он не поддерживается на CPU и требует доп. библиотек
+   use_flash=False,   # 3. Указываем, что модель должна быть загружена на CPU
+   device="cpu",  # 4. Указываем корневой каталог, где лежит модель (GigaAM сам добавит /gigaam)
+   download_root=cache_dir   )
+  # model = gigaam.load_model(model_name)
   return model
  except Exception as e:
   print(e)
@@ -96,7 +101,7 @@ def update_label(root, label, model, source_id):
       root.withdraw()#
       buffer.clear()  # Сбрасываем буфер
       if is_speech(0.030, array):
-       array = enhance_speech_for_recognition(array)
+       # array = enhance_speech_for_recognition(array)
        write(filename, fs, array)
        message = model.transcribe(filename)
        # message = model.transcribe_longform(filename)

@@ -15,7 +15,7 @@ from speechbrain.pretrained import SpectralMaskEnhancement
 import logging
 
 # Настройка кэша
-cache_dir = Path("/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project/cache")
+cache_dir = Path("/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache")
 cache_dir.mkdir(parents=True, exist_ok=True)
 os.environ["XDG_CACHE_HOME"] = str(cache_dir)
 os.environ["TORCH_HOME"] = str(cache_dir)

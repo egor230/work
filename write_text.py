@@ -185,7 +185,7 @@ def replace(match):
   return res[match.group(0)]
 
 def repeat(text1 : str):  # text = "linux менч установить линукс минт помоги мне установить "
-  text=text1.replace("?", "").replace(".", "").replace("!", "")
+  text=text1.replace("?", "").replace("!", "")#.replace(".", "")
   k.save_text(text)
   text1 = ""
   res = k.get_dict()
@@ -213,16 +213,16 @@ def press_keys(text):  # xte 'keyup Shift_L'
    xte 'keyup Shift_L'
    xkbset -sticky
    xte "key Num_Lock"
+   exit '''   # text="lunix mint"
    # command = 'xte "key Num_Lock"'
    # subprocess.run(command, shell=True)
-   exit '''   # text="lunix mint"
    char_to_xdotool = { ",": "comma",  ":": "colon"}  # Без shift, а сам символ
    liters_en=['a', 'A', 'b', 'B', 'c', 'C', 'd', 'D', 'e', 'E', 'f', 'F', 'g', 'G', 'h', 'H', 'i', 'I', 'j', 'J', 'k', 'K', 'l', 'L', 'm', 'M',
      'n', 'N', 'o', 'O', 'p', 'P', 'q', 'Q', 'r', 'R', 's', 'S', 't', 'T', 'u', 'U', 'v', 'V', 'w', 'W', 'x', 'X', 'y', 'Y', 'z', 'Z']  # Диапазон от пробела до тильды (ASCII 32-126)#
    for char in text:
     if char in char_to_xdotool:
+      subprocess.run(['bash', '-c', key_s])
       subprocess.call(['xdotool', 'key', char_to_xdotool[char]])
-      # subprocess.run(['bash', '-c', key_s])
       continue
     if char in liters_en:
        subprocess.call(['xdotool', 'type', '--delay', '3', char])
@@ -262,42 +262,41 @@ def record_audio(filename = "temp.wav", duration=10, fs=48000):  # Запись 
 
 def enhance_speech_for_recognition(audio, sample_rate=48000):
  try:
-  audio = audio.astype(np.float32)
-  nyquist = sample_rate / 2
+   audio = audio.astype(np.float32)
+   nyquist = sample_rate / 2
 
-  ## 1. Полосовая фильтрация (Оставляем без изменений)
-  # Фокусируемся на частотах речи
-  b, a = signal.butter(2, [100 / nyquist, 6000 / nyquist], btype='band')
-  audio = signal.filtfilt(b, a, audio)
+   ## 1. Полосовая фильтрация (Оставляем без изменений)
+   # Фокусируемся на частотах речи
+   b, a = signal.butter(2, [100 / nyquist, 6000 / nyquist], btype='band')
+   audio = signal.filtfilt(b, a, audio)
 
   ## 2. Более агрессивное усиление с нормализацией (AGC)
-  # Увеличиваем максимальный коэффициент усиления (с 3.0 до 5.0)
-  rms = np.sqrt(np.mean(audio ** 2))
-  if rms > 0:
-   # Позволяем более сильное усиление для тихих фрагментов
-   gain = min(5.0, 0.9 / rms)
+   # Увеличиваем максимальный коэффициент усиления (с 3.0 до 5.0)
+   # rms = np.sqrt(np.mean(audio ** 2))
+   # if rms > 0:
+   #  # Позволяем более сильное усиление для тихих фрагментов
+   #  gain = min(4.0, 0.9 / rms)
+   #  audio *= gain
+
+   # 3. Улучшенная, более мягкая компрессия
+    # Понижаем порог (-28dB вместо -12dB), чтобы захватить более тихие звуки
+   threshold_db = -28
+   threshold = 10 ** (threshold_db / 20)
+
+   # Сглаживание огибающей
+   gain = np.ones_like(audio)
+
+    # Смягчаем коэффициент компрессии (0.15 вместо 0.25),
+    # чтобы не сильно "сплющивать" динамику, позволяя модели
+    # лучше различать нечеткие звуки.
+   # envelope = np.abs(audio)
+   # envelope_smooth = np.convolve(envelope, np.ones(100) / 100, mode='same')
+   # compression_mask = envelope_smooth > threshold
+   # gain[compression_mask] = (threshold / envelope_smooth[compression_mask]) ** 0.15
+
    audio *= gain
-
-  ## 3. Улучшенная, более мягкая компрессия
-  # Понижаем порог (-18dB вместо -12dB), чтобы захватить более тихие звуки
-  threshold_db = -28
-  threshold = 10 ** (threshold_db / 20)
-  envelope = np.abs(audio)
-
-  # Сглаживание огибающей
-  envelope_smooth = np.convolve(envelope, np.ones(100) / 100, mode='same')
-  gain = np.ones_like(audio)
-
-  compression_mask = envelope_smooth > threshold
-  # Смягчаем коэффициент компрессии (0.15 вместо 0.25),
-  # чтобы не сильно "сплющивать" динамику, позволяя модели
-  # лучше различать нечеткие звуки.
-  gain[compression_mask] = (threshold / envelope_smooth[compression_mask]) ** 0.15
-
-  audio *= gain
-  audio = np.clip(audio, -0.9, 0.9)
-
-  return audio
+   audio = np.clip(audio, -0.9, 0.9)
+   return audio
 
  except Exception as e:
   print(f"Ошибка обработки аудио: {e}")
