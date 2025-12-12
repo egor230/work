@@ -88,7 +88,7 @@ def update_label(root, label, model, source_id):
           silence_time = 0
           start = True
          if start:
-          buffer.extend(audio_chunk.flatten())
+          buffer.append(audio_chunk.astype(np.float32).flatten())
           # buffer1.extend(audio_chunk.flatten())
           # if mean_amp<7:
           #  print(mean_amp)
@@ -97,14 +97,13 @@ def update_label(root, label, model, source_id):
           #  print( model.transcribe(arr))
           if silence_time > min_silence_duration:
            root.withdraw()
-           array = np.array(buffer)
+           array = np.concatenate(buffer)
            start= False
            break
           else:
            silence_time += time.time() - last_speech_time
            last_speech_time = time.time()
       root.withdraw()#
-      buffer.clear()  # Сбрасываем буфер
       if is_speech(0.030, array):
        array = enhance_speech_for_recognition(array)
        # write(filename, fs, array)
@@ -113,6 +112,7 @@ def update_label(root, label, model, source_id):
           # os.unlink(filename)
        if message !=" " and len(message) >0:
         threading.Thread(target=process_text, args=(message,), daemon=True).start()
+      buffer.clear()  # Сбрасываем буфер
     root.after(1000, lambda: update_label(root, label, model, source_id))
   except Exception as e:
     print(f"Ошибка: {e}")
