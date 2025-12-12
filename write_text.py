@@ -260,15 +260,77 @@ def record_audio(filename = "temp.wav", duration=10, fs=48000):  # Запись 
  audio_data = audio_data.flatten().astype(np.float32) # Конвертируем в нужный формат и сохраняем
  wavfile.write(filename, fs, (audio_data * 32767).astype(np.int16))
 
-def enhance_speech_for_recognition(audio, sample_rate=48000):
+def enhance_speech_for_recognition(audio, sample_rate=16000):
  try:
-   audio = audio.astype(np.float32)
-   nyquist = sample_rate / 2
+   x = audio.astype(np.float32).copy()
+   eps = 1e-8
+   # Параметры компрессии (внутренние)
+
+   threshold_db = -35  # порог, ниже которого считаем фрагмент тихим
+   ratio = 4.0  # степень компрессии
+   attack = 0.005  # время реакции при уменьшении громкости
+   release = 0.03  # время восстановления громкости
+
+
+   # 1. Считаем RMS (энергетику) в окне 10 мс,
+   # чтобы определить громкость в каждый момент времени
+
+   window = int(sample_rate * 0.01)  # 10 мс окно
+   rms = np.sqrt(
+    np.convolve(x * x, np.ones(window) / window, mode='same') + eps   )
+
+   # 2. RMS → dB (логарифмическая шкала)
+   rms_db = 20 * np.log10(rms + eps)
+
+   # 3. Определяем, насколько сигнал превышает порог threshold_db
+   # если не превышает — усиливать не нужно
+   over_threshold = rms_db - threshold_db
+
+   # 4. Вычисляем коэффициент усиления в dB:
+   # чем громче сигнал, тем сильнее его "сжимаем"
+   # тихие фрагменты остаются без изменений
+
+   gain_db = np.where(    over_threshold > 0,
+    -over_threshold * (1 - 1 / ratio),    0   )
+
+   # 5. Переводим усиление из dB → линейный коэффициент
+
+   gain = 10 ** (gain_db / 20)
+
+   # 6. Сглаживаем коэффициент (attack / release),
+   # чтобы не было щелчков и резких переходов
+
+   smoothed_gain = np.zeros_like(gain)
+
+   attack_coeff = np.exp(-1 / (sample_rate * attack))
+   release_coeff = np.exp(-1 / (sample_rate * release))
+
+   g = 1.0  # текущее плавное усиление
+
+   for i in range(len(gain)):
+    if gain[i] < g:
+     # Быстрое уменьшение громкости
+     g = attack_coeff * g + (1 - attack_coeff) * gain[i]
+    else:
+     # Медленное восстановление громкости
+     g = release_coeff * g + (1 - release_coeff) * gain[i]
+    smoothed_gain[i] = g
+
+   # 7. Применяем сглаженное усиление к аудио
+   compressed = x * smoothed_gain
+
+   # 8. Небольшая нормализация, чтобы итоговый сигнал
+   # занимал почти весь диапазон, но без клиппинга
+   peak = np.max(np.abs(compressed))
+   if peak > 0:
+    compressed = compressed / peak * 0.98
+   # Возвращаем улучшённое аудио
+   return compressed.astype(np.float32)
 
    ## 1. Полосовая фильтрация (Оставляем без изменений)
    # Фокусируемся на частотах речи
-   b, a = signal.butter(2, [100 / nyquist, 6000 / nyquist], btype='band')
-   audio = signal.filtfilt(b, a, audio)
+   # b, a = signal.butter(2, [100 / nyquist, 6000 / nyquist], btype='band')
+   # audio = signal.filtfilt(b, a, audio)
 
   ## 2. Более агрессивное усиление с нормализацией (AGC)
    # Увеличиваем максимальный коэффициент усиления (с 3.0 до 5.0)
@@ -280,11 +342,11 @@ def enhance_speech_for_recognition(audio, sample_rate=48000):
 
    # 3. Улучшенная, более мягкая компрессия
     # Понижаем порог (-28dB вместо -12dB), чтобы захватить более тихие звуки
-   threshold_db = -28
-   threshold = 10 ** (threshold_db / 20)
+   # threshold_db = -28
+   # threshold = 10 ** (threshold_db / 20)
 
    # Сглаживание огибающей
-   gain = np.ones_like(audio)
+   # gain = np.ones_like(audio)
 
     # Смягчаем коэффициент компрессии (0.15 вместо 0.25),
     # чтобы не сильно "сплющивать" динамику, позволяя модели
@@ -294,8 +356,8 @@ def enhance_speech_for_recognition(audio, sample_rate=48000):
    # compression_mask = envelope_smooth > threshold
    # gain[compression_mask] = (threshold / envelope_smooth[compression_mask]) ** 0.15
 
-   audio *= gain
-   audio = np.clip(audio, -0.9, 0.9)
+   # audio *= gain
+   # audio = np.clip(audio, -0.9, 0.9)
    return audio
 
  except Exception as e:

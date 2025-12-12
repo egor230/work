@@ -9,7 +9,7 @@ torch.serialization.add_safe_globals([ContainerMetadata, DictConfig, typing.Any]
 # Разрешаем необходимые типы для загрузки чекпоинта
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 # Настройка директории кэша
-cache_dir = Path("/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache")
+cache_dir = Path("/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache/gigaam")
 # Отключаем предупреждения ALSA и JACK
 os.environ["PYAUDIO_ALSA_WARN"] = "0"
 os.environ["ALSA_LOG_LEVEL"] = "0"  # Подавляем логи ALSA
@@ -28,7 +28,7 @@ def check_model():
   print(f"Ошибка: Файл модели не найден по пути: {model_path}")
   sys.exit(1)  # Завершаем программу с кодом ошибки
  try:  # Проверка наличия файла (указываем полный путь, как это делает gigaam)
-  model = load_model( model_name, # 1. Отключаем FP16, так как это полезно только на GPU
+  model = load_model(model_name, # 1. Отключаем FP16, так как это полезно только на GPU
    fp16_encoder=False,  # 2. Отключаем FlashAttention, так как он не поддерживается на CPU и требует доп. библиотек
    use_flash=False,   # 3. Указываем, что модель должна быть загружена на CPU
    device="cpu",  # 4. Указываем корневой каталог, где лежит модель (GigaAM сам добавит /gigaam)
@@ -107,7 +107,7 @@ def update_label(root, label, model, source_id):
       root.withdraw()#
       buffer.clear()  # Сбрасываем буфер
       if is_speech(0.030, array):
-       # array = enhance_speech_for_recognition(array)
+       array = enhance_speech_for_recognition(array)
        # write(filename, fs, array)
        message = model.transcribe(array)
        # message = model.transcribe_longform(filename)

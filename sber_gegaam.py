@@ -1,7 +1,3 @@
-# Sber GigaAM - Объединенный модуль для работы с аудиоданными
-# Автор: AI Assistant
-# Версия: 1.0
-
 import hashlib
 import logging
 import math
@@ -43,7 +39,7 @@ SAMPLE_RATE = 16000
 LONGFORM_THRESHOLD = 55 * SAMPLE_RATE
 DTYPE = np.float32
 MAX_LETTERS_PER_FRAME = 3
-_CACHE_DIR = os.path.expanduser("/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache/gigaam/")
+_CACHE_DIR = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache/gigaam/"
 _URL_DIR = "https://cdn.chatwm.opensmodel.sberdevices.ru/GigaAM"
 _MODEL_HASHES = {
     "emo": "7ce76f9535cb254488985057c0d33006",
@@ -1753,7 +1749,7 @@ def _download_model(model_name: str, download_root: str) -> Tuple[str, str]:
     if model_name in short_names:
         model_name = f"v3_{model_name}"
     model_url = f"{_URL_DIR}/{model_name}.ckpt"
-    model_path = os.path.join(download_root, model_name + ".ckpt")
+    model_path = os.path.join(download_root, f"{model_name}.ckpt")
     return model_name, _download_file(model_url, model_path)
 
 
@@ -1763,7 +1759,7 @@ def _download_tokenizer(model_name: str, download_root: str) -> Optional[str]:
         return None  # No tokenizer required for this model
 
     tokenizer_url = f"{_URL_DIR}/{model_name}_tokenizer.model"
-    tokenizer_path = os.path.join(download_root, model_name + "_tokenizer.model")
+    tokenizer_path = os.path.join(download_root, f"{model_name}_tokenizer.model")
     return _download_file(tokenizer_url, tokenizer_path)
 
 
