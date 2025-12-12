@@ -4,7 +4,6 @@ from omegaconf.dictconfig import DictConfig # <--- ИСПРАВЛЕНИЕ ОШИ
 from write_text import *
 import torch, tempfile, torchaudio, math, scipy.signal, typing
 from sber_gegaam import load_model
-#pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1
 torch.serialization.add_safe_globals([ContainerMetadata, DictConfig, typing.Any])
 # Разрешаем необходимые типы для загрузки чекпоинта
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -131,7 +130,6 @@ def update_label(root, label, model, source_id):
  else:
   root.withdraw()
   root.after(2000, lambda: update_label(root, label, model, source_id))
-
 # ===== Интерфейс =====
 root = tk.Tk()
 frame = tk.Frame(root)
@@ -141,6 +139,28 @@ frame.pack(fill=tk.X)
 root.overrideredirect(True)
 root.resizable(True, True)
 root.attributes("-topmost", True)
-
 update_label(root, label, model, source_id)
 root.mainloop()
+'''
+pip install \
+  torch==2.5.1 \
+  torchaudio==2.5.1 \
+  torchvision==0.20.1 \
+  numpy==1.26.4 \
+  scipy==1.13.1 \
+  librosa==0.10.2.post1 \
+  sounddevice==0.5.3 \
+  soundfile==0.13.1 \
+  omegaconf==2.3.0 \
+  hydra-core==1.3.2 \
+  onnxruntime==1.18.0 \
+  sentencepiece==0.2.0 \
+  tqdm==4.66.4 \
+  pyannote.audio==3.4.0 \
+  transformers==4.42.3 \
+  pynput==1.7.6 \
+  PyQt5==5.15.11 \
+  torch-audiomentations==0.12.0 \
+  flash-attn==2.5.9 \
+  llama-cpp-python==0.2.91
+'''
