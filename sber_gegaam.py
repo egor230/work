@@ -33,7 +33,6 @@ from pyannote.audio import Model, Pipeline
 from pyannote.audio.core.task import Problem, Resolution, Specifications
 from pyannote.audio.pipelines import VoiceActivityDetection
 from torch.torch_version import TorchVersion
-
 # Constants
 SAMPLE_RATE = 16000
 LONGFORM_THRESHOLD = 55 * SAMPLE_RATE
@@ -57,14 +56,9 @@ _MODEL_HASHES = {
 }
 
 _PIPELINE = None
-
 warnings.simplefilter("ignore", category=UserWarning)
 
-
-# === PREPROCESS.PY CONTENT ===
-
-def load_audio(
-    audio_input: Union[str, np.ndarray, Tensor], sample_rate: int = SAMPLE_RATE
+def load_audio(    audio_input: Union[str, np.ndarray, Tensor], sample_rate: int = SAMPLE_RATE
 ) -> Tensor:
     """
     Load an audio file or process an audio array and resample it to the specified sample rate.
@@ -114,7 +108,6 @@ def load_audio(
             ).squeeze(0)
 
     return audio_tensor
-
 
 class SpecScaler(nn.Module):
     """
@@ -299,9 +292,6 @@ class RNNTHead(nn.Module):
         self.decoder = RNNTDecoder(**decoder)
         self.joint = RNNTJoint(**joint)
 
-
-# === DECODING.PY CONTENT ===
-
 class Tokenizer:
     """
     Tokenizer for converting between text and token IDs.
@@ -371,12 +361,10 @@ class CTCGreedyDecoding:
 
 
 class RNNTGreedyDecoding:
-    def __init__(
-        self,
+    def __init__(   self,
         vocabulary: List[str],
         model_path: Optional[str] = None,
-        max_symbols_per_step: int = 10,
-    ):
+        max_symbols_per_step: int = 10,    ):
         """
         Class for performing greedy decoding of RNN-T outputs.
         """
@@ -420,9 +408,6 @@ class RNNTGreedyDecoding:
             inseq = encoded[i, :, :].unsqueeze(1)
             pred_texts.append(self._greedy_decode(head, inseq, enc_len[i]))
         return pred_texts
-
-
-# === ENCODER.PY CONTENT ===
 
 class StridingSubsampling(nn.Module):
     """
@@ -494,9 +479,7 @@ class MultiHeadAttention(nn.Module, ABC):
     """
     Base class of Multi-Head Attention Mechanisms.
     """
-
-    def __init__(
-        self, n_head: int, n_feat: int, flash_attn=False, torch_sdpa_attn=False
+    def __init__( self, n_head: int, n_feat: int, flash_attn=False, torch_sdpa_attn=False
     ):
         super().__init__()
         assert n_feat % n_head == 0
@@ -509,8 +492,7 @@ class MultiHeadAttention(nn.Module, ABC):
         self.flash_attn = flash_attn
         self.torch_sdpa_attn = torch_sdpa_attn
         if self.flash_attn and not IMPORT_FLASH:
-            raise RuntimeError(
-                f"flash_attn_func was imported with err {IMPORT_FLASH_ERR}. "
+            raise RuntimeError(           f"flash_attn_func was imported with err {IMPORT_FLASH_ERR}. "
                 "Please install flash_attn or use --no_flash flag. "
                 "If you have already done this, "
                 "--force-reinstall flag might be useful"
@@ -976,9 +958,6 @@ class ConformerEncoder(nn.Module):
 
         return audio_signal.transpose(1, 2), length
 
-
-# === VAD_UTILS.PY CONTENT ===
-
 def get_pipeline(device: torch.device) -> Pipeline:
     """
     Retrieves a PyAnnote voice activity detection pipeline and move it to the specified device.
@@ -1007,7 +986,6 @@ def get_pipeline(device: torch.device) -> Pipeline:
     _PIPELINE.instantiate({"min_duration_on": 0.0, "min_duration_off": 0.0})
 
     return _PIPELINE.to(device)
-
 
 def segment_audio_file(
     wav_input: Union[np.ndarray, Tensor],
@@ -1076,17 +1054,13 @@ def segment_audio_file(
 
     return segments, boundaries
 
-
-# === ONNX_UTILS.PY CONTENT ===
-
 def infer_onnx(
     wav_input: Union[str, np.ndarray, Tensor],
     model_cfg: omegaconf.DictConfig,
     sessions: List[rt.InferenceSession],
     preprocessor: Optional[FeatureExtractor] = None,
     tokenizer: Optional[Tokenizer] = None,
-    sample_rate: int = 16000
-) -> Union[str, np.ndarray]:
+    sample_rate: int = 16000) -> Union[str, np.ndarray]:
     """Run ONNX sessions for the model, requires preprocessor instantiating"""
     model_name = model_cfg.model_name
 
@@ -1165,12 +1139,8 @@ def infer_onnx(
 
     return tokenizer.decode(token_ids)
 
-
-def load_onnx(
-    onnx_dir: str,
-    model_version: str,
-    provider: Optional[str] = None,
-) -> Tuple[
+def load_onnx(   onnx_dir: str,  model_version: str,
+    provider: Optional[str] = None,) -> Tuple[
     List[rt.InferenceSession], Union[omegaconf.DictConfig, omegaconf.ListConfig]
 ]:
     """Load ONNX sessions for the given versions and cpu / cuda provider"""
@@ -1212,9 +1182,6 @@ def load_onnx(
 
     return sessions, model_cfg
 
-
-# === UTILS.PY CONTENT ===
-
 def onnx_converter(
     model_name: str,
     module: torch.nn.Module,
@@ -1225,8 +1192,7 @@ def onnx_converter(
     dynamic_axes: Optional[
         Union[Dict[str, List[int]], Dict[str, Dict[int, str]]]
     ] = None,
-    opset_version: int = 17,
-):
+    opset_version: int = 17,):
     if inputs is None:
         inputs = module.input_example()  # type: ignore[operator]
     if input_names is None:
@@ -1273,8 +1239,7 @@ def rtt_half(x: Tensor) -> Tensor:
     return torch.cat([-x2, x1], dim=x1.ndim - 1)
 
 
-def apply_rotary_pos_emb(
-    q: Tensor, k: Tensor, cos: Tensor, sin: Tensor, offset: int = 0
+def apply_rotary_pos_emb(  q: Tensor, k: Tensor, cos: Tensor, sin: Tensor, offset: int = 0
 ) -> Tuple[Tensor, Tensor]:
     """
     Applies Rotary Position Embeddings to query and key tensors.
@@ -1292,8 +1257,7 @@ def apply_masked_flash_attn(
     v: Tensor,
     mask: Tensor,
     h: int,
-    d_k: int,
-) -> Tensor:
+    d_k: int,) -> Tensor:
     """
     Applies Flash Attention with padding masks.
     """
@@ -1399,9 +1363,6 @@ class AudioDataset(torch.utils.data.Dataset):
         for idx, wav in enumerate(wavs):
             wav_tns[idx, : wav.shape[-1]] = wav.squeeze()
         return wav_tns, lengths
-
-
-# === MODEL.PY CONTENT ===
 
 class GigaAM(nn.Module):
     """

@@ -115,8 +115,7 @@ def update_label(root, label, model, source_id):
       buffer.clear()  # Сбрасываем буфер
     root.after(1000, lambda: update_label(root, label, model, source_id))
   except Exception as e:
-    print(f"Ошибка: {e}")
-    # Добавьте остановку потока в случае ошибки
+    print(f"Ошибка: {e}")  # Добавьте остановку потока в случае ошибки
     try:
       stream.stop()
       stream.close()
