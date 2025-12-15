@@ -1,7 +1,7 @@
 from omegaconf import omegaconf
 from omegaconf.base import ContainerMetadata
 from omegaconf.dictconfig import DictConfig # <--- ИСПРАВЛЕНИЕ ОШИБКИ #1
-from write_text import *
+from write_text_for_tkinter import *
 import torch, tempfile, torchaudio, math, scipy.signal, typing
 from sber_gegaam import load_model
 torch.serialization.add_safe_globals([ContainerMetadata, DictConfig, typing.Any])

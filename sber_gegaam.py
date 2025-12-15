@@ -1,37 +1,19 @@
-import hashlib
-import logging
-import math
-import os
-import urllib.request
-import warnings
-from abc import ABC, abstractmethod
-from pathlib import Path
-from subprocess import CalledProcessError, run
-from typing import Dict, List, Optional, Tuple, Union
+# Стандартная библиотека Python
+import hashlib, logging, math, os, urllib.request, warnings; from abc import ABC, abstractmethod; from pathlib import Path; from subprocess import CalledProcessError, run; from typing import Dict, List, Optional, Tuple, Union
 
-import hydra
-import numpy as np
-import omegaconf
-import onnxruntime as rt
-import torch
-import torch.nn.functional as F
-import torchaudio
-import torchaudio.functional as taF
-from sentencepiece import SentencePieceProcessor
-from torch import Tensor, nn
-from torch.jit import TracerWarning
-from tqdm import tqdm
+# Основные ML библиотеки
+import hydra, numpy as np, omegaconf, onnxruntime as rt, torch, torch.nn.functional as F, torchaudio, torchaudio.functional as taF; from torch import Tensor, nn; from torch.jit import TracerWarning
 
-try:
-    from flash_attn import flash_attn_func
-    IMPORT_FLASH = True
-except Exception as err:
-    IMPORT_FLASH = False
-    IMPORT_FLASH_ERR = err
+# Токенизация и прогресс
+from sentencepiece import SentencePieceProcessor; from tqdm import tqdm
 
-from pyannote.audio import Model, Pipeline
-from pyannote.audio.core.task import Problem, Resolution, Specifications
-from pyannote.audio.pipelines import VoiceActivityDetection
+# Аудио обработка
+from pyannote.audio import Model, Pipeline; from pyannote.audio.core.task import Problem, Resolution, Specifications; from pyannote.audio.pipelines import VoiceActivityDetection
+
+# Опциональная flash attention
+try: from flash_attn import flash_attn_func; IMPORT_FLASH = True
+except ImportError as err: IMPORT_FLASH = False; IMPORT_FLASH_ERR = err
+
 from torch.torch_version import TorchVersion
 # Constants
 SAMPLE_RATE = 16000
@@ -61,7 +43,7 @@ warnings.simplefilter("ignore", category=UserWarning)
 def load_audio(    audio_input: Union[str, np.ndarray, Tensor], sample_rate: int = SAMPLE_RATE
 ) -> Tensor:
     """
-    Load an audio file or process an audio array and resample it to the specified sample rate.
+    Загружает аудиофайл или обрабатывает аудиомассив и пересэмплирует до заданной частоты дискретизации.
     """
     if isinstance(audio_input, str):
         cmd = [
@@ -96,11 +78,11 @@ def load_audio(    audio_input: Union[str, np.ndarray, Tensor], sample_rate: int
     else:
         raise TypeError(f"Unsupported audio input type: {type(audio_input)}. Expected str, np.ndarray, or Tensor.")
 
-    # Ensure audio is 1D
+    # Убедиться, что аудио одномерное
     if audio_tensor.ndim > 1:
         audio_tensor = audio_tensor.flatten()
 
-    # Resample if necessary
+    # Пересэмплировать при необходимости
     if sample_rate != SAMPLE_RATE:
         if audio_tensor.numel() > 0:
             audio_tensor = taF.resample(
@@ -121,17 +103,17 @@ class SpecScaler(nn.Module):
 
 class FeatureExtractor(nn.Module):
     """
-    Module for extracting Log-mel spectrogram features from raw audio signals.
-    This module uses Torchaudio's MelSpectrogram transform to extract features
-    and applies logarithmic scaling.
+    Модуль для извлечения признаков логарифмического мел-спектрограммы из сырых аудиосигналов.
+    Этот модуль использует преобразование MelSpectrogram из Torchaudio для извлечения признаков
+    и применяет логарифмическое масштабирование.
     """
 
-    def __init__(self, sample_rate: int, features: int, **kwargs):
+    def __init__(self, sample_rate: int, features: int, hop_length=None, win_length=None, n_fft=None, center=None, **kwargs):
         super().__init__()
-        self.hop_length = kwargs.get("hop_length", sample_rate // 100)
-        self.win_length = kwargs.get("win_length", sample_rate // 40)
-        self.n_fft = kwargs.get("n_fft", sample_rate // 40)
-        self.center = kwargs.get("center", True)
+        self.hop_length = hop_length if hop_length is not None else kwargs.get("hop_length", sample_rate // 100)
+        self.win_length = win_length if win_length is not None else kwargs.get("win_length", sample_rate // 40)
+        self.n_fft = n_fft if n_fft is not None else kwargs.get("n_fft", sample_rate // 40)
+        self.center = center if center is not None else kwargs.get("center", True)
         self.featurizer = nn.Sequential(
             torchaudio.transforms.MelSpectrogram(
                 sample_rate=sample_rate,
@@ -146,7 +128,7 @@ class FeatureExtractor(nn.Module):
 
     def out_len(self, input_lengths: Tensor) -> Tensor:
         """
-        Calculates the output length after the feature extraction process.
+        Вычисляет длину выхода после процесса извлечения признаков.
         """
         if self.center:
             return (
@@ -853,16 +835,17 @@ class ConformerEncoder(nn.Module):
         feat_in: int = 64,
         n_layers: int = 16,
         d_model: int = 768,
-        subsampling: str = "conv2d",
-        subs_kernel_size: int = 3,
         subsampling_factor: int = 4,
         ff_expansion_factor: int = 4,
         self_attention_model: str = "rotary",
         n_heads: int = 16,
         pos_emb_max_len: int = 5000,
-        conv_norm_type: str = "batch_norm",
         conv_kernel_size: int = 31,
         flash_attn: bool = False,
+        subsampling=None,
+        subs_kernel_size=None,
+        conv_norm_type=None,
+        **kwargs
     ):
         super().__init__()
         self.feat_in = feat_in
@@ -870,6 +853,11 @@ class ConformerEncoder(nn.Module):
             "rotary",
             "rel_pos",
         ], f"Not supported attn = {self_attention_model}"
+
+        # Обработать опциональные параметры
+        subsampling = subsampling if subsampling is not None else kwargs.get("subsampling", "conv2d")
+        subs_kernel_size = subs_kernel_size if subs_kernel_size is not None else kwargs.get("subs_kernel_size", 3)
+        conv_norm_type = conv_norm_type if conv_norm_type is not None else kwargs.get("conv_norm_type", "batch_norm")
 
         self.pre_encode = StridingSubsampling(
             subsampling=subsampling,
@@ -1007,13 +995,13 @@ def segment_audio_file(
     else:
         raise TypeError(f"Unsupported input type for VAD: {type(wav_input)}. Expected np.ndarray or Tensor.")
 
-    # Ensure audio is 1D and on the correct device
+    # Убедиться, что аудио одномерное и на правильном устройстве
     if audio.ndim > 1:
         audio = audio.flatten()
     audio = audio.to(device)
 
     pipeline = get_pipeline(device)
-    # PyAnnote pipeline expects a dict with "waveform" and "sample_rate"
+    # PyAnnote pipeline ожидает словарь с "waveform" и "sample_rate"
     sad_segments = pipeline({"waveform": audio.unsqueeze(0), "sample_rate": sr})
 
     segments: List[torch.Tensor] = []
@@ -1035,8 +1023,8 @@ def segment_audio_file(
         segments.append(audio[int(curr_start * sr) : int(curr_end * sr)])
         boundaries.append((curr_start, curr_end))
 
-    # Concat segments from pipeline into chunks for asr according to max/min duration
-    # Segments longer than strict_limit_duration are split manually
+    # Объединить сегменты из pipeline в чанки для asr согласно макс/мин длительности
+    # Сегменты длиннее strict_limit_duration разделяются вручную
     for segment in sad_segments.get_timeline().support():
         start = max(0, segment.start)
         end = min(audio.shape[0] / sr, segment.end)
@@ -1431,7 +1419,7 @@ class GigaAM(nn.Module):
                 elif max_val > 1.0:
                     wav = wav / max_val  # Нормализация к диапазону [-1, 1]
         elif isinstance(wav_input, Tensor):
-            # Использование torch tensor напрямую
+            # Использование torch тензора напрямую
             if wav_input.numel() == 0:
                 raise ValueError("Audio tensor is empty")
             wav = wav_input.float().clone()
@@ -1717,7 +1705,7 @@ def _download_model(model_name: str, download_root: str) -> Tuple[str, str]:
 def _download_tokenizer(model_name: str, download_root: str) -> Optional[str]:
     """Download the tokenizer if required and return its path."""
     if model_name != "v1_rnnt" and "e2e" not in model_name:
-        return None  # No tokenizer required for this model
+        return None  # Токенизатор не требуется для этой модели
 
     tokenizer_url = f"{_URL_DIR}/{model_name}_tokenizer.model"
     tokenizer_path = os.path.join(download_root, f"{model_name}_tokenizer.model")
@@ -1788,6 +1776,19 @@ def load_model(
     if tokenizer_path is not None:
         checkpoint["cfg"].decoding.model_path = tokenizer_path
 
+    # Заменить внешние классы на локальные для обеспечения совместимости
+    if "preprocessor" in checkpoint["cfg"]:
+        if "_target_" in checkpoint["cfg"].preprocessor:
+            # Заменить внешний класс gigaam на локальный
+            if "gigaam.preprocess.FeatureExtractor" in checkpoint["cfg"].preprocessor["_target_"]:
+                checkpoint["cfg"].preprocessor["_target_"] = "sber_gegaam.FeatureExtractor"
+
+    if "encoder" in checkpoint["cfg"]:
+        if "_target_" in checkpoint["cfg"].encoder:
+            # Заменить внешний класс gigaam на локальный
+            if "gigaam.encoder.ConformerEncoder" in checkpoint["cfg"].encoder["_target_"]:
+                checkpoint["cfg"].encoder["_target_"] = "sber_gegaam.ConformerEncoder"
+    
     if "ssl" in model_name:
         model = GigaAM(checkpoint["cfg"])
     elif "emo" in model_name:

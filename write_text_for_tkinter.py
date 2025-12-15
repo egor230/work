@@ -1,10 +1,4 @@
-import sys, os, subprocess, json, wave, io, threading, re, time, warnings, collections#, webrtcvad
-from scipy.io.wavfile import write
-from PyQt6 import QtCore, QtWidgets, QtGui
-from PyQt6.QtCore import QTimer, QObject, pyqtSignal, Qt, QThread
-from PyQt6.QtGui import QIcon, QFont, QAction
-from PyQt6.QtWidgets import ( QApplication, QWidget, QLabel, QVBoxLayout, QSystemTrayIcon, QMenu,
- QSlider, QMainWindow, QPushButton, QDialog)
+import sys, os, subprocess, json, wave, io, threading, re, time, warnings, collections, torch, librosa, math, logging#, webrtcvad
 from queue import Queue
 import sounddevice as sd
 import tkinter as tk
@@ -18,8 +12,6 @@ from pathlib import Path
 from pynput.keyboard import Controller, Key, Listener
 from pynput import keyboard
 from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor
-import torch, librosa, math
-import logging
 warnings.filterwarnings("ignore")
 # --- Конфигурация модели ---
 warnings.filterwarnings("ignore", category=DeprecationWarning)

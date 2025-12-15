@@ -23,15 +23,15 @@ with open("requirements.sh", "w") as file:
         if any(bad in package_name for bad in ["huggingface", "gigachat", "nvidia"]):
             continue  # пропускаем
 
-        # Обрабатываем PyTorch-пакеты
-        if package_name in ("torch", "torchvision", "torchaudio"):
-            if package_name == "torch":
-                file.write("pip install torch==2.5.1+cpu --index-url https://download.pytorch.org/whl/cpu;\n")
-            elif package_name == "torchvision":
-                file.write("pip install torchvision==0.20.1+cpu --index-url https://download.pytorch.org/whl/cpu;\n")
-            elif package_name == "torchaudio":
-                file.write("pip install torchaudio==2.5.1+cpu --index-url https://download.pytorch.org/whl/cpu;\n")
-            continue
+        # # Обрабатываем PyTorch-пакеты
+        # if package_name in ("torch", "torchvision", "torchaudio"):
+        #     if package_name == "torch":
+        #         file.write("pip install torch==2.5.1+cpu --index-url https://download.pytorch.org/whl/cpu;\n")
+        #     elif package_name == "torchvision":
+        #         file.write("pip install torchvision==0.20.1+cpu --index-url https://download.pytorch.org/whl/cpu;\n")
+        #     elif package_name == "torchaudio":
+        #         file.write("pip install torchaudio==2.5.1+cpu --index-url https://download.pytorch.org/whl/cpu;\n")
+        #     continue
 
         # Записываем команду pip install с указанием версии
         file.write(f"pip install {package};\n")

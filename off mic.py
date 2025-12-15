@@ -1,9 +1,8 @@
 import subprocess, sys, os, signal
-os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = "myenv/lib/python3.12/site-packages/PyQt5/Qt5/plugins"
-from PyQt5 import QtCore, QtWidgets, QtGui  # Импорт необходимых модулей из PyQt5
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QSystemTrayIcon, QAction, QMenu, QWidget, QDialog, QLabel, QSystemTrayIcon, QMenu, QAction, QVBoxLayout, QPushButton, QApplication
-from PyQt5.QtCore import QTimer
+from PyQt6 import QtCore, QtWidgets, QtGui  # Импорт необходимых модулей из PyQt5
+from PyQt6.QtGui import QIcon, QAction
+from PyQt6.QtWidgets import QMenu, QSystemTrayIcon, QWidget, QDialog, QLabel, QVBoxLayout, QPushButton, QApplication
+from PyQt6.QtCore import QTimer
 from write_text import *
 source_id = get_webcam_source_id()
 set_mute("0", source_id)
@@ -87,5 +86,5 @@ if __name__ == "__main__":
  app = QApplication(sys.argv)
  window = MyWindow()
  window.show()
- sys.exit(app.exec_())
+ sys.exit(app.exec())
 
