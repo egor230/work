@@ -1564,15 +1564,39 @@ class GigaAMASR(GigaAM):
 
     @torch.inference_mode()
     def transcribe_longform(
-        self, wav_input: Union[np.ndarray, Tensor], sample_rate: int = SAMPLE_RATE, **kwargs
+        self, wav_input: Union[str, np.ndarray, Tensor], sample_rate: int = SAMPLE_RATE, **kwargs
     ) -> List[Dict[str, Union[str, Tuple[float, float]]]]:
         """
-        Transcribes a long audio array by splitting it into segments and
+        Transcribes a long audio file or array by splitting it into segments and
         then transcribing each segment.
+
+        Parameters
+        ----------
+        wav_input : Union[str, np.ndarray, Tensor]
+            Path to audio file, numpy array, or torch tensor with audio data.
+        sample_rate : int
+            Sample rate of the provided array/tensor. Ignored for file inputs.
         """
+        # Prepare audio input (load from file if needed)
+        if isinstance(wav_input, str):
+            # Загрузка из файла
+            audio_data = load_audio(wav_input, sample_rate=sample_rate)
+        elif isinstance(wav_input, np.ndarray):
+            # Конвертация numpy массива
+            audio_data = torch.from_numpy(wav_input.copy()).float()
+            if audio_data.ndim > 1:
+                audio_data = audio_data.flatten()
+        elif isinstance(wav_input, Tensor):
+            # Использование torch тензора напрямую
+            audio_data = wav_input.float().clone()
+            if audio_data.ndim > 1:
+                audio_data = audio_data.flatten()
+        else:
+            raise TypeError(f"Unsupported input type: {type(wav_input)}. Expected str, np.ndarray, or Tensor.")
+
         transcribed_segments = []
         segments, boundaries = segment_audio_file(
-            wav_input, SAMPLE_RATE, device=self._device, **kwargs
+            audio_data, SAMPLE_RATE, device=self._device, **kwargs
         )
         for segment, segment_boundaries in zip(segments, boundaries):
             wav = segment.to(self._device).unsqueeze(0).to(self._dtype)
@@ -1583,6 +1607,52 @@ class GigaAMASR(GigaAM):
                 {"transcription": result, "boundaries": segment_boundaries}
             )
         return transcribed_segments
+
+    @torch.inference_mode()
+    def transcribe_auto(
+        self, wav_input: Union[str, np.ndarray, Tensor], sample_rate: int = SAMPLE_RATE, **kwargs
+    ) -> Union[str, List[Dict[str, Union[str, Tuple[float, float]]]]]:
+        """
+        Automatically transcribes audio by choosing between short and long-form transcription
+        based on audio length.
+
+        Parameters
+        ----------
+        wav_input : Union[str, np.ndarray, Tensor]
+            Path to audio file, numpy array, or torch tensor with audio data.
+        sample_rate : int
+            Sample rate of the provided array/tensor. Ignored for file inputs.
+
+        Returns
+        -------
+        Union[str, List[Dict[str, Union[str, Tuple[float, float]]]]]
+            For short audio: transcribed text as string
+            For long audio: list of transcription segments with boundaries
+        """
+        # Prepare audio to check length
+        if isinstance(wav_input, str):
+            # Загрузка из файла для проверки длины
+            audio_data = load_audio(wav_input, sample_rate=sample_rate)
+        elif isinstance(wav_input, np.ndarray):
+            audio_data = torch.from_numpy(wav_input.copy()).float()
+            if audio_data.ndim > 1:
+                audio_data = audio_data.flatten()
+        elif isinstance(wav_input, Tensor):
+            audio_data = wav_input.float().clone()
+            if audio_data.ndim > 1:
+                audio_data = audio_data.flatten()
+        else:
+            raise TypeError(f"Unsupported input type: {type(wav_input)}. Expected str, np.ndarray, or Tensor.")
+
+        # Check audio length
+        audio_length = audio_data.shape[-1]
+
+        if audio_length <= LONGFORM_THRESHOLD:
+            # Use regular transcription for short audio
+            return self.transcribe(wav_input, sample_rate=sample_rate)
+        else:
+            # Use long-form transcription for long audio
+            return self.transcribe_longform(wav_input, sample_rate=sample_rate, **kwargs)
 
 
 class GigaAMEmo(GigaAM):
@@ -1661,9 +1731,9 @@ __all__ = [
 ]
 
 
-def _download_file(file_url: str, file_path: str):
+def _download_file(file_url: str, file_path: str, force: bool = False) -> str:
     """Helper to download a file if not already cached."""
-    if os.path.exists(file_path):
+    if os.path.exists(file_path) and not force:
         return file_path
 
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
@@ -1686,7 +1756,7 @@ def _download_file(file_url: str, file_path: str):
     return file_path
 
 
-def _download_model(model_name: str, download_root: str) -> Tuple[str, str]:
+def _download_model(model_name: str, download_root: str, force: bool = False) -> Tuple[str, str]:
     """Download the model weights if not already cached."""
     short_names = ["ctc", "rnnt", "e2e_ctc", "e2e_rnnt", "ssl"]
     possible_names = short_names + list(_MODEL_HASHES.keys())
@@ -1697,19 +1767,70 @@ def _download_model(model_name: str, download_root: str) -> Tuple[str, str]:
 
     if model_name in short_names:
         model_name = f"v3_{model_name}"
+
     model_url = f"{_URL_DIR}/{model_name}.ckpt"
     model_path = os.path.join(download_root, f"{model_name}.ckpt")
-    return model_name, _download_file(model_url, model_path)
+
+    # Логируем информацию о загрузке
+    if os.path.exists(model_path) and not force:
+        logging.info(f"Model found at {model_path}, skipping download.")
+    else:
+        logging.info(f"Downloading model to {model_path}")
+
+    return model_name, _download_file(model_url, model_path, force)
 
 
-def _download_tokenizer(model_name: str, download_root: str) -> Optional[str]:
+def _download_tokenizer(model_name: str, download_root: str, force: bool = False) -> Optional[str]:
     """Download the tokenizer if required and return its path."""
     if model_name != "v1_rnnt" and "e2e" not in model_name:
         return None  # Токенизатор не требуется для этой модели
 
     tokenizer_url = f"{_URL_DIR}/{model_name}_tokenizer.model"
     tokenizer_path = os.path.join(download_root, f"{model_name}_tokenizer.model")
-    return _download_file(tokenizer_url, tokenizer_path)
+
+    if os.path.exists(tokenizer_path) and not force:
+        logging.info(f"Tokenizer found at {tokenizer_path}, skipping download.")
+    else:
+        logging.info(f"Downloading tokenizer to {tokenizer_path}")
+
+    return _download_file(tokenizer_url, tokenizer_path, force)
+
+
+# Добавляем функцию для проверки существования модели в директории
+def check_model_exists(model_name: str, download_root: str) -> bool:
+    """
+    Check if the model exists in the specified directory.
+
+    Parameters
+    ----------
+    model_name : str
+        The name of the model to check.
+    download_root : str
+        The directory to check.
+
+    Returns
+    -------
+    bool
+        True if model exists, False otherwise.
+    """
+    short_names = ["ctc", "rnnt", "e2e_ctc", "e2e_rnnt", "ssl"]
+    if model_name in short_names:
+        model_name = f"v3_{model_name}"
+
+    model_path = os.path.join(download_root, f"{model_name}.ckpt")
+
+    if not os.path.exists(model_path):
+        return False
+
+    # Проверяем хеш, если он известен
+    expected_hash = _MODEL_HASHES.get(model_name)
+    if expected_hash:
+        actual_hash = hash_path(model_path)
+        if actual_hash != expected_hash:
+            logging.warning(f"Model exists but hash mismatch: expected {expected_hash}, got {actual_hash}")
+            return False
+
+    return True
 
 
 def hash_path(ckpt_path: str) -> str:
@@ -1733,6 +1854,7 @@ def load_model(
     use_flash: Optional[bool] = False,
     device: Optional[Union[str, torch.device]] = None,
     download_root: Optional[str] = None,
+    force_download: bool = False,  # Добавляем опцию для принудительной загрузки
 ) -> Union[GigaAM, GigaAMEmo, GigaAMASR]:
     """
     Load the GigaAM model by name.
@@ -1749,19 +1871,48 @@ def load_model(
     device : Optional[Union[str, torch.device]]
         The device to load the model onto. Defaults to "cuda" if available, otherwise "cpu".
     download_root : Optional[str]
-        The directory to download the model to. Defaults to "~/.cache/gigaam".
+        The directory to download the model to. If None, uses the default cache directory.
+    force_download : bool
+        Whether to force download even if the model already exists in the directory.
+        Defaults to False.
     """
     device_obj = _normalize_device(device)
 
+    # Если директория не указана, используем дефолтную
     if download_root is None:
         download_root = _CACHE_DIR
 
-    model_name, model_path = _download_model(model_name, download_root)
-    tokenizer_path = _download_tokenizer(model_name, download_root)
+    # Создаем директорию, если она не существует
+    os.makedirs(download_root, exist_ok=True)
 
-    assert (
-        hash_path(model_path) == _MODEL_HASHES[model_name]
-    ), f"Model checksum failed. Please run `rm {model_path}` and reload the model"
+    # Проверяем существование модели в указанной директории
+    model_name, model_path = _download_model(model_name, download_root, force_download)
+
+    # Проверяем токенизатор
+    tokenizer_path = _download_tokenizer(model_name, download_root, force_download)
+
+    # Проверяем хеш модели
+    if os.path.exists(model_path):
+        actual_hash = hash_path(model_path)
+        expected_hash = _MODEL_HASHES.get(model_name)
+
+        if expected_hash and actual_hash != expected_hash:
+            if force_download:
+                # Удаляем поврежденный файл и загружаем заново
+                logging.warning(f"Model hash mismatch: expected {expected_hash}, got {actual_hash}. Re-downloading...")
+                os.remove(model_path)
+                model_name, model_path = _download_model(model_name, download_root, True)
+            else:
+                raise RuntimeError(
+                    f"Model checksum failed for {model_name}. "
+                    f"Expected {expected_hash}, got {actual_hash}. "
+                    f"Please delete {model_path} and reload the model, "
+                    f"or use force_download=True to re-download automatically."
+                )
+
+    # Проверяем существование файла модели
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(f"Model file not found: {model_path}. Please check the download directory.")
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=(FutureWarning))
@@ -1779,16 +1930,14 @@ def load_model(
     # Заменить внешние классы на локальные для обеспечения совместимости
     if "preprocessor" in checkpoint["cfg"]:
         if "_target_" in checkpoint["cfg"].preprocessor:
-            # Заменить внешний класс gigaam на локальный
             if "gigaam.preprocess.FeatureExtractor" in checkpoint["cfg"].preprocessor["_target_"]:
                 checkpoint["cfg"].preprocessor["_target_"] = "sber_gegaam.FeatureExtractor"
 
     if "encoder" in checkpoint["cfg"]:
         if "_target_" in checkpoint["cfg"].encoder:
-            # Заменить внешний класс gigaam на локальный
             if "gigaam.encoder.ConformerEncoder" in checkpoint["cfg"].encoder["_target_"]:
                 checkpoint["cfg"].encoder["_target_"] = "sber_gegaam.ConformerEncoder"
-    
+
     if "ssl" in model_name:
         model = GigaAM(checkpoint["cfg"])
     elif "emo" in model_name:

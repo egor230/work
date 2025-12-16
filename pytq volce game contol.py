@@ -76,9 +76,9 @@ def web():
   # driver.minimize_window()
   WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.ID, 'mic')))
   driver.find_element("id", "mic").click()  # включить запись голоса
-  
+
   return driver
- 
+
  except Exception as ex:  #
   print(ex)
   # driver.quit()
@@ -92,7 +92,6 @@ def web():
   # driver.quit()
   pass
 
-os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = "/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project/myenv/lib/python3.12/site-packages/PyQt5/Qt5/plugins"
 pres12 = work_key()
 def web_press_key(driver, self):
  try:
