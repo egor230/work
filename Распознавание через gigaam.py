@@ -78,6 +78,7 @@ def update_label(root, label, model, source_id):
       with sd.InputStream(samplerate=fs, channels=1, dtype='float32') as stream:
        while True:
         if not get_mute_status(source_id):
+          print("00000000")
           root.withdraw()
         else:
          audio_chunk, overflowed = stream.read(16096)  # Читаем аудио порциями

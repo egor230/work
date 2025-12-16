@@ -1,25 +1,14 @@
-import sys
-import os
-import json
-import threading
-import time
-import math
+import sys, os
+import json, threading
+import time, math
 import numpy as np
-import collections
-import warnings
+import collections, warnings
 from pathlib import Path
 from typing import Dict, Optional
-
-# ======================= ИСПРАВЛЕННЫЙ ИМПОРТ PyQt6 =======================
-from PyQt6.QtWidgets import (
- QApplication, QMainWindow, QComboBox, QPushButton, QLineEdit,
- QVBoxLayout, QHBoxLayout, QWidget, QScrollArea, QMessageBox
-)
+from PyQt6.QtWidgets import ( QApplication, QMainWindow, QComboBox, QPushButton, QLineEdit,
+ QVBoxLayout, QHBoxLayout, QWidget, QScrollArea, QMessageBox)
 from PyQt6.QtGui import QPalette, QColor
 from PyQt6.QtCore import QThread, Qt
-# =========================================================================
-
-# ======================= ВНЕШНИЕ МОДУЛИ (дополнительно) =======================
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
@@ -28,12 +17,10 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import subprocess
 
-# ===============================================================================
-
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 # ======================= ПУТИ И НАСТРОЙКИ =======================
-cache_dir = Path("/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache")
+cache_dir = Path("/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache/gigaam")
 settings_file = "settings_voice_game_control_linux.json"
 
 # Отключаем предупреждения ALSA
@@ -44,15 +31,9 @@ os.environ["JACK_NO_START_SERVER"] = "1"
 # ======================= КЛЮЧЕВЫЕ ПЕРЕМЕННЫЕ (загружаются лениво) =======================
 source_id = None
 pres12 = None
-buffer = collections.deque()
-min_silence_duration = 1.6
-fs = 16000
-
 # Глобальная переменная для модели
 model = None
 model_loading_lock = threading.Lock()
-model_loaded = False
-
 
 # ======================= ЛЕНИВАЯ ЗАГРУЗКА КЛЮЧЕВЫХ РЕСУРСОВ =======================
 def get_source_id():
@@ -64,7 +45,6 @@ def get_source_id():
   set_mute("0", source_id)
  return source_id
 
-
 def get_pres12():
  """Ленивая загрузка pres12"""
  global pres12
@@ -73,47 +53,24 @@ def get_pres12():
   pres12 = work_key()
  return pres12
 
-
-# ======================= ЗАГРУЗКА МОДЕЛИ GIGAAM (лазерная) =======================
 def get_gigaam_model():
  """Ленивая загрузка модели GigaAM"""
- global model, model_loaded
+ from sber_gegaam import load_model
+ global model
 
- if model_loaded and model is not None:
+ print("Начинаю загрузку модели GigaAM...")
+ try:
+  model = load_model(  "v1_ctc",
+   fp16_encoder=False,
+   use_flash=False,
+   device="cpu",
+   download_root=cache_dir   )
+
+  print("Модель GigaAM успешно загружена")
   return model
-
- with model_loading_lock:
-  if model_loaded and model is not None:
-   return model
-
-  print("Начинаю загрузку модели GigaAM...")
-  try:
-   from sber_gegaam import load_model
-  except ImportError as e:
-   print(f"Ошибка импорта sber_gegaam: {e}")
-   return None
-
-  model_name = "v3_e2e_rnnt"
-  model_path = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache/gigaam/v3_e2e_rnnt"
-
-  if not os.path.exists(f"{model_path}.ckpt"):
-   print(f"Ошибка: Файл модели не найден по пути: {model_path}")
-   return None
-
-  try:
-   model = load_model(
-    model_name,
-    fp16_encoder=False,
-    use_flash=False,
-    device="cpu",
-    download_root=cache_dir
-   )
-   model_loaded = True
-   print("Модель GigaAM успешно загружена")
-   return model
-  except Exception as e:
-   print(f"Ошибка загрузки модели GigaAM: {e}")
-   return None
+ except Exception as e:
+  print(f"Ошибка загрузки модели GigaAM: {e}")
+  return None
 
 
 # ======================= РЕЖИМ INTERNET (speechtexter.com) =======================
@@ -168,84 +125,41 @@ def web_press_key(driver, words_dict):
  except Exception as e:
   pass
 
-
-# ======================= ОБРАБОТКА КЛАВИШ =======================
 def press_key_function(text, words_dict):
  """Ищет команду как подстроку в распознанном тексте."""
  text = text.strip().lower()
- print(f"Распознано: {text}")
-
  pres12_instance = get_pres12()
 
  for phrase, key in words_dict.items():
   if phrase in text:
    key_name = key.upper().replace("KEY", "")
    pres12_instance.key_press(key_name)
-   print(f"Нажата клавиша: {key_name} по команде: '{phrase}'")
    return
 
-
-# ======================= РЕЖИМ VOSK (локальное распознавание) =======================
 def get_voice_chunks(words_dict):
  """Генератор, выдающий текст после паузы в речи"""
 
- SPEECH_THRESHOLD = 0.01
-
- buffer = collections.deque()
- last_speech_time = time.time()
- recording = False
-
- # Ленивая загрузка sounddevice
  import sounddevice as sd
-
- with sd.InputStream(samplerate=fs, channels=1, dtype='float32', blocksize=8096) as stream:
+ buffer = collections.deque()
+ fs = 16 * 1000
+ with sd.InputStream(samplerate=fs, channels=1, dtype='float32') as stream:
   while True:
-   # Проверка состояния микрофона (mute status)
-   from libs_voice import get_mute_status
-   if not get_mute_status(get_source_id()):
-    if len(buffer) > 0 or recording:
+    audio_chunk, overflowed = stream.read(2048)  # Читаем аудио порциями
+    mean_amp = np.mean(np.abs(audio_chunk)) * 100
+    mean_amp = math.ceil(mean_amp)  #
+    if mean_amp > 5:  #
+     buffer.append(audio_chunk.astype(np.float32).flatten())
+     # buffer1.extend(audio_chunk.flatten())
+     # if mean_amp<7:
+     #  print(mean_amp)
+    if mean_amp< 8 and buffer:
+     array = np.concatenate(buffer)
+     text = model.transcribe(array)
      buffer.clear()
-     recording = False
-    time.sleep(0.1)
-    continue
+     print(text)
+     threading.Thread(target=press_key_function,
+                      args=(text, words_dict), daemon=True).start()
 
-   audio_chunk, _ = stream.read(8096)
-   audio_chunk_flat = audio_chunk.flatten()
-
-   amplitude = np.max(np.abs(audio_chunk_flat))
-
-   if amplitude > SPEECH_THRESHOLD:  # Обнаружена речь
-    last_speech_time = time.time()
-    recording = True
-
-   if recording:
-    buffer.extend(audio_chunk_flat)
-
-   current_time = time.time()
-   silence_duration = current_time - last_speech_time
-
-   if silence_duration > min_silence_duration and len(buffer) > 0:
-    audio_array = np.array(buffer, dtype=np.float32)
-    buffer.clear()
-    recording = False
-    last_speech_time = current_time
-
-    if len(audio_array) / fs > 0.5:
-     try:
-      model_instance = get_gigaam_model()
-      if model_instance:
-       text = str(model_instance.transcribe(audio_array)).strip().lower()
-       if text and len(text) > 0:
-        threading.Thread(target=press_key_function,
-                         args=(text, words_dict),
-                         daemon=True).start()
-     except Exception as e:
-      print(f"Ошибка распознавания: {e}")
-   else:
-    time.sleep(0.01)
-
-
-# ======================= ПОТОК УПРАВЛЕНИЯ =======================
 class VoiceControlThread(QThread):
  def __init__(self, profile_name, words_dict):
   super().__init__()
@@ -391,8 +305,8 @@ class VoiceControlApp(QMainWindow):
   }
 
   try:
-   with open(settings_file, "w", encoding="utf-8") as f:
-    json.dump(data, f, ensure_ascii=False, indent=4)
+   # with open(settings_file, "w", encoding="cp1251") as f:
+   #  json.dump(data, f, ensure_ascii=False, indent=4)
    self.settings_changed = False
    # Сохраняем копию оригинальных настроек для сравнения
    self.original_settings = data.copy()
@@ -440,9 +354,8 @@ class VoiceControlApp(QMainWindow):
    return
 
   gamer_cmds = data.get("Gamer", {})
-  last_profile = data.get("last_pfofile", "internet")
-  self.profile_combo.setCurrentIndex(1 if last_profile == "Vosk" else 0)
-
+  last_profile = data.get("last_pfofile")
+  self.profile_combo.setCurrentIndex(1 if last_profile == "vosk" else 0)
   # Сохраняем оригинальные настройки для сравнения
   self.original_settings = data.copy()
 

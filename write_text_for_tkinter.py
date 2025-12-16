@@ -492,9 +492,35 @@ def set_mute(mute: str, source_id: str):
  subprocess.run(["pactl", "set-source-volume", source_id, "99%"], check=True)
 source_id = get_webcam_source_id()      # ← твоя функция
 set_mute("1", source_id)
-def get_mute_status(source_id):  # Получает статус Mute для источника '54' с помощью pactl и grep.
+
+def get_mute_status(source_id: str) -> bool:  # Получает статус 'Mute' для указанного источника (source) в PulseAudio.
+ # Поддерживает английский (yes/no) и русский (да/нет) вывод.
+ #
+ # Возвращает:
+ #     True  — если muted (приглушено),
+ #     False — если не muted.
+ # Выбрасывает исключение при ошибке pactl или неизвестном формате.
+
  try:
-  r = subprocess.run(["pactl", "get-source-mute", source_id],  capture_output=True, text=True, check=True)
-  return r.stdout.lower()
- except:
+  # Выполняем команду без смены локали — поддерживаем оба языка
+  result = subprocess.run(["pactl", "get-source-mute", source_id],
+   capture_output=True, text=True, check=True)
+  output = result.stdout.strip()
+
+  # Ищем строку вида "Mute: значение", регистронезависимо
+  match = re.search(r'Mute\s*:\s*(\S+)', output, re.IGNORECASE)
+  if not match:
+   raise ValueError(f"Не удалось найти 'Mute:' в выводе pactl: {output!r}")
+   return False
+  value = match.group(1).lower()
+  # Поддерживаем оба языка:
+  if value in ('yes', 'да'):
+   return False
+  elif value in ('no', 'нет'):
+   return True
+  else:
+   raise ValueError(f"Неизвестное значение mute: {value!r} (ожидалось yes/no/да/нет)")
+   return False
+
+ except subprocess.CalledProcessError as e:
   return False
