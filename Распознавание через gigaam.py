@@ -30,8 +30,7 @@ def check_model():
   model = load_model(model_name, # 1. Отключаем FP16, так как это полезно только на GPU
    fp16_encoder=False,  # 2. Отключаем FlashAttention, так как он не поддерживается на CPU и требует доп. библиотек
    use_flash=False,   # 3. Указываем, что модель должна быть загружена на CPU
-   device="cpu",  # 4. Указываем корневой каталог, где лежит модель (GigaAM сам добавит /gigaam)
-   download_root=cache_dir   )
+   device="cpu", download_root=cache_dir ) # 4. Указываем корневой каталог, где лежит модель (GigaAM сам добавит /gigaam)
   # model = gigaam.load_model(model_name)
   return model
  except Exception as e:
@@ -71,7 +70,7 @@ def update_label(root, label, model, source_id):
       buffer = collections.deque()  # ИЗМЕНЕНО: используем список вместо Queue
       silence_time = 0
       last_speech_time = time.time()
-      min_silence_duration = 1.6
+      min_silence_duration = 1.2
       fs = 16*1000
       start= False
       # buffer1 = collections.deque()
