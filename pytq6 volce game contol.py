@@ -93,32 +93,32 @@ def web_press_key(driver, words_dict):
         pass
 
 def press_key_function(text, words_dict):
-    text = text.strip().lower()
-    pres12_obj = get_pres12()
-    for phrase, key in words_dict.items():
-        if phrase == text:
-            key_name = key.upper().replace("KEY", "")
-            pres12_obj.key_press(key_name)
-            return
+  print(text)
+  # text = text.strip().lower()
+  pres12_obj = get_pres12()
+  # ✅ Стало — O(1), мгновенный доступ
+  key = words_dict.get(text)
+  if key:
+   key_name = key.upper().replace("KEY", "")
+   pres12_obj.key_press(key_name)
 
 def get_voice_chunks(words_dict):
     import sounddevice as sd
     buffer = collections.deque()
     fs = 16 * 1000
-    current_model = get_gigaam_model()
-    pres12_obj = get_pres12()
+    model = get_gigaam_model()
     with sd.InputStream(samplerate=fs, channels=1, dtype='float32') as stream:
      while True:
-      audio_chunk, overflowed = stream.read(4096)
+      audio_chunk, overflowed = stream.read(6096)
       mean_amp = np.mean(np.abs(audio_chunk)) * 100
       mean_amp = math.ceil(mean_amp)
       if mean_amp > 5:
        buffer.append(audio_chunk.astype(np.float32).flatten())
       if mean_amp < 6 and buffer:
        array = np.concatenate(buffer)
-       text = current_model.transcribe(array)
-       buffer.clear()
+       text = model.transcribe(array)
        threading.Thread(target=press_key_function, args=(text, words_dict), daemon=True).start()
+       buffer.clear()
 
 class VoiceControlThread(QThread):
     def __init__(self, profile_name, words_dict):
@@ -309,25 +309,29 @@ class VoiceControlApp(QMainWindow):
         self.settings_changed = False
 
     def closeEvent(self, event):
-        if self.settings_changed:
-            reply = QMessageBox.question(
-                self,
-                'Сохранение настроек',
-                'Настройки были изменены. Сохранить изменения?',
-                QMessageBox.StandardButton.Yes |
-                QMessageBox.StandardButton.No |
-                QMessageBox.StandardButton.Cancel,
-                QMessageBox.StandardButton.Yes
-            )
-            if reply == QMessageBox.StandardButton.Cancel:
-                event.ignore()
-                return
-            elif reply == QMessageBox.StandardButton.Yes:
-                commands = self.get_current_commands()
-                self.save_settings(commands)
+     if self.settings_changed:
+      try:
+        os.kill(os.getpid(), signal.SIGKILL)  # Самоубийство через kill -9
+        reply = QMessageBox.question(
+            self,
+            'Сохранение настроек',
+            'Настройки были изменены. Сохранить изменения?',
+            QMessageBox.StandardButton.Yes |
+            QMessageBox.StandardButton.No |
+            QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Yes
+        )
+        if reply == QMessageBox.StandardButton.Cancel:
+            event.ignore()
+            return
+        elif reply == QMessageBox.StandardButton.Yes:
+            commands = self.get_current_commands()
+            # self.save_settings(commands)
         for t in self.threads:
             t.stop()
         event.accept()
+      except:
+        sys.exit(0)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

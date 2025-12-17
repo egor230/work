@@ -20,18 +20,13 @@ source_id = get_webcam_source_id()      # ← твоя функция
 set_mute("0", source_id)
 # Проверка и загрузка модели GigaAM
 def check_model():
- models = ["v1_ssl", "v2_ssl", "ssl", "ctc", "v1_ctc", "v2_ctc", "rnnt", "v1_rnnt", "v2_rnnt", "emo", "v3_e2e_rnnt", "v3-e2e_ctc"]
- model_name = models[-2]  # v2_rnnt
- model_path = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache/gigaam/v3_e2e_rnnt"#cache_dir / "gigaam" / f"{model_name}"
- if not os.path.exists(f"{model_path}.ckpt"):
-  print(f"Ошибка: Файл модели не найден по пути: {model_path}")
-  sys.exit(1)  # Завершаем программу с кодом ошибки
+ models = ["v1_ssl", "v2_ssl", "ssl", "ctc", "v1_ctc", "v2_ctc", "rnnt", "v1_rnnt", "v2_rnnt", "emo", "v3_e2e_rnnt", "v3_e2e_ctc"]
+ model_name = models[-1]  # v2_rnnt
  try:  # Проверка наличия файла (указываем полный путь, как это делает gigaam)
   model = load_model(model_name, # 1. Отключаем FP16, так как это полезно только на GPU
    fp16_encoder=False,  # 2. Отключаем FlashAttention, так как он не поддерживается на CPU и требует доп. библиотек
    use_flash=False,   # 3. Указываем, что модель должна быть загружена на CPU
    device="cpu", download_root=cache_dir ) # 4. Указываем корневой каталог, где лежит модель (GigaAM сам добавит /gigaam)
-  # model = gigaam.load_model(model_name)
   return model
  except Exception as e:
   print(e)
@@ -70,14 +65,13 @@ def update_label(root, label, model, source_id):
       buffer = collections.deque()  # ИЗМЕНЕНО: используем список вместо Queue
       silence_time = 0
       last_speech_time = time.time()
-      min_silence_duration = 1.2
+      min_silence_duration = 1.1
       fs = 16*1000
       start= False
       # buffer1 = collections.deque()
       with sd.InputStream(samplerate=fs, channels=1, dtype='float32') as stream:
        while True:
         if not get_mute_status(source_id):
-          print("00000000")
           root.withdraw()
         else:
          audio_chunk, overflowed = stream.read(16096)  # Читаем аудио порциями
