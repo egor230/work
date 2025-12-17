@@ -3,6 +3,20 @@
 
 cd "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project";
 image_url=$(copyq read 0)    # Получаем  из буфера обмена  
+# Проверяем, есть ли в свежем элементе (0) изображение
+if copyq read image/png 0 >/dev/null 2>&1 || copyq read image/jpeg 0 >/dev/null 2>&1 || copyq read image/webp 0 >/dev/null 2>&1; then
+    
+    # Небольшая задержка, чтобы CopyQ успел полностью сохранить элемент
+   sleep 0.3
+   # Перезаписываем системный буфер обмена ТОЛЬКО изображением
+   # copyq copyImage копирует именно бинарное изображение из элемента 0 в системный буфер
+    # Опционально: можно также скопировать как файл, если нужно
+ #  copyq copy 0
+    
+   copyq copyImage 0
+  
+   exit 0
+fi
 if [ ! -f "$(copyq clipboard)" ] && [[ -z "$(copyq clipboard)" ]]; then  
  #echo "$image_url"
  sleep 0.8
