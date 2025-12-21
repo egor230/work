@@ -206,7 +206,13 @@ class RNNTGreedyDecoding:
         self.tokenizer = Tokenizer(vocabulary, model_path)
         self.blank_id = len(self.tokenizer)
         self.max_symbols = max_symbols_per_step
-
+        ''' Это инициализация жадного декодера для RNN-T модели. Параметр max_symbols_per_step ограничивает максимальное 
+        количество букв (токенов), которые модель может выдать за один акустический кадр (один временной шаг аудио).
+        На что влияет:
+        
+        При большом значении (по умолчанию 10) модель может вставлять повторы букв или лишние слоги при медленной речи.
+        При маленьком значении (например, 2–5) повторов становится меньше, текст чище на растянутой речи.
+        Значение по умолчанию: 10'''
     def _greedy_decode(self, head: RNNTHead, x: Tensor, seqlen: Tensor) -> str:
         hyp: List[int] = []
         dec_state: Optional[Tensor] = None
@@ -215,10 +221,16 @@ class RNNTGreedyDecoding:
             f = x[t, :, :].unsqueeze(1)
             not_blank = True
             new_symbols = 0
+            ''' conf — это уровень уверенности модели в том, что предсказанная буква (токен) правильная.
+Значение от 0.0 (совсем не уверена) до 1.0 (полностью уверена).
+Условие conf < 0.6 означает:
+«Если модель уверена в букве меньше чем на 60% — считай это пустым звуком (blank) и не добавляй букву в текст».    '''
             while not_blank and new_symbols < self.max_symbols:
                 g, hidden = head.decoder.predict(last_label, dec_state)
                 k = head.joint.joint(f, g)[0, 0, 0, :].argmax(0).item()
-                if k == self.blank_id:
+                conf = max_prob.item()
+                if k == self.blank_id or conf < 0.6:
+                # if k == self.blank_id:
                     not_blank = False
                 else:
                     hyp.append(int(k))

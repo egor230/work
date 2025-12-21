@@ -21,7 +21,7 @@ set_mute("0", source_id)
 # Проверка и загрузка модели GigaAM
 def check_model():
  models = ["v1_ssl", "v2_ssl", "ssl", "ctc", "v1_ctc", "v2_ctc", "rnnt", "v1_rnnt", "v2_rnnt", "emo", "v3_e2e_rnnt", "v3_e2e_ctc"]
- model_name = models[-1]  # v2_rnnt
+ model_name = models[-2]  # v2_rnnt
  try:  # Проверка наличия файла (указываем полный путь, как это делает gigaam)
   model = load_model(model_name, # 1. Отключаем FP16, так как это полезно только на GPU
    fp16_encoder=False,  # 2. Отключаем FlashAttention, так как он не поддерживается на CPU и требует доп. библиотек
@@ -92,14 +92,16 @@ def update_label(root, label, model, source_id):
           if silence_time > min_silence_duration:
            root.withdraw()
            array = np.concatenate(buffer)
-           start= False
+           duration = len(array) / fs
+           if duration > 2:
+            start= False
            break
           else:
            silence_time += time.time() - last_speech_time
            last_speech_time = time.time()
       root.withdraw()#
       if is_speech(0.030, array):
-       array = enhance_speech_for_recognition(array)
+       # array = enhance_speech_for_recognition(array)
        # write(filename, fs, array)
        message = model.transcribe(array)
        # message = model.transcribe_longform(filename)
