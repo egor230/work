@@ -88,7 +88,7 @@ def update_label(root, label, model, processor, source_id):
     buffer = collections.deque()
     silence_time = 0
     last_speech_time = time.time()
-    min_silence_duration = 1.8
+    min_silence_duration = 1.4
     fs = 16000
     filename = "temp.wav"
     start = False

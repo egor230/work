@@ -1,7 +1,4 @@
-import os
-import json
-import string
-
+import os, json, string
 
 class XemuConfigManager:
  PROFILES_FILE = "xemu_profiles.json"
