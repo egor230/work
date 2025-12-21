@@ -4,8 +4,10 @@ MODEL_DIR = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_l
 # Загружаем модель Turbo вместо Whisper
 try:
  processor = AutoProcessor.from_pretrained(MODEL_DIR)
- model = AutoModelForSpeechSeq2Seq.from_pretrained(  MODEL_DIR,  dtype=torch.float32,  # CPU
-  low_cpu_mem_usage=True )
+ model = AutoModelForSpeechSeq2Seq.from_pretrained(
+  MODEL_DIR,
+  low_cpu_mem_usage=True
+ ).to("cpu")
  model = model.to("cpu")
  print("Модель загружена успешно.")
 except Exception as e:
@@ -53,11 +55,11 @@ def transcribe_audio_with_turbo(audio_array, sample_rate=16000):
    audio_array = librosa.resample(  audio_array.astype(np.float32),
     orig_sr=sample_rate,   target_sr=16000   )
   inputs = processor(   audio_array,   sampling_rate=16000,   return_tensors="pt"  )
-  generated_ids = model.generate(  inputs["input_features"],  max_new_tokens=192,  # Увеличиваем, т.к. речь может быть медленнее
+  generated_ids = model.generate(  inputs["input_features"],  max_new_tokens=128,  # Увеличиваем, т.к. речь может быть медленнее
    num_beams=10,  # Увеличиваем beam search для лучшего поиска
    # Ключевые параметры для нечеткой речи
-   temperature=0.7,  # Небольшая креативность для интерпретации
-   # do_sample=True,  # Включаем сэмплирование
+   temperature=0.87,  # Небольшая креативность для интерпретации
+   do_sample=True,  # Включаем сэмплирование
    # top_k=30,  # Рассматриваем больше вариантов
 #  top_p=0.9,  # Nucleus sampling
    # Специальные настройки
@@ -88,9 +90,8 @@ def update_label(root, label, model, processor, source_id):
     buffer = collections.deque()
     silence_time = 0
     last_speech_time = time.time()
-    min_silence_duration = 1.4
+    min_silence_duration = 1.2
     fs = 16000
-    filename = "temp.wav"
     start = False
     with sd.InputStream(samplerate=fs, channels=1, dtype='float32') as stream:
      while True:
