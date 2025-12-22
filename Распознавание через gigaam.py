@@ -10,15 +10,15 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 # Настройка директории кэша
 cache_dir = Path("/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache/gigaam")
 # Отключаем предупреждения ALSA и JACK
-os.environ["PYAUDIO_ALSA_WARN"] = "0"
-os.environ["ALSA_LOG_LEVEL"] = "0"  # Подавляем логи ALSA
-os.environ["JACK_NO_START_SERVER"] = "1"  # Отключаем запуск JACK-сервера
-err = os.dup(2)  # Сохраняем оригинальный stderr
-os.dup2(os.open(os.devnull, os.O_WRONLY), 2)  # Перенаправляем вывод ошибок в /dev/null
+# os.environ["PYAUDIO_ALSA_WARN"] = "0"
+# os.environ["ALSA_LOG_LEVEL"] = "0"  # Подавляем логи ALSA
+# os.environ["JACK_NO_START_SERVER"] = "1"  # Отключаем запуск JACK-сервера
+# err = os.dup(2)  # Сохраняем оригинальный stderr
+# os.dup2(os.open(os.devnull, os.O_WRONLY), 2)  # Перенаправляем вывод ошибок в /dev/null
 torch.set_num_threads(8)
 source_id = get_webcam_source_id()      # ← твоя функция
-set_mute("0", source_id)
-# Проверка и загрузка модели GigaAM
+set_mute("0", source_id)# Проверка и загрузка модели GigaAM
+print("0")
 def check_model():
  models = ["v1_ssl", "v2_ssl", "ssl", "ctc", "v1_ctc", "v2_ctc", "rnnt", "v1_rnnt", "v2_rnnt", "emo", "v3_e2e_rnnt", "v3_e2e_ctc"]
  model_name = models[-2]  # v2_rnnt
