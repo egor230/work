@@ -217,7 +217,6 @@ class MyThread(QThread):
      thread = threading.Thread(target=process_text, args=(self.message,))
      thread.start()
      thread.join()
-
      thr = threading.Thread(target=lambda: [time.sleep(3.7), setattr(self, 'mic', True)])
      thr.daemon = True
      thr.start()

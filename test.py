@@ -9,7 +9,13 @@ import pkg_resources
 import sys, urllib.parse
 import base64
 from transformers import AutoTokenizer, AutoModelForCausalLM
+from evdev import InputDevice, list_devices
 
+devices = [InputDevice(fn) for fn in list_devices()]
+
+print("Список устройств ввода:")
+for dev in devices:
+    print(f"Путь: {dev.path} | Имя: {dev.name} | Физ. путь: {dev.phys}")
 def get_webcam_source_id():# Определяет текущий Source ID (например, '53') для HD Webcam C525,
  # Постоянное имя вашего микрофона с веб-камеры (из вашего вывода)
  TARGET_NAME = "alsa_input.usb-046d_HD_Webcam_C525_79588C20-00.mono-fallback"

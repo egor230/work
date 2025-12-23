@@ -17,8 +17,7 @@ cache_dir = Path("/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/pyt
 # os.dup2(os.open(os.devnull, os.O_WRONLY), 2)  # Перенаправляем вывод ошибок в /dev/null
 torch.set_num_threads(8)
 source_id = get_webcam_source_id()      # ← твоя функция
-set_mute("0", source_id)# Проверка и загрузка модели GigaAM
-print("0")
+set_mute("0", source_id)# Проверка и загрузка модели GigaAMprint("0")
 def check_model():
  models = ["v1_ssl", "v2_ssl", "ssl", "ctc", "v1_ctc", "v2_ctc", "rnnt", "v1_rnnt", "v2_rnnt", "emo", "v3_e2e_rnnt", "v3_e2e_ctc"]
  model_name = models[-2]  # v2_rnnt
@@ -77,7 +76,7 @@ def update_label(root, label, model, source_id):
          audio_chunk, overflowed = stream.read(16096)  # Читаем аудио порциями
          mean_amp = np.mean(np.abs(audio_chunk)) * 100
          mean_amp = math.ceil(mean_amp)#
-         if mean_amp > 5:#
+         if mean_amp > 6:#
           last_speech_time = time.time()
           silence_time = 0
           start = True
@@ -93,7 +92,7 @@ def update_label(root, label, model, source_id):
            root.withdraw()
            array = np.concatenate(buffer)
            duration = len(array) / fs
-           if duration > 2:
+           if duration > 3:
             start= False
            break
           else:
