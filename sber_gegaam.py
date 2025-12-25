@@ -202,7 +202,7 @@ class CTCGreedyDecoding:
         return pred_texts
 
 class RNNTGreedyDecoding:
-    def __init__(self, vocabulary: List[str], model_path: Optional[str] = None, max_symbols_per_step: int = 10):
+    def __init__(self, vocabulary: List[str], model_path: Optional[str] = None, max_symbols_per_step: int = 20):
         self.tokenizer = Tokenizer(vocabulary, model_path)
         self.blank_id = len(self.tokenizer)
         self.max_symbols = max_symbols_per_step

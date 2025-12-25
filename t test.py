@@ -1,4 +1,4 @@
-from huggingface_hub import hf_hub_download
+# from huggingface_hub import hf_hub_download
 import os
 #
 # repo_id = "openai/whisper-large-v3-turbo"
@@ -21,10 +21,12 @@ import os
 # print(f"\n---")
 # print(f"Файл успешно скачан и сохранен по пути: {cached_file}")
 
+# !/usr/bin/env python3
+
 # whisper_local.py
-import os
-import torch
-from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
+# import os
+# import torch
+# from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
 
 # # Путь к твоему safetensors-файлу
 # local_model_path = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache/whisper_files"

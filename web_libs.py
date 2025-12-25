@@ -380,7 +380,7 @@ def copy_and_rename_file(res, source_file="/home/egor/Шаблоны/doc.doc", t
      # Очищаем название от недопустимых символов для имени файла
      # Можно добавить больше символов в список, если нужно
      invalid_chars = ['<', '>', ':', '"', '/', '\\', '|', '?', '*']
-     clean_title = title
+     clean_title = str(title)
      for char in invalid_chars:
       clean_title = clean_title.replace(char, '')
     

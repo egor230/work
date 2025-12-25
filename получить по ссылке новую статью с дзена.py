@@ -1,17 +1,22 @@
 from libs_voice import *
 from web_libs import *
+
+
 def simplify_html(html, base_url="https://dzen.ru"):
  soup = BeautifulSoup(html, 'html.parser')
+
+ # Пробуем несколько способов найти заголовок
  title_element = soup.find('h1', {'data-testid': 'article-title'})
  if not title_element:
-  title_html = "<h1>Заголовок не найден</h1>"
+  title_element = soup.find('h1', {'itemprop': 'headline'})
+
+ if title_element:
+  title_text = title_element.get_text(strip=True)
+  title_html = f"<h1>{title_text}</h1>"
  else:
-  title_copy = BeautifulSoup(str(title_element), 'html.parser').h1
-  if title_copy:
-   title_copy.attrs = {}
-   title_html = str(title_copy)
-  else:
-   title_html = f"<h1>{title_element.get_text(strip=True)}</h1>"
+  title_text = "Заголовок не найден"
+  title_html = f"<h1>{title_text}</h1>"
+
  article_body = soup.find('div', {'data-testid': 'article-body'})
  if not article_body:
   body_html = "<div>Текст статьи не найден</div>"
@@ -37,47 +42,42 @@ def simplify_html(html, base_url="https://dzen.ru"):
    body_html = str(body_copy)
   else:
    body_html = "<div>Ошибка обработки текста статьи</div>"
+
  html_content = f"{title_html}{body_html}".replace(
   "Те, кто мне благодарен за мою помощь при работе с их руками, могут по своему желанию перевести мне денежную благодарность на карту с пометкой \"В дар\". Счёт карты 2202 2063 9554 7743 Сбербанк MИР.",
   "")
- html_content1 = f"<div>{html_content}</div>"
+
  html_content = f"""
-  <div>
+ <div>
    <style>
-    img {{
-     max-width: 512px;
-     max-height: 512px;
-     width: auto;
-     height: auto;
-    }}
+     img {{ max-width: 512px; max-height: 512px; width: auto; height: auto; }}
    </style>
-   {html_content1}
-  </div>
-  """
+   <div>{html_content}</div>
+ </div>
+ """
+
  try:
-  # subprocess.run(['copyq', 'write', 'text/html', html_content])
+  # Используем xclip с коротким таймаутом или игнорируем ошибку, чтобы вернуть заголовок
   process = subprocess.Popen(['xclip', '-selection', 'clipboard', '-t', 'text/html'], stdin=subprocess.PIPE, stderr=subprocess.PIPE)
-  stdout, stderr = process.communicate(input=html_content.encode('utf-8'), timeout=10)
-  show_list_id = '''#!/bin/bash
-    sleep 1.9
-    copyq select 0  '''
-  subprocess.run(['bash', '-c', show_list_id])
-  if process.returncode == 0:
-   print("Полный текст статьи успешно скопирован в буфер обмена.")
-   subprocess.run(['copyq', 'write', 'text/html', html_content])
-   return title_element.get_text(strip=True)
-  else:
-   print(f"Ошибка xclip: {stderr.decode('utf-8')}")
-   # process_text = subprocess.Popen(['xclip', '-selection', 'clipboard'], stdin=subprocess.PIPE, stderr=subprocess.PIPE)
-   # stdout_text, stderr_text = process_text.communicate(input=html_content.encode('utf-8'), timeout=10)
-   # if process_text.returncode == 0:
-   #  print("Текст успешно скопирован как обычный текст.")
-   # else:
-   #  print(f"Ошибка при копировании как текст: {stderr_text.decode('utf-8')}")
- 
-  return title_element.get_text(strip=True)
+  try:
+   process.communicate(input=html_content.encode('utf-8'), timeout=5)
+
+   show_list_id = '''#!/bin/bash
+       sleep 1.9
+       copyq select 0  '''
+   subprocess.run(['bash', '-c', show_list_id])
+
+   if process.returncode == 0:
+    subprocess.run(['copyq', 'write', 'text/html', html_content])
+  except subprocess.TimeoutExpired:
+   process.kill()
+   print("Предупреждение: xclip не ответил вовремя, продолжаем выполнение.")
+
+  return title_text
+
  except Exception as e:
-  print(f"Неожиданная ошибка при копировании: {e}")
+  print(f"Ошибка при работе с буфером: {e}")
+  return title_text
 
 option = get_option()
 driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=option)
@@ -89,7 +89,7 @@ res = {}  # Ваш словарь для результатов
 source = driver.page_source
 res[simplify_html(source)] =url
 # print(res)
-# time.sleep(3)  # Дополнительное время для загрузки контента
+time.sleep(3)  # Дополнительное время для загрузки контента
 copy_and_rename_file(res)
 open_documents_from_dict(res, driver)
 driver.quit()

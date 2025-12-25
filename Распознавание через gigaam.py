@@ -47,7 +47,9 @@ if result.returncode == 0 and result.stdout.strip():
 cmd = f'#!/bin/bash\n"/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/myvenv/bin/python\" \"{script_path}\"'
 def run_script():# Запускаем скрипт в отдельном демонизированном потоке
   subprocess.Popen(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+t = time.time()
 model = check_model()
+print(time.time() - t)
 threading.Thread(target=run_script, daemon=True).start()# print("Скрипт запущен заново.")
 
 def update_label(root, label, model, source_id):
