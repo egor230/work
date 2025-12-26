@@ -3,7 +3,8 @@ from omegaconf.base import ContainerMetadata
 from omegaconf.dictconfig import DictConfig # <--- ИСПРАВЛЕНИЕ ОШИБКИ #1
 from write_text_for_tkinter import *
 import torch, tempfile, torchaudio, math, scipy.signal, typing
-from sber_gegaam import load_model
+# from sber_gegaam import load_model
+from sber_gegaam_without_cuda import load_model
 torch.serialization.add_safe_globals([ContainerMetadata, DictConfig, typing.Any])
 # Разрешаем необходимые типы для загрузки чекпоинта
 warnings.filterwarnings("ignore", category=DeprecationWarning)
