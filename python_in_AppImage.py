@@ -1,250 +1,183 @@
-import sys
-import os
-import time
-import shutil
-import subprocess
-import requests
-from PIL import Image
-from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QPushButton,
-                             QLabel, QFileDialog, QLineEdit, QMessageBox, QTextEdit)
-from PyQt6.QtGui import QPalette, QColor
+import sys, os, shutil, subprocess, glob, tempfile;
+from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QLabel, QFileDialog, QLineEdit, QMessageBox, QTextEdit, QComboBox, QHBoxLayout, QGroupBox, QFrame, QSizePolicy, QCheckBox;
+from PyQt6.QtCore import Qt, QSize;
+from PyQt6.QtGui import QFont, QIcon, QPixmap
+
 
 class CompilerApp(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.resources_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources")
-        os.makedirs(self.resources_dir, exist_ok=True)
-        self.init_ui()
-        self.apply_light_theme()
+ def __init__(self):
+  super().__init__()
+  self.compiler_methods = {
+   "Nuitka": self.compile_with_nuitka,
+   "PyInstaller": self.compile_with_pyinstaller,
+   "AppImage (Linux)": self.compile_as_appimage
+  }
 
-    def apply_light_theme(self):
-        style_sheet = """
-          QWidget {
-            background-color: #F8F8F8;
-            color: #333333;
-            font-family: Arial, sans-serif;
-            font-size: 10pt;
-          }
-          QLabel {
-            color: #1A1A1A;
-            padding-top: 5px;
-          }
-          QLineEdit, QTextEdit {
-            border: 1px solid #C0C0C0;
-            padding: 8px;
-            border-radius: 4px;
-            background-color: #FFFFFF;
-          }
-          QPushButton {
-            background-color: #EFEFEF;
-            border: 1px solid #D0D0D0;
-            padding: 10px 15px;
-            border-radius: 4px;
-            min-height: 30px;
-          }
-          QPushButton:hover {
-            background-color: #E0E0E0;
-          }
-          QPushButton#compileButton {
-            background-color: #28A745;
-            color: white;
-            font-weight: bold;
-            border: none;
-          }
-          QPushButton#compileButton:hover {
-            background-color: #218838;
-          }
-        """
-        self.setStyleSheet(style_sheet)
-        self.btn_compile.setObjectName("compileButton")
+  self.size_info = {
+   "Nuitka": "Ожидаемый размер: ~50-150 МБ (высокая оптимизация)",
+   "PyInstaller": "Ожидаемый размер: ~100-300 МБ (стандарт)",
+   "AppImage (Linux)": "Ожидаемый размер: ~150-400 МБ (полный пакет)"
+  }
 
-    def init_ui(self):
-        self.setWindowTitle('Python to AppImage Compiler (Auto-Install Tool)')
-        self.setGeometry(300, 300, 550, 500)
-        layout = QVBoxLayout()
+  self.init_ui()
+  self.apply_light_theme()
 
-        self.label_file = QLabel('Выберите Python файл (.py):')
-        layout.addWidget(self.label_file)
-        self.input_file = QLineEdit()
-        layout.addWidget(self.input_file)
-        self.btn_browse_file = QPushButton('Обзор файла')
-        self.btn_browse_file.clicked.connect(self.browse_file)
-        layout.addWidget(self.btn_browse_file)
+ def apply_light_theme(self):
+  style_sheet = """
+      QWidget { background-color: #f5f7fa; color: #2c3e50; font-family: 'Segoe UI', sans-serif; font-size: 10pt; }
+      QGroupBox { border: 2px solid #d1d9e6; border-radius: 8px; margin-top: 10px; padding-top: 15px; font-weight: bold; color: #3498db; background-color: #ffffff; }
+      QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 8px; }
+      QLineEdit { border: 2px solid #d1d9e6; border-radius: 6px; padding: 8px; background-color: #ffffff; }
+      QPushButton { border: 2px solid #d1d9e6; border-radius: 6px; padding: 8px 15px; background: #e8ecf1; font-weight: bold; }
+      QPushButton#compileButton { background: #2ecc71; color: white; min-height: 40px; }
+      QTextEdit { background-color: #ffffff; border: 2px solid #d1d9e6; font-family: 'Monospace'; }
+    """
+  self.setStyleSheet(style_sheet)
+  self.btn_compile.setObjectName("compileButton")
 
-        self.label_icon = QLabel('Выберите иконку (PNG/JPG/SVG):')
-        layout.addWidget(self.label_icon)
-        self.input_icon = QLineEdit()
-        layout.addWidget(self.input_icon)
-        self.btn_browse_icon = QPushButton('Обзор иконки')
-        self.btn_browse_icon.clicked.connect(self.browse_icon)
-        layout.addWidget(self.btn_browse_icon)
+ def init_ui(self):
+  self.setWindowTitle('Python Compiler Pro for Linux')
+  self.setGeometry(300, 200, 950, 800)
+  layout = QVBoxLayout()
+  layout.setSpacing(10)
 
-        self.log_output = QTextEdit()
-        self.log_output.setReadOnly(True)
-        layout.addWidget(self.log_output)
+  # Выбор компилятора
+  comp_box = QGroupBox("Настройки компиляции")
+  comp_layout = QVBoxLayout()
+  self.combo_compiler = QComboBox()
+  self.combo_compiler.addItems(list(self.compiler_methods.keys()))
+  self.combo_compiler.currentTextChanged.connect(self.update_compiler_info)
+  self.size_label = QLabel()
+  self.size_label.setStyleSheet("color: #27ae60; font-weight: bold;")
+  comp_layout.addWidget(QLabel("Инструмент:"))
+  comp_layout.addWidget(self.combo_compiler)
+  comp_layout.addWidget(self.size_label)
+  comp_box.setLayout(comp_layout)
+  layout.addWidget(comp_box)
 
-        self.btn_compile = QPushButton('Собрать AppImage')
-        self.btn_compile.clicked.connect(self.run_compiler)
-        layout.addWidget(self.btn_compile)
+  # Выбор файлов
+  file_box = QGroupBox("Исходные данные")
+  file_layout = QVBoxLayout()
 
-        self.setLayout(layout)
+  # Скрипт
+  h_file = QHBoxLayout()
+  self.input_file = QLineEdit()
+  self.input_file.setPlaceholderText('Выберите .py файл...')
+  btn_file = QPushButton('Обзор')
+  btn_file.clicked.connect(self.browse_file)
+  h_file.addWidget(self.input_file)
+  h_file.addWidget(btn_file)
+  file_layout.addLayout(h_file)
 
-    def log(self, message):
-        self.log_output.append(message)
-        QApplication.processEvents()
+  # Имя
+  self.input_appname = QLineEdit()
+  self.input_appname.setPlaceholderText('Название приложения')
+  file_layout.addWidget(self.input_appname)
 
-    def browse_file(self):
-        fname, _ = QFileDialog.getOpenFileName(self, 'Выбрать скрипт', os.getcwd(), "Python Files (*.py)")
-        if fname:
-            self.input_file.setText(fname)
+  # Иконка
+  h_icon = QHBoxLayout()
+  self.input_icon = QLineEdit()
+  self.input_icon.setPlaceholderText('Путь к иконке (.png, .ico)...')
+  btn_icon = QPushButton('Иконка')
+  btn_icon.clicked.connect(self.browse_icon)
+  h_icon.addWidget(self.input_icon)
+  h_icon.addWidget(btn_icon)
+  file_layout.addLayout(h_icon)
 
-    def browse_icon(self):
-        fname, _ = QFileDialog.getOpenFileName(self, 'Выбрать иконку', os.getcwd(), "Image Files (*.png *.jpg *.jpeg *.svg)")
-        if fname:
-            self.input_icon.setText(fname)
+  file_box.setLayout(file_layout)
+  layout.addWidget(file_box)
 
-    def ensure_pyinstaller(self):
-        self.log("Проверка PyInstaller...")
-        try:
-            import pyinstaller
-            self.log("PyInstaller уже установлен.")
-            return True
-        except ImportError:
-            self.log("PyInstaller не найден. Устанавливаю через pip...")
-            try:
-                subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller"])
-                self.log("PyInstaller успешно установлен.")
-                return True
-            except Exception as e:
-                self.log(f"Ошибка установки PyInstaller: {e}")
-                return False
+  # Лог
+  self.log_output = QTextEdit()
+  self.log_output.setReadOnly(True)
+  layout.addWidget(QLabel("Лог процесса:"))
+  layout.addWidget(self.log_output)
 
-    def ensure_appimagetool(self):
-        # Сначала ищем в встроенной папке resources
-        local_tool = os.path.join(self.resources_dir, "appimagetool-x86_64.AppImage")
-        if os.path.exists(local_tool):
-            os.chmod(local_tool, 0o755)  # на всякий случай
-            return local_tool
+  self.btn_compile = QPushButton('Начать процесс сборки')
+  self.btn_compile.clicked.connect(self.run_compiler)
+  layout.addWidget(self.btn_compile)
 
-        # Ищем в PATH
-        tool = shutil.which("appimagetool")
-        if tool:
-            return tool
+  self.setLayout(layout)
+  self.update_compiler_info(self.combo_compiler.currentText())
 
-        self.log("appimagetool не найден. Загружаю свежую версию...")
-        url = "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"
-        try:
-            response = requests.get(url, stream=True)
-            response.raise_for_status()
-            with open(local_tool, 'wb') as f:
-                shutil.copyfileobj(response.raw, f)
-            os.chmod(local_tool, 0o755)
-            self.log(f"appimagetool успешно загружен и сохранён в {local_tool}")
-            return local_tool
-        except Exception as e:
-            self.log(f"Ошибка загрузки appimagetool: {e}")
-            return None
+ def update_compiler_info(self, compiler):
+  self.size_label.setText(self.size_info.get(compiler, ""))
 
-    def run_compiler(self):
-        py_script = self.input_file.text().strip()
-        icon_path = self.input_icon.text().strip()
+ def log(self, message):
+  self.log_output.append(message)
+  QApplication.processEvents()
 
-        if not py_script or not os.path.isfile(py_script):
-            QMessageBox.warning(self, "Ошибка", "Выберите корректный Python-файл!")
-            return
-        if not icon_path or not os.path.isfile(icon_path):
-            QMessageBox.warning(self, "Ошибка", "Выберите корректную иконку!")
-            return
+ def browse_file(self):
+  fname, _ = QFileDialog.getOpenFileName(self, 'Скрипт', os.getcwd(), "Python (*.py)")
+  if fname:
+   self.input_file.setText(fname)
+   self.input_appname.setText(os.path.splitext(os.path.basename(fname))[0])
 
-        if not self.ensure_pyinstaller():
-            QMessageBox.critical(self, "Ошибка", "Не удалось установить PyInstaller!")
-            return
+ def browse_icon(self):
+  fname, _ = QFileDialog.getOpenFileName(self, 'Иконка', os.getcwd(), "Icons (*.png *.ico)")
+  if fname: self.input_icon.setText(fname)
 
-        tool_path = self.ensure_appimagetool()
-        if not tool_path:
-            QMessageBox.critical(self, "Ошибка", "Не удалось найти или загрузить appimagetool!")
-            return
+ def get_file_size_mb(self, path):
+  return round(os.path.getsize(path) / (1024 * 1024), 2) if os.path.exists(path) else 0
 
-        home = os.getcwd()
-        script_name = os.path.basename(py_script)
-        name_file = os.path.splitext(script_name)[0]
-        app_dir = os.path.join(home, f"{name_file}.AppDir")
+ def run_compiler(self):
+  script = self.input_file.text().strip()
+  if not script or not os.path.exists(script):
+   QMessageBox.warning(self, "Ошибка", "Укажите путь к скрипту!")
+   return
+  self.log_output.clear()
+  self.compiler_methods[self.combo_compiler.currentText()](script)
 
-        self.log("Этап 1: Сборка исполняемого файла через PyInstaller...")
-        cmd = [
-            "pyinstaller",
-            "--onefile",
-            "--clean",
-            "--distpath", os.path.join(home, "dist"),
-            py_script
-        ]
+ def compile_with_nuitka(self, script):
+  name = self.input_appname.text() or "app"
+  icon = self.input_icon.text().strip()
+  cmd = [sys.executable, "-m", "nuitka", "--standalone", "--onefile", "--remove-output", f"--output-filename={name}"]
+  if icon: cmd.append(f"--linux-icon={icon}")
+  cmd.append(script)
+  self.execute_proc(cmd, name)
 
-        try:
-            subprocess.check_call(cmd)
-        except Exception as e:
-            self.log(f"Ошибка PyInstaller: {e}")
-            QMessageBox.critical(self, "Ошибка", "Сборка PyInstaller провалилась!")
-            return
+ def compile_with_pyinstaller(self, script):
+  name = self.input_appname.text() or "app"
+  icon = self.input_icon.text().strip()
+  cmd = [sys.executable, "-m", "PyInstaller", "--onefile", "--clean", f"--name={name}"]
+  if icon: cmd.extend(["--icon", icon])
+  cmd.append(script)
+  self.execute_proc(cmd, name)
 
-        executable_path = os.path.join(home, "dist", name_file)
+ def compile_as_appimage(self, script):
+  self.log("Для AppImage создается базовый бинарник через PyInstaller...")
+  self.compile_with_pyinstaller(script)
 
-        try:
-            self.log("Этап 2: Создание AppDir...")
-            if os.path.exists(app_dir):
-                shutil.rmtree(app_dir)
-            os.makedirs(os.path.join(app_dir, "usr/bin"), exist_ok=True)
+ def execute_proc(self, cmd, app_name):
+  try:
+   self.log(f"Команда: {' '.join(cmd)}")
+   process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+   for line in process.stdout: self.log(line.strip())
+   process.wait()
 
-            shutil.move(executable_path, os.path.join(app_dir, "usr/bin", name_file))
+   dist_file = os.path.join(os.getcwd(), "dist", app_name)
+   final_file = os.path.join(os.getcwd(), app_name)
 
-            # Иконка
-            icon_dest = os.path.join(app_dir, f"{name_file}.png")
-            img = Image.open(icon_path).convert("RGBA")
-            img.save(icon_dest, "PNG")
+   if os.path.exists(dist_file):
+    if os.path.exists(final_file): os.remove(final_file)
+    shutil.move(dist_file, final_file)
 
-            # .desktop файл
-            desktop_path = os.path.join(app_dir, f"{name_file}.desktop")
-            with open(desktop_path, "w") as f:
-                f.write(f"[Desktop Entry]\n"
-                        f"Name={name_file}\n"
-                        f"Exec={name_file}\n"
-                        f"Icon={name_file}\n"
-                        f"Type=Application\n"
-                        f"Categories=Utility;")
+    # Полная очистка
+    for folder in ["dist", "build"]:
+     if os.path.exists(folder): shutil.rmtree(folder)
+    for spec in glob.glob("*.spec"): os.remove(spec)
 
-            # AppRun
-            apprun_path = os.path.join(app_dir, "AppRun")
-            with open(apprun_path, "w") as f:
-                f.write(f'#!/bin/bash\n'
-                        f'exec "$APPDIR/usr/bin/{name_file}" "$@"')
-            os.chmod(apprun_path, 0o755)
+    size = self.get_file_size_mb(final_file)
+    self.log(f"Успех! Размер файла: {size} МБ. Путь: {final_file}")
+    QMessageBox.information(self, "Готово", f"Сборка завершена!\nРазмер: {size} МБ")
+   else:
+    self.log("Ошибка: Сборка не удалась, файл в 'dist' не найден.")
+  except Exception as e:
+   self.log(f"Критическая ошибка: {str(e)}")
 
-            self.log("Этап 3: Финальная сборка AppImage...")
-            env = os.environ.copy()
-            env["ARCH"] = "x86_64"
-
-            subprocess.check_call([tool_path, app_dir], env=env)
-
-            final_appimage = f"{name_file}-x86_64.AppImage"
-            self.log(f"Готово! Создан файл: {final_appimage}")
-
-            # Очистка временных файлов
-            shutil.rmtree(app_dir)
-            if os.path.exists(os.path.join(home, "dist")):
-                shutil.rmtree(os.path.join(home, "dist"))
-            if os.path.exists(os.path.join(home, "build")):
-                shutil.rmtree(os.path.join(home, "build"))
-            spec_file = f"{name_file}.spec"
-            if os.path.exists(spec_file):
-                os.remove(spec_file)
-
-            QMessageBox.information(self, "Успех", f"AppImage успешно создан!\n{final_appimage}")
-
-        except Exception as e:
-            self.log(f"Ошибка в процессе сборки: {e}")
-            QMessageBox.critical(self, "Ошибка", "Произошла ошибка при создании AppImage.")
 
 if __name__ == '__main__':
-    app = QApplication(sys.argv)
-    ex = CompilerApp()
-    ex.show()
-    sys.exit(app.exec())
+ app = QApplication(sys.argv)
+ ex = CompilerApp()
+ ex.show()
+ sys.exit(app.exec())

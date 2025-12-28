@@ -1,105 +1,174 @@
-import cv2, sys, os, time, warnings, subprocess
-from pynput.keyboard import Key, Controller
+import cv2
+import sys
+import os
+import warnings
+from pynput.keyboard import Controller
+
 warnings.filterwarnings('ignore')
-# Путь к файлу Haar Cascade (ваш локальный файл)
+
+# ---------- PATH ----------
 cascade_path = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/haarcascade_frontalface_default.xml"
 
+# ---------- BRIGHTNESS ----------
 def enhance_brightness(frame):
- # Перевод в YUV, улучшение яркости канала Y
- yuv = cv2.cvtColor(frame, cv2.COLOR_BGR2YUV)
- yuv[:, :, 0] = cv2.equalizeHist(yuv[:, :, 0])
- return cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR)
+    yuv = cv2.cvtColor(frame, cv2.COLOR_BGR2YUV)
+    yuv[:, :, 0] = cv2.equalizeHist(yuv[:, :, 0])
+    return cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR)
 
-# Проверка существования файла Haar Cascade
+# ---------- CHECK CASCADE ----------
 if not os.path.exists(cascade_path):
-    print(f"Ошибка: Файл каскада не найден по пути {cascade_path}")
+    print("Ошибка: Haar cascade не найден")
     sys.exit(1)
 
-# Загрузка классификатора Haar Cascade
 face_cascade = cv2.CascadeClassifier(cascade_path)
 if face_cascade.empty():
-    print(f"Ошибка: Не удалось загрузить файл каскада {cascade_path}")
+    print("Ошибка загрузки Haar cascade")
     sys.exit(1)
 
-# Подключение к веб-камере с использованием V4L2
-cap = cv2.VideoCapture('/dev/video0', cv2.CAP_V4L2)  # Попробуйте '/dev/video1', если не работает
+# ---------- CAMERA ----------
+cap = cv2.VideoCapture(0)
 if not cap.isOpened():
-    print("Ошибка: Не удалось открыть веб-камеру. Попробуйте '/dev/video1' или другой индекс.")
-    # Попытка открыть альтернативное устройство
-    cap = cv2.VideoCapture('/dev/video1', cv2.CAP_V4L2)
+    cap = cv2.VideoCapture(1)
     if not cap.isOpened():
-        print("Ошибка: Не удалось открыть веб-камеру на '/dev/video1'. Проверьте устройство.")
+        print("Ошибка камеры")
         sys.exit(1)
 
-# Установка разрешения камеры для ускорения обработки
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
+WIDTH = 320
+HEIGHT = 240
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, WIDTH)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, HEIGHT)
 
-# Инициализация трекера KCF
+# ---------- TRACKER ----------
 tracker = cv2.TrackerKCF_create()
 tracker_initialized = False
-bbox = None  # Переменная для хранения координат лица
-right = 50
-left = 220
-# Создаем объект для управления клавиатурой
+bbox = None
+
 keyboard = Controller()
-# Основной цикл обработки кадров
-while True: # Если трекер не инициализирован, ищем лицо с помощью Haar Cascade
 
- # Захват кадра с веб-камеры
- ret, frame = cap.read()
+# ---------- CONTROL KEYS ----------
+LEFT_KEY = 'a'
+RIGHT_KEY = 'd'
+FORWARD_KEY = 'w'
+BACK_KEY = 's'
 
- frame = enhance_brightness(frame)
- if not tracker_initialized:
-  # Преобразование кадра в серый цвет для ускорения обнаружения
-  gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-  faces = face_cascade.detectMultiScale(gray, scaleFactor=1.3, minNeighbors=3, minSize=(20, 20))
+# ---------- DEFAULT LINE POSITIONS ----------
+DEFAULT_LEFT = 250
+DEFAULT_RIGHT = 30
+DEFAULT_TOP = 0
+DEFAULT_BOTTOM = 160
 
-  # Если лицо найдено, инициализируем трекер
-  if len(faces) > 0:
-   x, y, w, h = faces[0]  # Берем первое обнаруженное лицо
-   bbox = (x, y, w, h)
-   tracker.init(frame, bbox)
-   tracker_initialized = True
- else:  # Обновление трекера для отслеживания лица
-  success, bbox = tracker.update(frame)
-  x, y, w, h = [int(v) for v in bbox]  # Преобразуем координаты в целые числа
-  cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)  # Рисуем зеленый прямоугольник вокруг лица
-  cv2.putText(frame, f'({x}, {y})', (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)  # Добавляем координаты над прямоугольником
-  if not success: # Если трекер потерял лицо, сбрасываем инициализацию
-   tracker_initialized = False
-   tracker = cv2.TrackerKCF_create()  # Создаем новый трекер для повторной инициализации
+# ---------- OPENCV WINDOW ----------
+cv2.namedWindow("Head Tracking")
 
- # Отрисовка прямоугольника и вывод координат
- back=101
- if bbox is not None:
-  if y > back:
-    keyboard.press('s')
-  if y < back:
-    keyboard.release('s')
-  if x < right:
-    keyboard.press('d')  # Нажимаем и удерживаем кнопку "d"
-  if x > right:
-    keyboard.release('d')  # Отпускаем кнопку "d"
-  if x > left:
-    keyboard.press('a')  # Нажимаем и удерживаем кнопку "d"
-  if x < left:
-   keyboard.release('a')  # Отпускаем кнопку "d"
- else:
-    keyboard.release('d')  # Отпускаем кнопку "d"
-    keyboard.release('a')  # Отпускаем кнопку "d"
- cv2.imshow("Head Tracking", frame) # Отображение кадра с наложенным прямоугольником
+def nothing(x):
+    pass
 
- # Выход из цикла по нажатию клавиши 'q'
- if cv2.waitKey(1) & 0xFF == ord('q'):
-  break
+# ---------- TRACKBARS ----------
+cv2.createTrackbar("LEFT", "Head Tracking", DEFAULT_LEFT, WIDTH, nothing)
+cv2.createTrackbar("RIGHT", "Head Tracking", DEFAULT_RIGHT, WIDTH, nothing)
+cv2.createTrackbar("TOP", "Head Tracking", DEFAULT_TOP, HEIGHT, nothing)
+cv2.createTrackbar("BOTTOM", "Head Tracking", DEFAULT_BOTTOM, HEIGHT, nothing)
 
-# Освобождение ресурсов
+# ---------- MAIN LOOP ----------
+while True:
+    # Проверяем, открыто ли окно
+    if cv2.getWindowProperty("Head Tracking", cv2.WND_PROP_VISIBLE) < 1:
+        break
+
+    ret, frame = cap.read()
+    if not ret:
+        print("Ошибка чтения кадра")
+        break
+
+    frame = enhance_brightness(frame)
+
+    # ---- READ TRACKBARS ----
+    left_line = cv2.getTrackbarPos("LEFT", "Head Tracking")
+    right_line = cv2.getTrackbarPos("RIGHT", "Head Tracking")
+    top_line = cv2.getTrackbarPos("TOP", "Head Tracking")
+    bottom_line = cv2.getTrackbarPos("BOTTOM", "Head Tracking")
+
+    # ---- RED LINES ----
+    cv2.line(frame, (left_line, 0), (left_line, HEIGHT), (0, 0, 255), 2)
+    cv2.line(frame, (right_line, 0), (right_line, HEIGHT), (0, 0, 255), 2)
+    cv2.line(frame, (0, top_line), (WIDTH, top_line), (0, 0, 255), 2)
+    cv2.line(frame, (0, bottom_line), (WIDTH, bottom_line), (0, 0, 255), 2)
+
+    # ---- FACE DETECTION AND TRACKING ----
+    if not tracker_initialized:
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        faces = face_cascade.detectMultiScale(
+            gray,
+            scaleFactor=1.3,
+            minNeighbors=3,
+            minSize=(20, 20)
+        )
+
+        if len(faces) > 0:
+            bbox = faces[0]
+            tracker.init(frame, bbox)
+            tracker_initialized = True
+    else:
+        success, bbox = tracker.update(frame)
+        if not success:
+            tracker_initialized = False
+            tracker = cv2.TrackerKCF_create()
+            keyboard.release(LEFT_KEY)
+            keyboard.release(RIGHT_KEY)
+            keyboard.release(FORWARD_KEY)
+            keyboard.release(BACK_KEY)
+            continue
+
+        x, y, w, h = map(int, bbox)
+
+        # ---- DRAW GREEN RECTANGLE ----
+        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        cv2.putText(
+            frame, f"x:{x} y:{y}",
+            (x, y - 10),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5, (0, 255, 0), 1
+        )
+
+        # ---- CHECK INTERSECTION WITH RED LINES ----
+        left_intersect = x <= left_line and x + w >= left_line
+        right_intersect = x <= right_line and x + w >= right_line
+        top_intersect = y <= top_line and y + h >= top_line
+        bottom_intersect = y <= bottom_line and y + h >= bottom_line
+
+        if left_intersect:
+            keyboard.press(LEFT_KEY)
+        else:
+            keyboard.release(LEFT_KEY)
+
+        if right_intersect:
+            keyboard.press(RIGHT_KEY)
+        else:
+            keyboard.release(RIGHT_KEY)
+
+        if top_intersect:
+            keyboard.press(FORWARD_KEY)
+        else:
+            keyboard.release(FORWARD_KEY)
+
+        if bottom_intersect:
+            keyboard.press(BACK_KEY)
+        else:
+            keyboard.release(BACK_KEY)
+
+    cv2.imshow("Head Tracking", frame)
+
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+# ---------- CLEANUP ----------
+keyboard.release(LEFT_KEY)
+keyboard.release(RIGHT_KEY)
+keyboard.release(FORWARD_KEY)
+keyboard.release(BACK_KEY)
+
 cap.release()
 cv2.destroyAllWindows()
-
-
-
 
 # Функция для отправки клавиатурных команд
 # def press(key):

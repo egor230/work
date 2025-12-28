@@ -10,11 +10,32 @@ def simplify_html(html, base_url="https://dzen.ru"):
  if not title_element:
   title_element = soup.find('h1', {'itemprop': 'headline'})
 
- if title_element:
-  title_text = title_element.get_text(strip=True)
-  title_html = f"<h1>{title_text}</h1>"
+ # Дополнительные способы поиска заголовка
+ if not title_element:
+  # Ищем любой h1 с классом содержащим "title" или "header"
+  title_element = soup.find('h1', class_=lambda x: x and any(word in x.lower() for word in ['title', 'header']) if x else False)
+
+ if not title_element:
+  # Ищем первый h1 на странице
+  title_element = soup.find('h1')
+
+ if not title_element:
+  # Ищем в мета-тегах
+  meta_title = soup.find('meta', {'property': 'og:title'}) or soup.find('meta', {'name': 'title'})
+  if meta_title:
+   title_text = meta_title.get('content', '').strip()
+   if title_text:
+    title_html = f"<h1>{title_text}</h1>"
+   else:
+    title_text = "Заголовок не найден"
+    title_html = f"<h1>{title_text}</h1>"
+  else:
+   title_text = "Заголовок не найден"
+   title_html = f"<h1>{title_text}</h1>"
  else:
-  title_text = "Заголовок не найден"
+  # Очищаем текст заголовка от лишних пробелов
+  title_text = title_element.get_text(strip=True)
+  title_text = ' '.join(title_text.split())
   title_html = f"<h1>{title_text}</h1>"
 
  article_body = soup.find('div', {'data-testid': 'article-body'})
@@ -63,8 +84,8 @@ def simplify_html(html, base_url="https://dzen.ru"):
    process.communicate(input=html_content.encode('utf-8'), timeout=5)
 
    show_list_id = '''#!/bin/bash
-       sleep 1.9
-       copyq select 0  '''
+             sleep 1.9
+             copyq select 0  '''
    subprocess.run(['bash', '-c', show_list_id])
 
    if process.returncode == 0:

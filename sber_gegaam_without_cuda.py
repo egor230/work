@@ -235,7 +235,7 @@ class CTCGreedyDecoding:
 class RNNTGreedyDecoding:
  """Жадное декодирование для RNN-T моделей"""
 
- def __init__(self, vocabulary: List[str], model_path: Optional[str] = None, max_symbols_per_step: int = 20):
+ def __init__(self, vocabulary: List[str], model_path: Optional[str] = None, max_symbols_per_step: int = 10):
   self.tokenizer = Tokenizer(vocabulary, model_path)# по умолчанию 10
   self.blank_id = len(self.tokenizer)
   self.max_symbols = max_symbols_per_step  # Макс. символов на шаг

@@ -20,11 +20,11 @@ set_mute("0", source_id)# Проверка и звука
 #  }
 # Проверка наличия модели
 models = ["tiny", "base", "small", "medium", "large", "large-v2", "large-v3", "large-v3-turbo"]
-model_name = models[-2]
+model_name = models[-1]
 
 # Пример использования:
 t = time.time()
-model = whisper.load_model(model_name, device="cpu")
+model = whisper.load_model(model_name, download_root="/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache", device="cpu")
 print(time.time() - t)
 
 class MyThread(QtCore.QThread):
