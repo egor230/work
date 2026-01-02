@@ -67,7 +67,7 @@ def update_label(root, label, model, source_id):
       buffer = collections.deque()  # ИЗМЕНЕНО: используем список вместо Queue
       silence_time = 0
       last_speech_time = time.time()
-      min_silence_duration = 1.1
+      min_silence_duration = 1.5
       fs = 16*1000
       start= False
       # buffer1 = collections.deque()
@@ -79,7 +79,7 @@ def update_label(root, label, model, source_id):
          audio_chunk, overflowed = stream.read(16096)  # Читаем аудио порциями
          mean_amp = np.mean(np.abs(audio_chunk)) * 100
          mean_amp = math.ceil(mean_amp)#
-         if mean_amp > 6:#
+         if mean_amp > 4:#
           last_speech_time = time.time()
           silence_time = 0
           start = True
@@ -95,7 +95,7 @@ def update_label(root, label, model, source_id):
            root.withdraw()
            array = np.concatenate(buffer)
            duration = len(array) / fs
-           if duration > 3:
+           if duration > 4:
             start= False
            break
           else:

@@ -235,7 +235,7 @@ class CTCGreedyDecoding:
 class RNNTGreedyDecoding:
  """Жадное декодирование для RNN-T моделей"""
 
- def __init__(self, vocabulary: List[str], model_path: Optional[str] = None, max_symbols_per_step: int = 10):
+ def __init__(self, vocabulary: List[str], model_path: Optional[str] = None, max_symbols_per_step: int = 15):
   self.tokenizer = Tokenizer(vocabulary, model_path)# по умолчанию 10
   self.blank_id = len(self.tokenizer)
   self.max_symbols = max_symbols_per_step  # Макс. символов на шаг
@@ -733,11 +733,63 @@ def get_pipeline() -> Pipeline:
  _PIPELINE.instantiate({"min_duration_on": 0.0, "min_duration_off": 0.0})
 
  return _PIPELINE
+ '''
+    def segment_audio_file(wav_input, sr, 
+                           max_duration: float = 22.0,  # ← максимальная длительность сегмента
+                           min_duration: float = 15.0,  # ← минимальная длительность
+                           strict_limit_duration: float = 30.0,  # ← лимит для принудительного разбиения
+                           new_chunk_threshold: float = 0.2):  # ← порог для нового чанка
+    Что настроить:
+    new_chunk_threshold - увеличить с 0.2 до 0.5-1.0 секунды
+    max_duration - уменьшить с 22.0 до 15.0-18.0 секунд
+    Для твоей речи:  Паузы могут быть длиннее обычных →
+    слишком большой min_duration заставляет модель тащить сегмент дальше, даже когда качество уже падает.
+    
+    🟢 Оптимум: 6–8 секунд    3️⃣ strict_limit_duration
+    strict_limit_duration: float = 60.0        
+    Что это:   Жёсткий потолок.
+    Если VAD “залип” и не видит пауз — сегмент принудительно режется.
+    
+    🔴 60 секунд — слишком опасно   🟢 Оптимум: 20–25 секунд
+    
+    4️⃣ new_chunk_threshold    new_chunk_threshold: float = 0.6     
+    Самый важный параметр для тебя.    Что это:
+    Минимальная пауза (в секундах), которая считается “настоящей”.
+     меньше → игнорируется    больше → можно закрывать сегмент
+    
+    При ДЦП:    паузы часто неровные
+    
+    есть микро-остановки    дыхание может сбивать VAD
+    
+    🔴 0.2–0.3 → модель режет слишком часто
+    🟢 0.8–1.2 → модель терпеливее, но не тянет до деградации
+    
+    🔧 Рекомендованные настройки именно для тебя
+    ⭐ Баланс качества и стабильности (РЕКОМЕНДУЮ)
+segments, boundaries = segment_audio_file(
+    audio_data,
+    sr=SAMPLE_RATE,
+    max_duration=16.0,          # ключевое: не даём модели "уставать"
+    min_duration=7.0,           # принимаем короткие фразы
+    strict_limit_duration=22.0, # страховка от деградации
+    new_chunk_threshold=1.0     # игнорируем микропаузы
+)
 
+🧠 Максимальное качество (если хватает CPU / RAM)
+segments, boundaries = segment_audio_file(
+    audio_data,
+    sr=SAMPLE_RATE,
+    max_duration=14.0,
+    min_duration=6.0,
+    strict_limit_duration=18.0,
+    new_chunk_threshold=1.2
+)
+'''
+ #Максимальное качество (если хватает CPU / RAM)
 
 def segment_audio_file(wav_input: Union[np.ndarray, Tensor], sr: int,
-                       max_duration: float = 22.0, min_duration: float = 15.0,
-                       strict_limit_duration: float = 30.0, new_chunk_threshold: float = 0.2) -> Tuple[List[torch.Tensor], List[Tuple[float, float]]]:
+                       max_duration: float = 10.0, min_duration: float = 50.0,
+                       strict_limit_duration: float = 20.0, new_chunk_threshold: float = 0.7) -> Tuple[List[torch.Tensor], List[Tuple[float, float]]]:
  """Сегментирует аудио на фрагменты по голосовой активности"""
  if isinstance(wav_input, np.ndarray):
   audio = torch.from_numpy(wav_input.copy()).float()
@@ -745,7 +797,6 @@ def segment_audio_file(wav_input: Union[np.ndarray, Tensor], sr: int,
   audio = wav_input.float().clone()
  else:
   raise TypeError(f"Unsupported input type for VAD: {type(wav_input)}. Expected np.ndarray or Tensor.")
-
  if audio.ndim > 1:
   audio = audio.flatten()
 

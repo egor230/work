@@ -61,7 +61,8 @@ class MyThread(QtCore.QThread):
            audio_chunk, overflowed = stream.read(16096)
            mean_amp = np.mean(np.abs(audio_chunk)) * 100
            mean_amp = math.ceil(mean_amp)
-           if mean_amp > 6:
+           # print(mean_amp)
+           if mean_amp > 4:
              last_speech_time = time.time()
              silence_time = 0
              start = True
@@ -70,6 +71,7 @@ class MyThread(QtCore.QThread):
              if silence_time > min_silence_duration:
                array = np.concatenate(buffer)
                duration = len(array) / fs
+               print(duration)
                if duration > 3:
                 self.icon_signal.emit(self.icon2_path)
                 start = False
@@ -77,7 +79,7 @@ class MyThread(QtCore.QThread):
              else:
                silence_time += time.time() - last_speech_time
                last_speech_time = time.time()
-          if is_speech(0.0730, array):
+          if is_speech(0.0340, array):
             message = model.transcribe(array, fp16=False, language="ru", task="transcribe")["text"]
             buffer.clear()
             if message != " " and len(message) > 0:
