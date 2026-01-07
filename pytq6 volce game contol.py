@@ -1,17 +1,9 @@
 import sys, os, json, threading, time, math, subprocess, collections, warnings
 import numpy as np
-from pathlib import Path
 from typing import Dict, Optional
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QComboBox, QPushButton, QLineEdit,
-                             QVBoxLayout, QHBoxLayout, QWidget, QScrollArea, QMessageBox)
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QComboBox, QPushButton, QLineEdit, QVBoxLayout, QHBoxLayout, QWidget, QScrollArea, QMessageBox)
 from PyQt6.QtGui import QPalette, QColor
 from PyQt6.QtCore import QThread, Qt
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
-from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 settings_file = "settings_voice_game_control_linux.json"
@@ -47,44 +39,50 @@ def get_gigaam_model():
     return model
 
 def web():
-    subprocess.call(['bash', '-c', 'pkill -f "chrome"; pkill -f "chromedriver"'])
-    options = webdriver.ChromeOptions()
-    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.7204.168 Safari/537.36")
-    options.add_experimental_option("excludeSwitches", ['enable-automation'])
-    options.add_argument("--use-fake-ui-for-media-stream")
-    options.add_argument("--disable-popup-blocking")
-    options.add_argument('--disable-web-security')
-    options.add_argument('--disable-notifications')
-    options.add_argument('--user-data-dir=/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/google-chrome')
-    options.binary_location = "/usr/bin/google-chrome"
-    try:
-        driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-        driver.get("https://www.speechtexter.com")
-        WebDriverWait(driver, 15).until(EC.element_to_be_clickable((By.ID, 'mic')))
-        driver.find_element(By.ID, "mic").click()
-        return driver
-    except Exception as e:
-        print(f"Ошибка запуска браузера: {e}")
-        return None
+  from selenium import webdriver
+  from selenium.webdriver.chrome.service import Service
+  from selenium.webdriver.common.by import By
+  from webdriver_manager.chrome import ChromeDriverManager
+  from selenium.webdriver.support.ui import WebDriverWait
+  from selenium.webdriver.support import expected_conditions as EC
+  subprocess.call(['bash', '-c', 'pkill -f "chrome"; pkill -f "chromedriver"'])
+  options = webdriver.ChromeOptions()
+  options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.7204.168 Safari/537.36")
+  options.add_experimental_option("excludeSwitches", ['enable-automation'])
+  options.add_argument("--use-fake-ui-for-media-stream")
+  options.add_argument("--disable-popup-blocking")
+  options.add_argument('--disable-web-security')
+  options.add_argument('--disable-notifications')
+  options.add_argument('--user-data-dir=/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/google-chrome')
+  options.binary_location = "/usr/bin/google-chrome"
+  try:
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    driver.get("https://www.speechtexter.com")
+    WebDriverWait(driver, 15).until(EC.element_to_be_clickable((By.ID, 'mic')))
+    driver.find_element(By.ID, "mic").click()
+    return driver
+  except Exception as e:
+    print(f"Ошибка запуска браузера: {e}")
+    return None
 
 def web_press_key(driver, words_dict):
-    try:
-        element = WebDriverWait(driver, 1).until(
-            EC.presence_of_element_located((By.ID, "speech-text")))
-        text = element.get_attribute('value')
-        if not text:
-            text = element.text
-        text = text.strip().lower()
-        if text:
-            driver.find_element(By.ID, "mic").click()
-            press_key_function(text, words_dict)
-            element.clear()
-            time.sleep(1.5)
-            driver.find_element(By.ID, "mic").click()
-            time.sleep(1.5)
-            driver.find_element(By.ID, "mic").click()
-    except Exception:
-        pass
+ try:
+   element = WebDriverWait(driver, 1).until(
+       EC.presence_of_element_located((By.ID, "speech-text")))
+   text = element.get_attribute('value')
+   if not text:
+       text = element.text
+   text = text.strip().lower()
+   if text:
+       driver.find_element(By.ID, "mic").click()
+       press_key_function(text, words_dict)
+       element.clear()
+       time.sleep(1.5)
+       driver.find_element(By.ID, "mic").click()
+       time.sleep(1.5)
+       driver.find_element(By.ID, "mic").click()
+ except Exception:
+   pass
 
 def press_key_function(text, words_dict):
   print(text)
@@ -103,7 +101,7 @@ def get_voice_chunks(words_dict):
     model = get_gigaam_model()
     with sd.InputStream(samplerate=fs, channels=1, dtype='float32') as stream:
      while True:
-      audio_chunk, overflowed = stream.read(6096)
+      audio_chunk, overflowed = stream.read(7096)
       mean_amp = np.mean(np.abs(audio_chunk)) * 100
       mean_amp = math.ceil(mean_amp)
       if mean_amp > 5:
