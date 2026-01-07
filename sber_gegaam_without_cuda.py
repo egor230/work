@@ -1184,13 +1184,12 @@ def _normalize_device(device: Optional[Union[str, torch.device]]) -> torch.devic
  return torch.device("cpu")
 
 
-def load_model(
-  model_name: str,
+def load_model( model_name: str,
+  download_root: Optional[str] = None,  # 4. Корневой каталог для загрузки моделей
+  force_download: bool = False,  # 5. Принудительная перезагрузка модели
   fp16_encoder: bool = True,  # 1. Игнорируется, т.к. FP16 полезен только на GPU
   use_flash: Optional[bool] = False,  # 2. Игнорируется, т.к. FlashAttention не поддерживается на CPU
-  device: Optional[Union[str, torch.device]] = None,  # 3. Игнорируется, модель всегда загружается на CPU
-  download_root: Optional[str] = None,  # 4. Корневой каталог для загрузки моделей
-  force_download: bool = False  # 5. Принудительная перезагрузка модели
+  device: Optional[Union[str, torch.device]] = None  # 3. Игнорируется, модель всегда загружается на CPU
 ) -> Union[GigaAM, GigaAMEmo, GigaAMASR]:
  """
  Быстрая загрузка модели для CPU

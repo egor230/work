@@ -1,8 +1,5 @@
-import sys, os
-import json, threading
-import time, math
+import sys, os, json, threading, time, math, subprocess, collections, warnings
 import numpy as np
-import collections, warnings
 from pathlib import Path
 from typing import Dict, Optional
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QComboBox, QPushButton, QLineEdit,
@@ -15,11 +12,8 @@ from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-import subprocess
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
-
-cache_dir = Path("/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache/gigaam")
 settings_file = "settings_voice_game_control_linux.json"
 
 os.environ["PYAUDIO_ALSA_WARN"] = "0"
@@ -42,14 +36,14 @@ def get_gigaam_model():
     global model
     from sber_gegaam import load_model
     if model is None:
-        print("Начинаю загрузку модели GigaAM...")
-        try:
-            model = load_model("ctc", fp16_encoder=False, use_flash=False, device="cpu", download_root=cache_dir)
-            print("Модель GigaAM успешно загружена")
-            return model
-        except Exception as e:
-            print(f"Ошибка загрузки модели GigaAM: {e}")
-            return None
+     try:
+       cache_dir = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache/gigaam"
+       model = load_model("ctc", download_root=cache_dir)
+       print("Модель GigaAM успешно загружена")
+       return model
+     except Exception as e:
+       print(f"Ошибка загрузки модели GigaAM: {e}")
+       return None
     return model
 
 def web():
@@ -130,14 +124,14 @@ class VoiceControlThread(QThread):
 
     def run(self):
         if self.profile_name == "internet":
-            self.driver = web()
-            while self.running:
-                try:
-                    if self.driver:
-                        web_press_key(self.driver, self.words)
-                    self.msleep(200)
-                except Exception as e:
-                    print(f"Ошибка в потоке Internet: {e}")
+          self.driver = web()
+          while self.running:
+           try:
+             if self.driver:
+               web_press_key(self.driver, self.words)
+             self.msleep(200)
+           except Exception as e:
+            print(f"Ошибка в потоке Internet: {e}")
         elif self.profile_name == "Vosk":
             try:
                 get_voice_chunks(self.words)
@@ -146,30 +140,30 @@ class VoiceControlThread(QThread):
                 self.running = False
 
     def stop(self):
-        self.running = False
-        if self.driver:
-            try:
-                self.driver.quit()
-                subprocess.call(['bash', '-c', 'pkill -f "chrome"; pkill -f "chromedriver"'])
-            except:
-                pass
-        self.quit()
-        self.wait()
+     self.running = False
+     if self.driver:
+      try:
+       self.driver.quit()
+       subprocess.call(['bash', '-c', 'pkill -f "chrome"; pkill -f "chromedriver"'])
+      except:
+       pass
+     self.quit()
+     self.wait()
 
 class CommandWidget(QWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        layout = QHBoxLayout(self)
-        self.command_edit = QLineEdit()
-        self.key_combo = QComboBox()
-        try:
-            from libs_voice import KEYS
-            self.key_combo.addItems(KEYS.keys())
-        except ImportError:
-            self.key_combo.addItems([])
-        layout.addWidget(self.command_edit)
-        layout.addWidget(self.key_combo)
-        layout.setContentsMargins(0, 0, 0, 0)
+  def __init__(self, parent=None):
+     super().__init__(parent)
+     layout = QHBoxLayout(self)
+     self.command_edit = QLineEdit()
+     self.key_combo = QComboBox()
+     try:
+         from libs_voice import KEYS
+         self.key_combo.addItems(KEYS.keys())
+     except ImportError:
+         self.key_combo.addItems([])
+     layout.addWidget(self.command_edit)
+     layout.addWidget(self.key_combo)
+     layout.setContentsMargins(0, 0, 0, 0)
 
 class VoiceControlApp(QMainWindow):
     def __init__(self):
@@ -215,11 +209,11 @@ class VoiceControlApp(QMainWindow):
         self.settings_changed = True
 
     def del_command(self):
-        if self.command_widgets:
-            w = self.command_widgets.pop()
-            self.commands_layout.removeWidget(w)
-            w.deleteLater()
-            self.settings_changed = True
+     if self.command_widgets:
+        w = self.command_widgets.pop()
+        self.commands_layout.removeWidget(w)
+        w.deleteLater()
+        self.settings_changed = True
 
     def on_settings_changed(self):
         self.settings_changed = True
@@ -312,15 +306,10 @@ class VoiceControlApp(QMainWindow):
      if self.settings_changed:
       try:
         os.kill(os.getpid(), signal.SIGKILL)  # Самоубийство через kill -9
-        reply = QMessageBox.question(
-            self,
-            'Сохранение настроек',
-            'Настройки были изменены. Сохранить изменения?',
-            QMessageBox.StandardButton.Yes |
-            QMessageBox.StandardButton.No |
-            QMessageBox.StandardButton.Cancel,
-            QMessageBox.StandardButton.Yes
-        )
+        reply = QMessageBox.question( self, 'Сохранение настроек',
+         'Настройки были изменены. Сохранить изменения?',
+         QMessageBox.StandardButton.Yes |  QMessageBox.StandardButton.No |
+         QMessageBox.StandardButton.Cancel, QMessageBox.StandardButton.Yes )
         if reply == QMessageBox.StandardButton.Cancel:
             event.ignore()
             return
