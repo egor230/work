@@ -13,7 +13,7 @@ from pyannote.audio.pipelines import VoiceActivityDetection
 
 # Константы
 SAMPLE_RATE = 16000
-LONGFORM_THRESHOLD = 25 * SAMPLE_RATE  # 25 секунд порог для длинных аудио
+LONGFORM_THRESHOLD = 35 * SAMPLE_RATE  # 25 секунд порог для длинных аудио
 DTYPE = np.float32
 MAX_LETTERS_PER_FRAME = 3
 _URL_DIR = "https://cdn.chatwm.opensmodel.sberdevices.ru/GigaAM"
@@ -235,7 +235,7 @@ class CTCGreedyDecoding:
 class RNNTGreedyDecoding:
  """Жадное декодирование для RNN-T моделей"""
 
- def __init__(self, vocabulary: List[str], model_path: Optional[str] = None, max_symbols_per_step: int = 15):
+ def __init__(self, vocabulary: List[str], model_path: Optional[str] = None, max_symbols_per_step: int = 30):
   self.tokenizer = Tokenizer(vocabulary, model_path)# по умолчанию 10
   self.blank_id = len(self.tokenizer)
   self.max_symbols = max_symbols_per_step  # Макс. символов на шаг
@@ -258,7 +258,7 @@ class RNNTGreedyDecoding:
     max_prob = joint_out[0, 0, 0, :].max().exp()  # Уверенность
 
     # Проверяем, не blank ли это и достаточно ли уверенности
-    if k == self.blank_id or max_prob.item() < 0.6: # это порог уверенности в слове
+    if k == self.blank_id or max_prob.item() < 0.5: # это порог уверенности в слове
      not_blank = False
     else:
      hyp.append(int(k))
@@ -301,12 +301,9 @@ class StridingSubsampling(nn.Module):
   subs_conv_class = torch.nn.Conv2d if self.subsampling_type == "conv2d" else torch.nn.Conv1d
 
   for _ in range(self._sampling_num):
-   layers.append(subs_conv_class(
-    in_channels=in_channels,
-    out_channels=conv_channels,
+   layers.append(subs_conv_class(  in_channels=in_channels,    out_channels=conv_channels,
     kernel_size=self._kernel_size,
-    stride=self._stride,
-    padding=self._padding
+    stride=self._stride,   padding=self._padding
    ))
    layers.append(nn.ReLU())
    in_channels = conv_channels
@@ -529,14 +526,8 @@ class ConformerConvolution(nn.Module):
 
   self.norm_type = norm_type
   self.pointwise_conv1 = nn.Conv1d(d_model, d_model * 2, kernel_size=1)
-  self.depthwise_conv = nn.Conv1d(
-   in_channels=d_model,
-   out_channels=d_model,
-   kernel_size=kernel_size,
-   padding=(kernel_size - 1) // 2,
-   groups=d_model,
-   bias=True
-  )
+  self.depthwise_conv = nn.Conv1d(   in_channels=d_model,   out_channels=d_model,
+   kernel_size=kernel_size,   padding=(kernel_size - 1) // 2,   groups=d_model,  bias=True  )
   self.batch_norm = nn.BatchNorm1d(d_model) if norm_type == "batch_norm" else nn.LayerNorm(d_model)
   self.activation = nn.SiLU()
   self.pointwise_conv2 = nn.Conv1d(d_model, d_model, kernel_size=1)
@@ -789,7 +780,7 @@ segments, boundaries = segment_audio_file(
 
 def segment_audio_file(wav_input: Union[np.ndarray, Tensor], sr: int,
                        max_duration: float = 10.0, min_duration: float = 50.0,
-                       strict_limit_duration: float = 20.0, new_chunk_threshold: float = 0.7) -> Tuple[List[torch.Tensor], List[Tuple[float, float]]]:
+                       strict_limit_duration: float = 20.0, new_chunk_threshold: float = 1.0) -> Tuple[List[torch.Tensor], List[Tuple[float, float]]]:
  """Сегментирует аудио на фрагменты по голосовой активности"""
  if isinstance(wav_input, np.ndarray):
   audio = torch.from_numpy(wav_input.copy()).float()
@@ -1073,6 +1064,7 @@ class GigaAMASR(GigaAM):
    return self.decoding.decode(self.head, encoded, encoded_len)[0]
   # Для длинных аудио сегментируем
   else:
+   print("long")
    transcribed_segments = []
    segments, boundaries = segment_audio_file(audio_data, SAMPLE_RATE, **kwargs)
 

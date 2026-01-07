@@ -64,12 +64,13 @@ def update_label(root, label, model, source_id):
       label.config(text="Говорите...")
       root.deiconify()
       root.update()
+      fs = 16*1000
       buffer = collections.deque()  # ИЗМЕНЕНО: используем список вместо Queue
       silence_time = 0
       last_speech_time = time.time()
-      min_silence_duration = 1.5
-      fs = 16*1000
+      min_silence_duration = 1.0
       start= False
+      pause_count = 0
       # buffer1 = collections.deque()
       with sd.InputStream(samplerate=fs, channels=1, dtype='float32') as stream:
        while True:
@@ -85,12 +86,8 @@ def update_label(root, label, model, source_id):
           start = True
          if start:
           buffer.append(audio_chunk.astype(np.float32).flatten())
-          # buffer1.extend(audio_chunk.flatten())
-          # if mean_amp<7:
-          #  print(mean_amp)
-          #  arr = np.array(buffer1)
-          #  buffer1.clear()
-          #  print( model.transcribe(arr))
+          if mean_amp <6:
+           pause_count += 1  # Начало паузы
           if silence_time > min_silence_duration:
            root.withdraw()
            array = np.concatenate(buffer)
@@ -103,9 +100,18 @@ def update_label(root, label, model, source_id):
            last_speech_time = time.time()
       root.withdraw()#
       if is_speech(0.030, array):
+
+       print(f"Пауз обнаружено: {pause_count}")
+       pause_count=0
+       message = model.transcribe(array)
+          # buffer1.extend(audio_chunk.flatten())
+          # if mean_amp<7:
+          #  print(mean_amp)
+          #  arr = np.array(buffer1)
+          #  buffer1.clear()
+          #  print( model.transcribe(arr))
        # array = enhance_speech_for_recognition(array)
        # write(filename, fs, array)
-       message = model.transcribe(array)
        # message = model.transcribe_longform(filename)
           # os.unlink(filename)
        if message !=" " and len(message) >0:
