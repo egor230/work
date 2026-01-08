@@ -236,7 +236,7 @@ class RNNTGreedyDecoding:
  """Жадное декодирование для RNN-T моделей"""
 
  def __init__(self, vocabulary: List[str], model_path: Optional[str] = None, max_symbols_per_step: int = 30):
-  self.tokenizer = Tokenizer(vocabulary, model_path)# по умолчанию 10
+  self.tokenizer = Tokenizer(vocabulary, model_path)  # по умолчанию 10
   self.blank_id = len(self.tokenizer)
   self.max_symbols = 50  # Макс. символов на шаг
 
@@ -258,7 +258,7 @@ class RNNTGreedyDecoding:
     max_prob = joint_out[0, 0, 0, :].max().exp()  # Уверенность
 
     # Проверяем, не blank ли это и достаточно ли уверенности
-    if k == self.blank_id or max_prob.item() < 0.4: # это порог уверенности в слове
+    if k == self.blank_id or max_prob.item() < 0.4:  # это порог уверенности в слове
      not_blank = False
     else:
      hyp.append(int(k))
@@ -301,10 +301,10 @@ class StridingSubsampling(nn.Module):
   subs_conv_class = torch.nn.Conv2d if self.subsampling_type == "conv2d" else torch.nn.Conv1d
 
   for _ in range(self._sampling_num):
-   layers.append(subs_conv_class(  in_channels=in_channels,    out_channels=conv_channels,
-    kernel_size=self._kernel_size,
-    stride=self._stride,   padding=self._padding
-   ))
+   layers.append(subs_conv_class(in_channels=in_channels, out_channels=conv_channels,
+                                 kernel_size=self._kernel_size,
+                                 stride=self._stride, padding=self._padding
+                                 ))
    layers.append(nn.ReLU())
    in_channels = conv_channels
 
@@ -334,6 +334,7 @@ class StridingSubsampling(nn.Module):
    x = self.conv(x.transpose(1, 2)).transpose(1, 2)
 
   return x, self.calc_output_length(lengths)
+
 
 class MultiHeadAttention(nn.Module, ABC):
  """Базовый класс для механизма внимания"""
@@ -411,7 +412,6 @@ class RelPositionMultiHeadAttention(MultiHeadAttention):
   scores = (matrix_ac + matrix_bd) / math.sqrt(self.d_k)
 
   return self.forward_attention(v, scores, mask)
-
 
 class RotaryPositionMultiHeadAttention(MultiHeadAttention):
  """Attention с rotary позиционными эмбеддингами"""
@@ -514,9 +514,7 @@ class RotaryPositionalEmbedding(PositionalEncoding):
 
   return x, [cos_emb, sin_emb]
 
-
-class ConformerConvolution(nn.Module):
- """Сверточный модуль Conformer"""
+class ConformerConvolution(nn.Module):# Сверточный модуль Conformer"""
 
  def __init__(self, d_model: int, kernel_size: int, norm_type: str):
   super().__init__()
@@ -525,8 +523,8 @@ class ConformerConvolution(nn.Module):
 
   self.norm_type = norm_type
   self.pointwise_conv1 = nn.Conv1d(d_model, d_model * 2, kernel_size=1)
-  self.depthwise_conv = nn.Conv1d(   in_channels=d_model,   out_channels=d_model,
-   kernel_size=kernel_size,   padding=(kernel_size - 1) // 2,   groups=d_model,  bias=True  )
+  self.depthwise_conv = nn.Conv1d(in_channels=d_model, out_channels=d_model,
+                                  kernel_size=kernel_size, padding=(kernel_size - 1) // 2, groups=d_model, bias=True)
   self.batch_norm = nn.BatchNorm1d(d_model) if norm_type == "batch_norm" else nn.LayerNorm(d_model)
   self.activation = nn.SiLU()
   self.pointwise_conv2 = nn.Conv1d(d_model, d_model, kernel_size=1)
@@ -551,9 +549,7 @@ class ConformerConvolution(nn.Module):
 
   return x.transpose(1, 2)
 
-
-class ConformerFeedForward(nn.Module):
- """FeedForward слой Conformer"""
+class ConformerFeedForward(nn.Module):# FeedForward слой Conformer"""
 
  def __init__(self, d_model: int, d_ff: int, use_bias=True):
   super().__init__()
@@ -622,12 +618,9 @@ class ConformerLayer(nn.Module):
 
   # Output
   x = self.norm_out(residual)
-
   return x
 
-
-class ConformerEncoder(nn.Module):
- """Conformer энкодер"""
+class ConformerEncoder(nn.Module):#"Conformer энкодер"""
 
  def __init__(self, feat_in: int = 64, n_layers: int = 16, d_model: int = 768,
               subsampling_factor: int = 4, ff_expansion_factor: int = 4,
@@ -644,9 +637,9 @@ class ConformerEncoder(nn.Module):
   conv_norm_type = conv_norm_type if conv_norm_type is not None else kwargs.get("conv_norm_type", "batch_norm")
 
   # Субсэмплирование
-  self.pre_encode = StridingSubsampling( subsampling=subsampling,
-   kernel_size=subs_kernel_size, subsampling_factor=subsampling_factor,
-   feat_in=feat_in, feat_out=d_model,  conv_channels=d_model  )
+  self.pre_encode = StridingSubsampling(subsampling=subsampling,
+                                        kernel_size=subs_kernel_size, subsampling_factor=subsampling_factor,
+                                        feat_in=feat_in, feat_out=d_model, conv_channels=d_model)
 
   self.pos_emb_max_len = pos_emb_max_len
 
@@ -659,9 +652,9 @@ class ConformerEncoder(nn.Module):
   # Слои Conformer
   self.layers = nn.ModuleList()
   for _ in range(n_layers):
-   layer = ConformerLayer(  d_model=d_model,  d_ff=d_model * ff_expansion_factor,
-    self_attention_model=self_attention_model,
-    n_heads=n_heads,  conv_norm_type=conv_norm_type,  conv_kernel_size=conv_kernel_size  )
+   layer = ConformerLayer(d_model=d_model, d_ff=d_model * ff_expansion_factor,
+                          self_attention_model=self_attention_model,
+                          n_heads=n_heads, conv_norm_type=conv_norm_type, conv_kernel_size=conv_kernel_size)
    self.layers.append(layer)
 
  def forward(self, audio_signal: Tensor, length: Tensor) -> Tuple[Tensor, Tensor]:
@@ -692,6 +685,7 @@ class ConformerEncoder(nn.Module):
    audio_signal = layer(x=audio_signal, pos_emb=pos_emb, att_mask=att_mask, pad_mask=pad_mask)
 
   return audio_signal.transpose(1, 2), length
+
 
 def get_pipeline() -> Pipeline:
  """Создает или возвращает кэшированный VAD пайплайн"""
@@ -724,26 +718,26 @@ def get_pipeline() -> Pipeline:
     max_duration - уменьшить с 22.0 до 15.0-18.0 секунд
     Для твоей речи:  Паузы могут быть длиннее обычных →
     слишком большой min_duration заставляет модель тащить сегмент дальше, даже когда качество уже падает.
-    
+
     🟢 Оптимум: 6–8 секунд    3️⃣ strict_limit_duration
     strict_limit_duration: float = 60.0        
     Что это:   Жёсткий потолок.
     Если VAD “залип” и не видит пауз — сегмент принудительно режется.
-    
+
     🔴 60 секунд — слишком опасно   🟢 Оптимум: 20–25 секунд
-    
+
     4️⃣ new_chunk_threshold    new_chunk_threshold: float = 0.6     
     Самый важный параметр для тебя.    Что это:
     Минимальная пауза (в секундах), которая считается “настоящей”.
      меньше → игнорируется    больше → можно закрывать сегмент
-    
+
     При ДЦП:    паузы часто неровные
-    
+
     есть микро-остановки    дыхание может сбивать VAD
-    
+
     🔴 0.2–0.3 → модель режет слишком часто
     🟢 0.8–1.2 → модель терпеливее, но не тянет до деградации
-    
+
     🔧 Рекомендованные настройки именно для тебя
     ⭐ Баланс качества и стабильности (РЕКОМЕНДУЮ)
 segments, boundaries = segment_audio_file(
@@ -765,7 +759,8 @@ segments, boundaries = segment_audio_file(
     new_chunk_threshold=1.2
 )
 '''
- #Максимальное качество (если хватает CPU / RAM)
+ # Максимальное качество (если хватает CPU / RAM)
+
 
 def segment_audio_file(wav_input: Union[np.ndarray, Tensor], sr: int,
                        max_duration: float = 10.0, min_duration: float = 50.0,
@@ -824,6 +819,7 @@ def segment_audio_file(wav_input: Union[np.ndarray, Tensor], sr: int,
   _update_segments(curr_start, curr_end, curr_duration)
  return segments, boundaries
 
+
 def infer_onnx(wav_input: Union[str, np.ndarray, Tensor], model_cfg: omegaconf.DictConfig,
                sessions: List[rt.InferenceSession], preprocessor: Optional[FeatureExtractor] = None,
                tokenizer: Optional[Tokenizer] = None, sample_rate: int = 16000) -> Union[str, np.ndarray]:
@@ -831,12 +827,12 @@ def infer_onnx(wav_input: Union[str, np.ndarray, Tensor], model_cfg: omegaconf.D
  model_name = model_cfg.model_name
 
  if preprocessor is None:
-  preprocessor = FeatureExtractor(  sample_rate=16000,
-   features=model_cfg.preprocessor.features  )
+  preprocessor = FeatureExtractor(sample_rate=16000,
+                                  features=model_cfg.preprocessor.features)
 
  if tokenizer is None and ("ctc" in model_name or "rnnt" in model_name):
-  tokenizer = Tokenizer(   model_cfg.decoding.vocabulary,
-   model_cfg.decoding.get("model_path")  )
+  tokenizer = Tokenizer(model_cfg.decoding.vocabulary,
+                        model_cfg.decoding.get("model_path"))
 
  input_signal = load_audio(wav_input, sample_rate=sample_rate)
  input_signal = preprocessor(input_signal.unsqueeze(0), torch.tensor([input_signal.shape[-1]]))[0].numpy()
@@ -897,6 +893,7 @@ def infer_onnx(wav_input: Union[str, np.ndarray, Tensor], model_cfg: omegaconf.D
      break
  return tokenizer.decode(token_ids)
 
+
 def load_onnx(onnx_dir: str, model_version: str) -> Tuple[List[rt.InferenceSession], Union[omegaconf.DictConfig, omegaconf.ListConfig]]:
  """Загружает ONNX модель для быстрого CPU инференса"""
  opts = rt.SessionOptions()
@@ -923,15 +920,18 @@ def load_onnx(onnx_dir: str, model_version: str) -> Tuple[List[rt.InferenceSessi
 
  return sessions, model_cfg
 
+
 def rtt_half(x: Tensor) -> Tensor:
  """Rotary преобразование для половины вектора"""
  x1, x2 = x[..., : x.shape[-1] // 2], x[..., x.shape[-1] // 2:]
  return torch.cat([-x2, x1], dim=x1.ndim - 1)
 
+
 def apply_rotary_pos_emb(q: Tensor, k: Tensor, cos: Tensor, sin: Tensor, offset: int = 0) -> Tuple[Tensor, Tensor]:
  """Применяет rotary позиционные эмбеддинги"""
  cos, sin = (cos[offset: q.shape[0] + offset, ...], sin[offset: q.shape[0] + offset, ...])
  return (q * cos) + (rtt_half(q) * sin), (k * cos) + (rtt_half(k) * sin)
+
 
 class GigaAM(nn.Module):
  """Базовый класс для моделей GigaAM"""
@@ -1005,7 +1005,8 @@ class GigaAM(nn.Module):
   length = torch.full([1], wav.shape[-1])
   return wav, length
 
-class GigaAMASR(GigaAM):# Модель для распознавания речи"""
+
+class GigaAMASR(GigaAM):  # Модель для распознавания речи"""
  def __init__(self, cfg: omegaconf.DictConfig):
   super().__init__(cfg)
 
@@ -1059,6 +1060,7 @@ class GigaAMASR(GigaAM):# Модель для распознавания реч�
 
    return transcribed_segments
 
+
 def _download_file(file_url: str, file_path: str, force: bool = False) -> str:
  # Скачивает файл с прогресс-баром"""
  if os.path.exists(file_path) and not force:
@@ -1076,6 +1078,7 @@ def _download_file(file_url: str, file_path: str, force: bool = False) -> str:
     output.write(buffer)
     loop.update(len(buffer))
  return file_path
+
 
 def _download_model(model_name: str, download_root: str, force: bool = False) -> Tuple[str, str]:
  """Скачивает модель если её нет"""
@@ -1097,6 +1100,7 @@ def _download_model(model_name: str, download_root: str, force: bool = False) ->
   logging.info(f"Downloading model to {model_path}")
  return model_name, _download_file(model_url, model_path, force)
 
+
 def _download_tokenizer(model_name: str, download_root: str, force: bool = False) -> Optional[str]:
  # Скачивает токенизатор если нужно
  if model_name != "v1_rnnt" and "e2e" not in model_name:
@@ -1110,6 +1114,7 @@ def _download_tokenizer(model_name: str, download_root: str, force: bool = False
   logging.info(f"Downloading tokenizer to {tokenizer_path}")
 
  return _download_file(tokenizer_url, tokenizer_path, force)
+
 
 def check_model_exists(model_name: str, download_root: str) -> bool:
  # Проверяет существует ли модель"""
@@ -1130,32 +1135,17 @@ def check_model_exists(model_name: str, download_root: str) -> bool:
    return False
  return True
 
+
 def _normalize_device(device: Optional[Union[str, torch.device]]) -> torch.device:
  """Нормализует устройство - всегда возвращает CPU"""
  return torch.device("cpu")
 
-class GigaAMEmo(GigaAM):# Модель для распознавания эмоций"""
- def __init__(self, cfg: omegaconf.DictConfig):
-  super().__init__(cfg)
-  self.head = nn.Linear(cfg.head.in_features, cfg.head.out_features)
-  self.id2name = cfg.id2name
 
- def get_probs(self, wav_input: Union[str, np.ndarray, Tensor], sample_rate: int = SAMPLE_RATE) -> Dict[str, float]:
-  """Определяет эмоции в аудио"""
-  wav, length = self.prepare_wav(wav_input, sample_rate=sample_rate)
-  encoded, _ = self.forward(wav, length)
-  # Пулинг по времени
-  encoded_pooled = nn.functional.avg_pool1d(encoded, kernel_size=encoded.shape[-1]).squeeze(-1)
-  logits = self.head(encoded_pooled)[0]
-  # Вероятности эмоций
-  probs = nn.functional.softmax(logits, dim=-1).detach().tolist()
-  return {self.id2name[i]: probs[i] for i in range(len(self.id2name))}
-
-def load_model( model_name: str, download_root: Optional[str] = None,  # 4. Корневой каталог для загрузки моделей
-  force_download: bool = False,  # 5. Принудительная перезагрузка модели
-  fp16_encoder: bool = True,  # 1. Игнорируется, т.к. FP16 полезен только на GPU
-  use_flash: Optional[bool] = False,  # 2. Игнорируется, т.к. FlashAttention не поддерживается на CPU
-  device: Optional[Union[str, torch.device]] = None  ) -> Union[GigaAM, GigaAMEmo, GigaAMASR]: # 3. Игнорируется, модель всегда загружается на CPU
+def load_model(model_name: str, download_root: Optional[str] = None,  # 4. Корневой каталог для загрузки моделей
+               force_download: bool = False,  # 5. Принудительная перезагрузка модели
+               fp16_encoder: bool = True,  # 1. Игнорируется, т.к. FP16 полезен только на GPU
+               use_flash: Optional[bool] = False,  # 2. Игнорируется, т.к. FlashAttention не поддерживается на CPU
+               device: Optional[Union[str, torch.device]] = None) -> Union[GigaAM, GigaAMASR]:  # 3. Игнорируется, модель всегда загружается на CPU
  """ Быстрая загрузка модели для CPU
  Args:
      model_name: Имя модели (ctc, rnnt, emo, ssl и т.д.)
@@ -1172,7 +1162,7 @@ def load_model( model_name: str, download_root: Optional[str] = None,  # 4. Ко
   raise ValueError("download_root must be specified")
  os.makedirs(download_root, exist_ok=True)
 
- device_obj = torch.device("cpu") # Всегда используем CPU для совместимости
+ device_obj = torch.device("cpu")  # Всегда используем CPU для совместимости
 
  # Проверяем и скачиваем модель если нужно
  if not check_model_exists(model_name, download_root) or force_download:
@@ -1195,7 +1185,7 @@ def load_model( model_name: str, download_root: Optional[str] = None,  # 4. Ко
      f"Model checksum failed for {model_name}. "
      f"Expected {expected_hash}, got {actual_hash}. "
      f"Please delete {model_path} and reload the model, "
-     f"or use force_download=True to re-download automatically."  )
+     f"or use force_download=True to re-download automatically.")
 
  if not os.path.exists(model_path):
   raise FileNotFoundError(f"Model file not found: {model_path}. Please check the download directory.")
@@ -1227,8 +1217,6 @@ def load_model( model_name: str, download_root: Optional[str] = None,  # 4. Ко
  # Создаем нужный тип модели
  if "ssl" in model_name:
   model = GigaAM(cfg)
- elif "emo" in model_name:
-  model = GigaAMEmo(cfg)
  else:
   model = GigaAMASR(cfg)
 
@@ -1242,7 +1230,7 @@ def load_model( model_name: str, download_root: Optional[str] = None,  # 4. Ко
  # Отключаем autograd для инференса
  for param in model.parameters():
   param.requires_grad = False
- try: # Компилируем модель для ускорения (PyTorch 2.0+)
+ try:  # Компилируем модель для ускорения (PyTorch 2.0+)
   if hasattr(torch, 'compile'):
    model = torch.compile(model, mode="reduce-overhead")
  except:
@@ -1252,4 +1240,4 @@ def load_model( model_name: str, download_root: Optional[str] = None,  # 4. Ко
 
 
 # Экспорт основных функций
-__all__ = ["GigaAM", "GigaAMASR", "GigaAMEmo", "load_audio", "load_model"]
+__all__ = ["GigaAM", "GigaAMASR", "load_audio", "load_model"]
