@@ -1,6 +1,4 @@
-import sys
-import os
-import shutil
+import sys, os, shutil
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QGridLayout, QComboBox, QPushButton, QLabel, QInputDialog, QDialog,
                              QFrame, QGraphicsDropShadowEffect, QMessageBox, QSizePolicy, QLineEdit)
