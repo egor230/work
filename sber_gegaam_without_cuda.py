@@ -238,7 +238,7 @@ class RNNTGreedyDecoding:
  def __init__(self, vocabulary: List[str], model_path: Optional[str] = None, max_symbols_per_step: int = 30):
   self.tokenizer = Tokenizer(vocabulary, model_path)# по умолчанию 10
   self.blank_id = len(self.tokenizer)
-  self.max_symbols = max_symbols_per_step  # Макс. символов на шаг
+  self.max_symbols = 50  # Макс. символов на шаг
 
  def _greedy_decode(self, head: RNNTHead, x: Tensor, seqlen: Tensor) -> str:
   hyp: List[int] = []  # Список предсказанных ID
@@ -258,7 +258,7 @@ class RNNTGreedyDecoding:
     max_prob = joint_out[0, 0, 0, :].max().exp()  # Уверенность
 
     # Проверяем, не blank ли это и достаточно ли уверенности
-    if k == self.blank_id or max_prob.item() < 0.5: # это порог уверенности в слове
+    if k == self.blank_id or max_prob.item() < 0.4: # это порог уверенности в слове
      not_blank = False
     else:
      hyp.append(int(k))
@@ -334,7 +334,6 @@ class StridingSubsampling(nn.Module):
    x = self.conv(x.transpose(1, 2)).transpose(1, 2)
 
   return x, self.calc_output_length(lengths)
-
 
 class MultiHeadAttention(nn.Module, ABC):
  """Базовый класс для механизма внимания"""
@@ -645,14 +644,9 @@ class ConformerEncoder(nn.Module):
   conv_norm_type = conv_norm_type if conv_norm_type is not None else kwargs.get("conv_norm_type", "batch_norm")
 
   # Субсэмплирование
-  self.pre_encode = StridingSubsampling(
-   subsampling=subsampling,
-   kernel_size=subs_kernel_size,
-   subsampling_factor=subsampling_factor,
-   feat_in=feat_in,
-   feat_out=d_model,
-   conv_channels=d_model
-  )
+  self.pre_encode = StridingSubsampling( subsampling=subsampling,
+   kernel_size=subs_kernel_size, subsampling_factor=subsampling_factor,
+   feat_in=feat_in, feat_out=d_model,  conv_channels=d_model  )
 
   self.pos_emb_max_len = pos_emb_max_len
 
@@ -665,14 +659,9 @@ class ConformerEncoder(nn.Module):
   # Слои Conformer
   self.layers = nn.ModuleList()
   for _ in range(n_layers):
-   layer = ConformerLayer(
-    d_model=d_model,
-    d_ff=d_model * ff_expansion_factor,
+   layer = ConformerLayer(  d_model=d_model,  d_ff=d_model * ff_expansion_factor,
     self_attention_model=self_attention_model,
-    n_heads=n_heads,
-    conv_norm_type=conv_norm_type,
-    conv_kernel_size=conv_kernel_size
-   )
+    n_heads=n_heads,  conv_norm_type=conv_norm_type,  conv_kernel_size=conv_kernel_size  )
    self.layers.append(layer)
 
  def forward(self, audio_signal: Tensor, length: Tensor) -> Tuple[Tensor, Tensor]:
@@ -833,9 +822,7 @@ def segment_audio_file(wav_input: Union[np.ndarray, Tensor], sr: int,
  # Добавляем последний сегмент
  if curr_duration > new_chunk_threshold:
   _update_segments(curr_start, curr_end, curr_duration)
-
  return segments, boundaries
-
 
 def infer_onnx(wav_input: Union[str, np.ndarray, Tensor], model_cfg: omegaconf.DictConfig,
                sessions: List[rt.InferenceSession], preprocessor: Optional[FeatureExtractor] = None,
@@ -844,16 +831,12 @@ def infer_onnx(wav_input: Union[str, np.ndarray, Tensor], model_cfg: omegaconf.D
  model_name = model_cfg.model_name
 
  if preprocessor is None:
-  preprocessor = FeatureExtractor(
-   sample_rate=16000,
-   features=model_cfg.preprocessor.features
-  )
+  preprocessor = FeatureExtractor(  sample_rate=16000,
+   features=model_cfg.preprocessor.features  )
 
  if tokenizer is None and ("ctc" in model_name or "rnnt" in model_name):
-  tokenizer = Tokenizer(
-   model_cfg.decoding.vocabulary,
-   model_cfg.decoding.get("model_path")
-  )
+  tokenizer = Tokenizer(   model_cfg.decoding.vocabulary,
+   model_cfg.decoding.get("model_path")  )
 
  input_signal = load_audio(wav_input, sample_rate=sample_rate)
  input_signal = preprocessor(input_signal.unsqueeze(0), torch.tensor([input_signal.shape[-1]]))[0].numpy()
@@ -1020,13 +1003,9 @@ class GigaAM(nn.Module):
 
   wav = wav.unsqueeze(0)
   length = torch.full([1], wav.shape[-1])
-
   return wav, length
 
-
-class GigaAMASR(GigaAM):
- """Модель для распознавания речи"""
-
+class GigaAMASR(GigaAM):# Модель для распознавания речи"""
  def __init__(self, cfg: omegaconf.DictConfig):
   super().__init__(cfg)
 
@@ -1080,32 +1059,8 @@ class GigaAMASR(GigaAM):
 
    return transcribed_segments
 
-
-class GigaAMEmo(GigaAM):
- """Модель для распознавания эмоций"""
-
- def __init__(self, cfg: omegaconf.DictConfig):
-  super().__init__(cfg)
-  self.head = nn.Linear(cfg.head.in_features, cfg.head.out_features)
-  self.id2name = cfg.id2name
-
- def get_probs(self, wav_input: Union[str, np.ndarray, Tensor], sample_rate: int = SAMPLE_RATE) -> Dict[str, float]:
-  """Определяет эмоции в аудио"""
-  wav, length = self.prepare_wav(wav_input, sample_rate=sample_rate)
-  encoded, _ = self.forward(wav, length)
-
-  # Пулинг по времени
-  encoded_pooled = nn.functional.avg_pool1d(encoded, kernel_size=encoded.shape[-1]).squeeze(-1)
-  logits = self.head(encoded_pooled)[0]
-
-  # Вероятности эмоций
-  probs = nn.functional.softmax(logits, dim=-1).detach().tolist()
-
-  return {self.id2name[i]: probs[i] for i in range(len(self.id2name))}
-
-
 def _download_file(file_url: str, file_path: str, force: bool = False) -> str:
- """Скачивает файл с прогресс-баром"""
+ # Скачивает файл с прогресс-баром"""
  if os.path.exists(file_path) and not force:
   return file_path
 
@@ -1120,9 +1075,7 @@ def _download_file(file_url: str, file_path: str, force: bool = False) -> str:
      break
     output.write(buffer)
     loop.update(len(buffer))
-
  return file_path
-
 
 def _download_model(model_name: str, download_root: str, force: bool = False) -> Tuple[str, str]:
  """Скачивает модель если её нет"""
@@ -1145,10 +1098,9 @@ def _download_model(model_name: str, download_root: str, force: bool = False) ->
  return model_name, _download_file(model_url, model_path, force)
 
 def _download_tokenizer(model_name: str, download_root: str, force: bool = False) -> Optional[str]:
- """Скачивает токенизатор если нужно"""
+ # Скачивает токенизатор если нужно
  if model_name != "v1_rnnt" and "e2e" not in model_name:
   return None
-
  tokenizer_url = f"{_URL_DIR}/{model_name}_tokenizer.model"
  tokenizer_path = os.path.join(download_root, f"{model_name}_tokenizer.model")
 
@@ -1159,9 +1111,8 @@ def _download_tokenizer(model_name: str, download_root: str, force: bool = False
 
  return _download_file(tokenizer_url, tokenizer_path, force)
 
-
 def check_model_exists(model_name: str, download_root: str) -> bool:
- """Проверяет существует ли модель"""
+ # Проверяет существует ли модель"""
  short_names = ["ctc", "rnnt", "e2e_ctc", "e2e_rnnt", "ssl"]
  if model_name in short_names:
   model_name = f"v3_{model_name}"
@@ -1183,35 +1134,45 @@ def _normalize_device(device: Optional[Union[str, torch.device]]) -> torch.devic
  """Нормализует устройство - всегда возвращает CPU"""
  return torch.device("cpu")
 
+class GigaAMEmo(GigaAM):# Модель для распознавания эмоций"""
+ def __init__(self, cfg: omegaconf.DictConfig):
+  super().__init__(cfg)
+  self.head = nn.Linear(cfg.head.in_features, cfg.head.out_features)
+  self.id2name = cfg.id2name
 
-def load_model( model_name: str,
-  download_root: Optional[str] = None,  # 4. Корневой каталог для загрузки моделей
+ def get_probs(self, wav_input: Union[str, np.ndarray, Tensor], sample_rate: int = SAMPLE_RATE) -> Dict[str, float]:
+  """Определяет эмоции в аудио"""
+  wav, length = self.prepare_wav(wav_input, sample_rate=sample_rate)
+  encoded, _ = self.forward(wav, length)
+  # Пулинг по времени
+  encoded_pooled = nn.functional.avg_pool1d(encoded, kernel_size=encoded.shape[-1]).squeeze(-1)
+  logits = self.head(encoded_pooled)[0]
+  # Вероятности эмоций
+  probs = nn.functional.softmax(logits, dim=-1).detach().tolist()
+  return {self.id2name[i]: probs[i] for i in range(len(self.id2name))}
+
+def load_model( model_name: str, download_root: Optional[str] = None,  # 4. Корневой каталог для загрузки моделей
   force_download: bool = False,  # 5. Принудительная перезагрузка модели
   fp16_encoder: bool = True,  # 1. Игнорируется, т.к. FP16 полезен только на GPU
   use_flash: Optional[bool] = False,  # 2. Игнорируется, т.к. FlashAttention не поддерживается на CPU
-  device: Optional[Union[str, torch.device]] = None  # 3. Игнорируется, модель всегда загружается на CPU
-) -> Union[GigaAM, GigaAMEmo, GigaAMASR]:
- """
- Быстрая загрузка модели для CPU
-
+  device: Optional[Union[str, torch.device]] = None  ) -> Union[GigaAM, GigaAMEmo, GigaAMASR]: # 3. Игнорируется, модель всегда загружается на CPU
+ """ Быстрая загрузка модели для CPU
  Args:
      model_name: Имя модели (ctc, rnnt, emo, ssl и т.д.)
+     download_root: Каталог для загрузки моделей
      fp16_encoder: Игнорируется (только для GPU)
      use_flash: Игнорируется (FlashAttention не поддерживается на CPU)
      device: Игнорируется (модель всегда загружается на CPU)
-     download_root: Каталог для загрузки моделей
      force_download: Принудительно перезагрузить модель
 
  Returns:
      Загруженная и готовая к использованию модель
  """
- # Всегда используем CPU для совместимости
- device_obj = torch.device("cpu")
-
  if download_root is None:
   raise ValueError("download_root must be specified")
-
  os.makedirs(download_root, exist_ok=True)
+
+ device_obj = torch.device("cpu") # Всегда используем CPU для совместимости
 
  # Проверяем и скачиваем модель если нужно
  if not check_model_exists(model_name, download_root) or force_download:
@@ -1224,7 +1185,6 @@ def load_model( model_name: str,
  if os.path.exists(model_path):
   actual_hash = hashlib.md5(open(model_path, "rb").read()).hexdigest()
   expected_hash = _MODEL_HASHES.get(model_name)
-
   if expected_hash and actual_hash != expected_hash:
    if force_download:
     logging.warning(f"Model hash mismatch: expected {expected_hash}, got {actual_hash}. Re-downloading...")
@@ -1235,8 +1195,7 @@ def load_model( model_name: str,
      f"Model checksum failed for {model_name}. "
      f"Expected {expected_hash}, got {actual_hash}. "
      f"Please delete {model_path} and reload the model, "
-     f"or use force_download=True to re-download automatically."
-    )
+     f"or use force_download=True to re-download automatically."  )
 
  if not os.path.exists(model_path):
   raise FileNotFoundError(f"Model file not found: {model_path}. Please check the download directory.")
@@ -1283,16 +1242,12 @@ def load_model( model_name: str,
  # Отключаем autograd для инференса
  for param in model.parameters():
   param.requires_grad = False
-
- # Компилируем модель для ускорения (PyTorch 2.0+)
- try:
+ try: # Компилируем модель для ускорения (PyTorch 2.0+)
   if hasattr(torch, 'compile'):
    model = torch.compile(model, mode="reduce-overhead")
  except:
   pass  # Если компиляция не поддерживается, работаем как есть
-
  cfg.model_name = model_name
-
  return model.to(device_obj)
 
 

@@ -56,64 +56,53 @@ def update_label(root, label, model, source_id):
     if not get_mute_status(source_id):
       root.withdraw()
     else:
-      # Показ окна с начальной надписью
-      root.geometry("100x20+700+1025")
-      label.config(text="Говорите...")
-      root.deiconify()
-      root.update()
-      fs = 16*1000
-      buffer = collections.deque()  # ИЗМЕНЕНО: используем список вместо Queue
-      silence_time = 0
-      last_speech_time = time.time()
-      min_silence_duration = 1.0
-      start= False
-      pause_count = 0
-      # buffer1 = collections.deque()
-      with sd.InputStream(samplerate=fs, channels=1, dtype='float32') as stream:
-       while True:
-        if not get_mute_status(source_id):
+     # Показ окна с начальной надписью
+     root.geometry("100x20+700+1025")
+     label.config(text="Говорите...")
+     root.deiconify()
+     root.update()
+     fs = 16*1000
+     buffer = collections.deque()  # ИЗМЕНЕНО: используем список вместо Queue
+     silence_time = 0
+     last_speech_time = time.time()
+     min_silence_duration = 1.0
+     start= False
+     pause_count = 0
+     # buffer1 = collections.deque()
+     with sd.InputStream(samplerate=fs, channels=1, dtype='float32') as stream:
+      while True:
+       if not get_mute_status(source_id):
+         root.withdraw()
+       else:
+        audio_chunk, overflowed = stream.read(16096)  # Читаем аудио порциями
+        mean_amp = np.mean(np.abs(audio_chunk)) * 100
+        mean_amp = math.ceil(mean_amp)#
+        if mean_amp > 4:#
+         last_speech_time = time.time()
+         silence_time = 0
+         start = True
+        if start:
+         buffer.append(audio_chunk.astype(np.float32).flatten())
+         if mean_amp <6:
+          pause_count += 1  # Начало паузы
+         if silence_time > min_silence_duration:
           root.withdraw()
-        else:
-         audio_chunk, overflowed = stream.read(16096)  # Читаем аудио порциями
-         mean_amp = np.mean(np.abs(audio_chunk)) * 100
-         mean_amp = math.ceil(mean_amp)#
-         if mean_amp > 4:#
+          array = np.concatenate(buffer)
+          duration = len(array) / fs
+          if duration > 4:
+           start= False
+          break
+         else:
+          silence_time += time.time() - last_speech_time
           last_speech_time = time.time()
-          silence_time = 0
-          start = True
-         if start:
-          buffer.append(audio_chunk.astype(np.float32).flatten())
-          if mean_amp <6:
-           pause_count += 1  # Начало паузы
-          if silence_time > min_silence_duration:
-           root.withdraw()
-           array = np.concatenate(buffer)
-           duration = len(array) / fs
-           if duration > 4:
-            start= False
-           break
-          else:
-           silence_time += time.time() - last_speech_time
-           last_speech_time = time.time()
-      root.withdraw()#
-      if is_speech(0.030, array):
-
-       print(f"Пауз обнаружено: {pause_count}")
-       pause_count=0
-       message = model.transcribe(array)
-          # buffer1.extend(audio_chunk.flatten())
-          # if mean_amp<7:
-          #  print(mean_amp)
-          #  arr = np.array(buffer1)
-          #  buffer1.clear()
-          #  print( model.transcribe(arr))
-       # array = enhance_speech_for_recognition(array)
-       # write(filename, fs, array)
-       # message = model.transcribe_longform(filename)
-          # os.unlink(filename)
-       if message !=" " and len(message) >0:
-        threading.Thread(target=process_text, args=(message,), daemon=True).start()
-      buffer.clear()  # Сбрасываем буфер
+     root.withdraw()#
+     if is_speech(0.030, array):
+      print(f"Пауз обнаружено: {pause_count}")
+      pause_count=0
+      message = model.transcribe(array)
+      if message !=" " and len(message) >0:
+       threading.Thread(target=process_text, args=(message,), daemon=True).start()
+     buffer.clear()  # Сбрасываем буфер
     root.after(1000, lambda: update_label(root, label, model, source_id))
   except Exception as e:
     print(f"Ошибка: {e}")  # Добавьте остановку потока в случае ошибки
@@ -141,6 +130,17 @@ root.resizable(True, True)
 root.attributes("-topmost", True)
 update_label(root, label, model, source_id)
 root.mainloop()
+
+# buffer1.extend(audio_chunk.flatten())
+# if mean_amp<7:
+#  print(mean_amp)
+#  arr = np.array(buffer1)
+#  buffer1.clear()
+#  print( model.transcribe(arr))
+# array = enhance_speech_for_recognition(array)
+# write(filename, fs, array)
+# message = model.transcribe_longform(filename)
+# os.unlink(filename)
 '''
 pip install \
   torch==2.5.1 \
