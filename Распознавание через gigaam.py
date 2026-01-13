@@ -50,6 +50,18 @@ model = check_model()
 print(time.time() - t)
 threading.Thread(target=run_script, daemon=True).start()# print("Скрипт запущен заново.")
 
+
+def boost_by_db_range(audio_array, low_db, high_db, boost=3):
+ # Переводим в dBFS, избегаем логарифма нуля
+ abs_audio = np.abs(audio_array)
+ db_vals = 20 * np.log10(abs_audio + 1e-9)
+ # Создаем маску для участка, попадающего в диапазон
+ mask = (db_vals >= low_db) & (db_vals <= high_db)
+ # Коэффициент усиления (например, для 3dB это ~1.41)
+ factor = 10 ** (boost / 20)
+ # Применяем только к выбранным элементам
+ audio_array[mask] *= factor
+ return np.clip(audio_array, -1.0, 1.0)
 def update_label(root, label, model, source_id):
  def record_and_process():
   try:
@@ -62,13 +74,12 @@ def update_label(root, label, model, source_id):
      root.deiconify()
      root.update()
      fs = 16*1000
-     buffer = collections.deque()  # ИЗМЕНЕНО: используем список вместо Queue
      silence_time = 0
      last_speech_time = time.time()
      min_silence_duration = 1.0
      start= False
      pause_count = 0
-     # buffer1 = collections.deque()
+     buffer = collections.deque()  # ИЗМЕНЕНО: используем список вместо Queue
      with sd.InputStream(samplerate=fs, channels=1, dtype='float32') as stream:
       while True:
        if not get_mute_status(source_id):
@@ -83,20 +94,25 @@ def update_label(root, label, model, source_id):
          start = True
         if start:
          buffer.append(audio_chunk.astype(np.float32).flatten())
-         if mean_amp <6:
+         if mean_amp <9:
+          # array = np.fromiter((item for chunk in buffer for item in chunk), dtype=np.float32)
+          # text= model.transcribe(array)
+          # print(text)
           pause_count += 1  # Начало паузы
          if silence_time > min_silence_duration:
           root.withdraw()
-          array = np.concatenate(buffer)
+          array = np.fromiter((item for chunk in buffer for item in chunk), dtype=np.float32)
           duration = len(array) / fs
           if duration > 4:
            start= False
+           buffer.clear()  # Сбрасываем буфер
           break
          else:
           silence_time += time.time() - last_speech_time
           last_speech_time = time.time()
      root.withdraw()#
      if is_speech(0.030, array):
+      array = boost_by_db_range(array, -4,-20)
       print(f"Пауз обнаружено: {pause_count}")
       pause_count=0
       message = model.transcribe(array)

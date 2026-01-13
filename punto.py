@@ -179,41 +179,6 @@ class SmartTyper: # Основной класс для автозамены и �
   for label in self.suggestion_labels:
    label.pack(side=tk.LEFT, padx=3, fill=tk.X, expand=False)
 
- def _check_active_window_loop(self): # Проверяет активное окно в цикле
-  get_main_id = '''#!/bin/bash
-  active_window_id=$(xdotool getactivewindow 2>/dev/null)
-  if [ -n "$active_window_id" ]; then
-   process_id_active=$(xdotool getwindowpid "$active_window_id" 2>/dev/null)
-   echo "$process_id_active"
-  else
-   echo "0"
-  fi
-  exit'''
-  try:
-   while True:
-    time.sleep(1)
-    process_id = int(subprocess.run(['bash'], input=get_main_id, stdout=subprocess.PIPE, text=True).stdout.strip())
-    result = subprocess.run(['ps', 'aux'], stdout=subprocess.PIPE, text=True).stdout
-    lines = [line for line in result.splitlines() if self.user in line]
-    pattern = r"(\.exe|\.EXE)"
-    found = False
-    for line in lines:
-     dir_process_name = line.split(maxsplit=10)[10].replace('\\', '/')
-     if re.search(pattern, dir_process_name) and process_id == int(line.split()[1]):
-      file_path_lower = dir_process_name.lower()
-      if ".exe" or '/PortProton/data/scripts/start.sh' in file_path_lower and "winword.exe" not in file_path_lower:
-       self.disabled = True
-       self.current_word = ""
-       self.suggestions = []
-       self.abbrev_res = ""
-       self.root.after(0, self._do_hide_all)
-       found = True
-       break
-    if not found:
-     self.disabled = False
-  except Exception as e:
-   print(e)
-
  def _get_current_keyboard_layout(self):
    try:
      # Получаем LED mask из вывода xset -q
@@ -386,9 +351,51 @@ class SmartTyper: # Основной класс для автозамены и �
     return self.normalized_abbrevs[abbrev_key]
   return None
 
+ def _check_active_window_loop(self): # Проверяет активное окно в цикле
+  get_main_id = '''#!/bin/bash
+  active_window_id=$(xdotool getactivewindow 2>/dev/null)
+  if [ -n "$active_window_id" ]; then
+   process_id_active=$(xdotool getwindowpid "$active_window_id" 2>/dev/null)
+   echo "$process_id_active"
+  else
+   echo "0"
+  fi
+  exit'''
+  while True:
+   try:
+    found = False
+    time.sleep(1)
+    process_id = int(subprocess.run(['bash'], input=get_main_id, stdout=subprocess.PIPE, text=True).stdout.strip())
+    result = subprocess.run(['ps', 'aux'], stdout=subprocess.PIPE, text=True).stdout
+    lines = [line for line in result.splitlines() if self.user in line]
+    pattern = r"(\.exe|\.EXE)"
+    for line in lines:
+     dir_process_name = line.split(maxsplit=10)[10].replace('\\', '/')
+     if re.search(pattern, dir_process_name) and process_id == int(line.split()[1]):
+      file_path_lower = dir_process_name.lower()
+      if ".exe" or '/PortProton/data/scripts/start.sh' in file_path_lower and "winword.exe" not in file_path_lower:
+       self.disabled = True
+       self.current_word = ""
+       self.suggestions = []
+       self.abbrev_res = ""
+       self.root.after(0, self._do_hide_all)
+       found = True
+       # print("game")
+       break
+    if not found:
+     # print("work")
+     self.disabled = False
+   except Exception as e:
+    print(e)
+    self.disabled = False
+    pass
+
  def _on_press(self, key): # Обрабатывает нажатия клавиш
-  if self.disabled or self.replacing:
-   return
+  if self.replacing:
+   self.clean()
+   return True
+  if self.disabled:
+   return True
   key_str = str(key).replace("'", "").replace(" ", "")#  print(key_str)
   if key_str =="<65437>":
    key_str="5"

@@ -23,7 +23,7 @@ export LAUNCH_PARAMETERS="-dx11 -skipintro 1"
 export PW_WINDOWS_VER="10"
 export PW_DLL_INSTALL="vcrun2019 corefonts lucida"
 export WINEDLLOVERRIDES="d3dx9_36,d3dx9_42=n,b;mfc120=b,n,d3d8,d3d9,ddraw,dinput8,dsound=n,b"
-export PW_VULKAN_USE=2
+export PW_VULKAN_USE="6"
 export PW_USE_D3D_EXTRAS="1"
 export PW_FIX_VIDEO_IN_GAME="1"
 export LC_ALL=ru_RU.UTF-8 # Локализация (опционально)
@@ -34,7 +34,6 @@ export PW_VKD3D_FEATURE_LEVEL="12_2"
 export PW_LOCALE_SELECT="ru_RU.utf"
 export FPS_LIMIT="90"
 export PW_USE_FSYNC="1"
-export PW_WINE_FULLSCREEN_FSR="0"
 export PW_GUI_DISABLED_CS="0"
 export PW_USE_GAMEMODE="1"
 export PW_USE_GSTREAMER="1"
@@ -50,15 +49,18 @@ export PW_MESA_VK_WSI_PRESENT_MODE="mailbox"
 export PW_MANGOHUD="1"
 export PW_MANGOHUD_USER_CONF="0"
 export MANGOHUD_CONFIG="fps_metrics,horizontal,horizontal_stretch,hud_compact,font_size=24"
+export PW_WINE_FULLSCREEN_FSR="1"
+export WINE_FULLSCREEN_FSR="1"
+export WINE_FULLSCREEN_FSR_STRENGTH="3"
 # Пути
 WINEPREFIX_PATH="/home/egor/PortProton/data/prefixes/DEFAULT"
-WINE_PATH="/home/egor/PortProton/data/dist/PROTON-SAREK10-15-ASYNC"
+WINE_PATH="/home/egor/PortProton/data/dist/PROTON-SAREK10-17-ASYNC"
 # Параметры gamescope
 GAMESCOPE_ARGS="-f -W 1920 -H 1080 -w 1920 -h 1080 -r 90 -S auto -F fsr --sharpness 20"
 
 GAME_PATH=\"{0}\"
 # Параметры gamescope
-GAMESCOPE_ARGS="-f --force-windows-fullscreen -W 1920 -H 1080 -w 1920 -h 1080 -r 90 -S auto -F fsr --sharpness 20"
+GAMESCOPE_ARGS="-f --fullscreen -W 1920 -H 1080 -w 1280 -h 720 -r 90 -S auto -F fsr --sharpness 20"
 
 # Назначаем переменные
 export WINEPREFIX="$WINEPREFIX_PATH"
