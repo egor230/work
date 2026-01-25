@@ -20,55 +20,48 @@ full_path, directory, filename_without_extension, filename = get_paths_file()
 file1=str(os.path.join(directory, filename)).replace('\'','')
 show_list_id = '''#!/bin/bash
 export LAUNCH_PARAMETERS="-dx11 -skipintro 1"
-export PW_WINDOWS_VER="10"
-export PW_DLL_INSTALL="vcrun2019 corefonts lucida"
+export WINDOWS_VER="10"
+export DLL_INSTALL="vcrun2019 corefonts lucida"
 export WINEDLLOVERRIDES="d3dx9_36,d3dx9_42=n,b;mfc120=b,n,d3d8,d3d9,ddraw,dinput8,dsound=n,b"
-export PW_VULKAN_USE="6"
-export PW_USE_D3D_EXTRAS="1"
-export PW_FIX_VIDEO_IN_GAME="1"
+export VULKAN_USE="6"
 export LC_ALL=ru_RU.UTF-8 # Локализация (опционально)
 export LANG=ru_RU.UTF-8
-export PW_USE_SUPPLIED_DXVK_VKD3D="1"
-export PW_DLL_INSTALL="vcrun2019 corefonts lucida"
-export PW_VKD3D_FEATURE_LEVEL="12_2"
-export PW_LOCALE_SELECT="ru_RU.utf"
+export USE_SUPPLIED_DXVK_VKD3D="1"
+export DLL_INSTALL="vcrun2019 corefonts lucida"
+export VKD3D_FEATURE_LEVEL="12_2"
+export LOCALE_SELECT="ru_RU.utf"
 export FPS_LIMIT="90"
-export PW_USE_FSYNC="1"
-export PW_GUI_DISABLED_CS="0"
-export PW_USE_GAMEMODE="1"
-export PW_USE_GSTREAMER="1"
-export PW_FORCE_LARGE_ADDRESS_AWARE="1"
-export PW_USE_SHADER_CACHE="1"
-export PW_USE_RUNTIME="1"
-export PW_WINE_CPU_TOPOLOGY="disabled"
-export PW_MESA_GL_VERSION_OVERRIDE="disabled"
-export PW_VKD3D_FEATURE_LEVEL="disabled"
-export PW_LOCALE_SELECT="disabled"
-export PW_MESA_VK_WSI_PRESENT_MODE="mailbox"
+export USE_FSYNC="1"
+export GUI_DISABLED_CS="0"
+export USE_GAMEMODE="1"
+export USE_D3D_EXTRAS="1"
+export FIX_VIDEO_IN_GAME="1"
+export USE_GSTREAMER="1"
+export FORCE_LARGE_ADDRESS_AWARE="1"
+export USE_SHADER_CACHE="1"
+export USE_RUNTIME="1"
+export AMD_VULKAN_USE="radv"
+export MESA_VK_WSI_PRESENT_MODE="mailbox"
 # Включаем MangoHud
-export PW_MANGOHUD="1"
-export PW_MANGOHUD_USER_CONF="0"
-export MANGOHUD_CONFIG="fps_metrics,horizontal,horizontal_stretch,hud_compact,font_size=24"
-export PW_WINE_FULLSCREEN_FSR="1"
+# export MANGOHUD="1"
+# export MANGOHUD_USER_CONF="0"
+# export MANGOHUD_CONFIG="fps_metrics,horizontal,horizontal_stretch,hud_compact,font_size=24"
 export WINE_FULLSCREEN_FSR="1"
-export WINE_FULLSCREEN_FSR_STRENGTH="3"
-# Пути
-WINEPREFIX_PATH="/home/egor/PortProton/data/prefixes/DEFAULT"
-WINE_PATH="/home/egor/PortProton/data/dist/PROTON-SAREK10-17-ASYNC"
+export WINE_FULLSCREEN_FSR_STRENGTH="5"
+export SOUND_DRIVER_USE="alsa"
 # Параметры gamescope
 GAMESCOPE_ARGS="-f -W 1920 -H 1080 -w 1920 -h 1080 -r 90 -S auto -F fsr --sharpness 20"
+# GAMESCOPE_ARGS="-f --fullscreen -W 1920 -H 1080 -w 1280 -h 720 -r 90 -S auto -F fsr --sharpness 20"
 
-GAME_PATH=\"{0}\"
-# Параметры gamescope
-GAMESCOPE_ARGS="-f --fullscreen -W 1920 -H 1080 -w 1280 -h 720 -r 90 -S auto -F fsr --sharpness 20"
-
+# Пути
 # Назначаем переменные
-export WINEPREFIX="$WINEPREFIX_PATH"
+export WINEPREFIX="/home/egor/PortProton/data/prefixes/DEFAULT"
 
 # Запуск через gamescope
-gamescope $GAMESCOPE_ARGS -- "$WINE_PATH/bin/wine" "$GAME_PATH"
-
-exit; '''.format(file1)  # показать список устройств в терминале
+#gamescope $GAMESCOPE_ARGS -- "$WINE_PATH" "$GAME_PATH"
+cd \"{0}\"
+DXVK_HUD=fps gamescope -f -w 1920 -h 1080 -r 90 -- \"/home/egor/PortProton/data/dist/PROTON-SAREK10-17-ASYNC/bin/wine\" {1}
+exit; '''.format(file1, filename)  # показать список устройств в терминале
 file=str(os.path.join(directory, filename_without_extension))+".sh"
 with open(file, 'w') as file:    # Записываем текст в файл
     file.write(show_list_id)

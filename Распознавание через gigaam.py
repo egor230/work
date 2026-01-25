@@ -50,7 +50,6 @@ model = check_model()
 print(time.time() - t)
 threading.Thread(target=run_script, daemon=True).start()# print("Скрипт запущен заново.")
 
-
 def boost_by_db_range(audio_array, low_db, high_db, boost=3):
  # Переводим в dBFS, избегаем логарифма нуля
  abs_audio = np.abs(audio_array)

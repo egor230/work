@@ -1,6 +1,50 @@
 import os, subprocess, sys, time, pyperclip, requests, threading
 from datetime import datetime
+import subprocess
+import requests
+import os
 
+
+def save_image_from_clipboard():
+ try:
+  url = subprocess.check_output(["copyq", "read", "text/plain"], text=True).strip()
+  if not url.startswith("http"):
+   print("В буфере не ссылка:", url)
+   return
+
+  now = datetime.now()
+  base_path = "/mnt/807EB5FA7EB5E954/soft/.../Screenshots"
+  filename = f"{base_path}/{now:%H %M %S %Y-%m-%d}.png"
+  os.makedirs(base_path, exist_ok=True)
+
+  if os.path.exists(filename):
+   print("Файл уже существует")
+   return
+
+  print("Скачиваю:", url)
+
+  headers = {
+   "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+   "Accept": "image/avif,image/webp,*/*",
+   "Referer": "https://www.google.com/"  # иногда очень помогает
+  }
+
+  r = requests.get(url, headers=headers, timeout=12, verify=False)
+  r.raise_for_status()
+
+  with open(filename, "wb") as f:
+   f.write(r.content)
+
+  print("Сохранено:", filename)
+
+ except subprocess.CalledProcessError:
+  print("CopyQ не отвечает")
+ except requests.exceptions.RequestException as e:
+  print("Ошибка загрузки:", str(e))
+ except Exception as e:
+  print("Ошибка:", str(e))
+
+save_image_from_clipboard()
 def quit_script():
   result = str(subprocess.run(['ps', 'aux'], stdout=subprocess.PIPE, text=True).stdout)  # print(result)
   name_scrypt = sys.argv[0] # Вызываем скрипт
@@ -18,7 +62,7 @@ def quit_script():
 
 # quit_script()
 url=str(pyperclip.paste()) #copy(text)get_paths_file()
-
+print(url)
 # url = "https://preview.reve.art/api/project/fc228c34-3790-4941-b5a6-0448606676b0/image/6ca950be-cbac-4944-8c35-78e164bf7ff2/url/filename/6ca950be-cbac-4944-8c35-78e164bf7ff2?fit=contain&width=512log/zamknutost2"
 if len(url) == 0:
     sys.exit(0)

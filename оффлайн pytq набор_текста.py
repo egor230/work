@@ -21,84 +21,91 @@ set_mute("0", source_id)# Проверка и звука
 # Проверка наличия модели
 models = ["tiny", "base", "small", "medium", "large", "large-v2", "large-v3", "large-v3-turbo"]
 model_name = models[-1]
-
+def boost_by_db_range(audio_array, low_db, high_db, boost=3):
+ # Переводим в dBFS, избегаем логарифма нуля
+ abs_audio = np.abs(audio_array)
+ db_vals = 20 * np.log10(abs_audio + 1e-9)
+ # Создаем маску для участка, попадающего в диапазон
+ mask = (db_vals >= low_db) & (db_vals <= high_db)
+ # Коэффициент усиления (например, для 3dB это ~1.41)
+ factor = 10 ** (boost / 20)
+ # Применяем только к выбранным элементам
+ audio_array[mask] *= factor
+ return np.clip(audio_array, -1.0, 1.0)
 # Пример использования:
 t = time.time()
 model = whisper.load_model(model_name, download_root="/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache", device="cpu")
 print(time.time() - t)
 
 class MyThread(QtCore.QThread):
-  mysignal = QtCore.pyqtSignal(str)
-  error_signal = QtCore.pyqtSignal(str)
-  icon_signal = QtCore.pyqtSignal(str)
-  mic_toggle_signal = QtCore.pyqtSignal(bool)
+ mysignal = QtCore.pyqtSignal(str)
+ error_signal = QtCore.pyqtSignal(str)
+ icon_signal = QtCore.pyqtSignal(str)
+ mic_toggle_signal = QtCore.pyqtSignal(bool)
 
-  def __init__(self, icon1_path, icon2_path, parent=None):
-    super().__init__(parent)
-    self.icon1_path = icon1_path
-    self.icon2_path = icon2_path
-    self.mic = True
-    self._stop = False
-    self.mic_toggle_signal.connect(self.set_mic_status)
+ def __init__(self, icon1_path, icon2_path, parent=None):
+   super().__init__(parent)
+   self.icon1_path = icon1_path
+   self.icon2_path = icon2_path
+   self.mic = True
+   self._stop = False
+   self.mic_toggle_signal.connect(self.set_mic_status)
 
-  def set_mic_status(self, status):
-    self.mic = status
+ def set_mic_status(self, status):
+   self.mic = status
 
-  def run(self):
-    while not self._stop:
-      try:
-        if self.mic:
-         buffer = collections.deque()
-         silence_time = 0
+ def run(self):
+  while not self._stop:
+   buffer = collections.deque()
+   silence_time = 0
+   last_speech_time = time.time()
+   min_silence_duration = 1.1
+   fs = 16 * 1000
+   start = False
+   self.icon_signal.emit(self.icon1_path)
+   try:
+     if self.mic:
+      with sd.InputStream(samplerate=fs, channels=1, dtype='float32') as stream:
+       while True:
+        audio_chunk, overflowed = stream.read(16096)
+        mean_amp = np.mean(np.abs(audio_chunk)) * 100
+        mean_amp = math.ceil(mean_amp)
+        # print(mean_amp)
+        if mean_amp > 4:
          last_speech_time = time.time()
-         min_silence_duration = 1.1
-         fs = 16 * 1000
-         start = False
-         self.icon_signal.emit(self.icon1_path)
+         silence_time = 0
+         start = True
+        if start:
+         buffer.append(audio_chunk.astype(np.float32).flatten())
+         if silence_time > min_silence_duration:
+          array = np.concatenate(buffer)
+          duration = len(array) / fs
+          print(duration)
+          if duration > 3:
+           self.icon_signal.emit(self.icon2_path)
+           start = False
+           break
+         else:
+          silence_time += time.time() - last_speech_time
+          last_speech_time = time.time()
+       if is_speech(0.0340, array):
+        array = boost_by_db_range(array, -4,-22)
+        message = model.transcribe(array, fp16=False, language="ru", task="transcribe")["text"]
+        buffer.clear()
+        if message != " " and len(message) > 0:
+         threading.Thread(target=process_text, args=(message,), daemon=True).start()
+   except Exception as ex2:
+     print(ex2)
 
-         with sd.InputStream(samplerate=fs, channels=1, dtype='float32') as stream:
-          while True:
-           audio_chunk, overflowed = stream.read(16096)
-           mean_amp = np.mean(np.abs(audio_chunk)) * 100
-           mean_amp = math.ceil(mean_amp)
-           # print(mean_amp)
-           if mean_amp > 4:
-             last_speech_time = time.time()
-             silence_time = 0
-             start = True
-           if start:
-             buffer.append(audio_chunk.astype(np.float32).flatten())
-             if silence_time > min_silence_duration:
-               array = np.concatenate(buffer)
-               duration = len(array) / fs
-               print(duration)
-               if duration > 3:
-                self.icon_signal.emit(self.icon2_path)
-                start = False
-                break
-             else:
-               silence_time += time.time() - last_speech_time
-               last_speech_time = time.time()
-          if is_speech(0.0340, array):
-            message = model.transcribe(array, fp16=False, language="ru", task="transcribe")["text"]
-            buffer.clear()
-            if message != " " and len(message) > 0:
-              threading.Thread(target=process_text, args=(message,), daemon=True).start()
-      except Exception as ex2:
-        print(ex2)
-
-  def stop(self):
-    self._stop = True
-
+ def stop(self):
+   self._stop = True
 
 class MyWindow(QtWidgets.QWidget):
   def __init__(self, parent=None):
     super().__init__(parent)
     self.icon1_path = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/voice.png"
     self.icon2_path = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/stop.png"
-
     self.mic = True
-
     self.tray_icon = QSystemTrayIcon(QIcon(self.icon1_path), self)
     menu = QMenu()
     quit_action = QAction("Quit", self)
@@ -137,7 +144,6 @@ class MyWindow(QtWidgets.QWidget):
     self.mythread.stop()
     self.mythread.wait()
     QApplication.quit()
-
 
 if __name__ == "__main__":
   app = QApplication(sys.argv)

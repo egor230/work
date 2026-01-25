@@ -18,7 +18,7 @@ def get_paths_file():  #  Получаем аргументы командной
 directory, filename_without_extension, filename, extension = get_paths_file()
 full_path_file=directory+str("/")+filename
 
-d =str("/mnt/807EB5FA7EB5E954/развития/книги/наша книга/впадина марса/Том 15")
+d =str("/mnt/807EB5FA7EB5E954/развития/книги/наша книга/впадина марса/Том 16")
 pdf_path_file=d+str("/")+filename_without_extension+(".pdf")
 
 if "doc" in extension:
