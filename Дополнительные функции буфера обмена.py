@@ -1,9 +1,6 @@
 import os, subprocess, sys, time, pyperclip, requests, threading
 from datetime import datetime
-import subprocess
 import requests
-import os
-
 
 def save_image_from_clipboard():
  try:
@@ -13,29 +10,37 @@ def save_image_from_clipboard():
    return
 
   now = datetime.now()
-  base_path = "/mnt/807EB5FA7EB5E954/soft/.../Screenshots"
+  base_path = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/Screenshots"
   filename = f"{base_path}/{now:%H %M %S %Y-%m-%d}.png"
   os.makedirs(base_path, exist_ok=True)
+  # Скрипт для помещения изображения в буфер обмена через copyq
+  show_list_id = '''#!/bin/bash
+     xclip -selection clipboard -t image/png -i "{0}" # Помещаем изображение в буфер обмена
+     sleep 2.9
+     copyq select 0'''.format(filename)
 
-  if os.path.exists(filename):
-   print("Файл уже существует")
-   return
+  subprocess.run(['bash', '-c', show_list_id])
+  time.sleep(0.1)
 
-  print("Скачиваю:", url)
+  # if os.path.exists(filename):
+  #  print("Файл уже существует")
+  #  return
 
-  headers = {
-   "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-   "Accept": "image/avif,image/webp,*/*",
-   "Referer": "https://www.google.com/"  # иногда очень помогает
-  }
-
-  r = requests.get(url, headers=headers, timeout=12, verify=False)
-  r.raise_for_status()
-
-  with open(filename, "wb") as f:
-   f.write(r.content)
-
-  print("Сохранено:", filename)
+  # print("Скачиваю:", url)
+  #
+  # headers = {
+  #  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+  #  "Accept": "image/avif,image/webp,*/*",
+  #  "Referer": "https://www.google.com/"  # иногда очень помогает
+  # }
+  #
+  # r = requests.get(url, headers=headers, timeout=12, verify=False)
+  # r.raise_for_status()
+  #
+  # with open(filename, "wb") as f:
+  #  f.write(r.content)
+  #
+  # print("Сохранено:", filename)
 
  except subprocess.CalledProcessError:
   print("CopyQ не отвечает")
