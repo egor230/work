@@ -21,6 +21,7 @@ def save_image_from_clipboard():
 
   subprocess.run(['bash', '-c', show_list_id])
   time.sleep(0.1)
+  return
 
   # if os.path.exists(filename):
   #  print("Файл уже существует")
@@ -66,11 +67,11 @@ def quit_script():
     pass
 
 # quit_script()
-url=str(pyperclip.paste()) #copy(text)get_paths_file()
-print(url)
+# url=str(pyperclip.paste()) #copy(text)get_paths_file()
+# print(url)
 # url = "https://preview.reve.art/api/project/fc228c34-3790-4941-b5a6-0448606676b0/image/6ca950be-cbac-4944-8c35-78e164bf7ff2/url/filename/6ca950be-cbac-4944-8c35-78e164bf7ff2?fit=contain&width=512log/zamknutost2"
-if len(url) == 0:
-    sys.exit(0)
+# if len(url) == 0:
+#     sys.exit(0)
 
 # if "reve" in url:
 #   # Получаем текущую дату для имени файла
