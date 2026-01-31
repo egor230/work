@@ -59,7 +59,7 @@ try:
   # option.add_argument('--user-data-dir=/home/egor/.config/google-chrome')
   try:
     driver = webdriver.ChromeOptions()
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()),     options=option)
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=option)
     driver.get("https://dzen.ru/id/5e81d2448e05bc7f847fbaea?tab=articles")  # открыть сайт        # Пауза для загрузки контента
     time.sleep(2)
     # driver.set_window_size(968, 503) # optiol

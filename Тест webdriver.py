@@ -21,10 +21,14 @@ try:
   option.add_argument("--disable-popup-blocking")  # блок всплывающих окон.
 
   # Указываем путь к chromedriver (если не в PATH, укажите явно)
-  service = Service("/usr/local/bin/chromedriver")  # Или используйте ChromeDriverManager().install()
+  # service = Service("/usr/local/bin/chromedriver")  # Или используйте ChromeDriverManager().install()
+  # options.add_argument("--headless")
+
+  # Автоматическая установка chromedriver
+  driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=option)
 
   # Инициализация драйвера
-  driver = webdriver.Chrome(service=service, options=option)
+  # driver = webdriver.Chrome(service=service, options=option)
 
   # Открываем сайт
   driver.get("https://dzen.ru/id/5e81d2448e05bc7f847fbaea?tab=articles")

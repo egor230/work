@@ -16,29 +16,23 @@ if [ "$current_layout" == "00001002" ]; then #000000002
     xte "keyup Shift_L" "keyup Alt_L"    # Дополнительные keyup на случай "залипания" клавиш (как в вашем примере)  
 fi
 nemo "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project";
-rivalcfg --sensitivity '960'
+#rivalcfg --sensitivity '610'
 sudo usermod -aG sudo $USER;
 sudo usermod -aG vboxusers $USER
 cd "/mnt/807EB5FA7EB5E954/python_linux";
-find ~/Library/Caches -type f -delete 2>/dev/null
-find /Library/Caches -type f -delete 2>/dev/null
-# Удаляем все в ~/.cache/*, КРОМЕ папки Obsidian
-find ~/.cache/ -mindepth 1 -maxdepth 1 ! -name "Obsidian" -exec rm -rf {} + 2>/dev/null
-find ~/Library/Logs -type f -delete 2>/dev/null
-find /Library/Logs -type f -delete 2>/dev/null
-sudo rm -rf /var/log/* 2>/dev/null
-rm -rf /tmp/* 2>/dev/null
-rm -rf /var/tmp/* 2>/dev/null
-TARGET_DIR="/home/egor"  # Удаляем все .log файлы
-# Удаляем все .log файлы, исключая путь, содержащий .PyCharmCE2019.3
-find "$TARGET_DIR" -type f \
-  ! -path "$TARGET_DIR/.PyCharmCE2019.3/*" \
-  -name "*.log" -delete
-
-# Удаляем все .tmp файлы, исключая путь, содержащий .PyCharmCE2019.3
-find "$TARGET_DIR" -type f \
-  ! -path "$TARGET_DIR/.PyCharmCE2019.3/*" \
-  -name "*.tmp" -delete
+#find ~/Library/Caches -type f -delete 2>/dev/null
+#find /Library/Caches -type f -delete 2>/dev/null # Удаляем все в ~/.cache/*, КРОМЕ папки Obsidian
+#find ~/.cache/ -mindepth 1 -maxdepth 1 ! -name "Obsidian" -exec rm -rf {} + 2>/dev/null
+#find ~/Library/Logs -type f -delete 2>/dev/null
+#find /Library/Logs -type f -delete 2>/dev/null
+#sudo rm -rf /var/log/* 2>/dev/null
+#rm -rf /tmp/* 2>/dev/null
+#rm -rf /var/tmp/* 2>/dev/null
+#TARGET_DIR="/home/egor"  # Удаляем все .log файлы # Удаляем все .log файлы, 
+#find "$TARGET_DIR" -type f \
+#  -name "*.log" -delete
+#find "$TARGET_DIR" -type f \ # Удаляем все .tmp файлы, исключая путь, содержащий .PyCharmCE2019.3
+#  -name "*.tmp" -delete
 cvt 1920 1080 90 
 xrandr --newmode "1920x1080_90.00" 270.15 1920 2072 2280 2640 1080 1081 1084 1137 -HSync +Vsync
 xrandr --addmode HDMI-A-0 1920x1080_90.00
@@ -46,8 +40,11 @@ xrandr --output HDMI-A-0 --mode 1920x1080_90.00
 sleep 0.31
 xte "keyup Shift_L" "keyup Alt_L"
 xrandr --output HDMI-A-0 --brightness 0.73
+sudo chown -R $USER:$USER ~/
+sudo chown -R $USER:$USER /mnt/807EB5FA7EB5E954
+systemctl --user list-units --type=service | grep -i windscribe
 #sudo modprobe -r kvm_intel kvm_amd kvm
-sudo chown -R egor:egor /mnt/807EB5FA7EB5E954
+
 #xinput set-button-map 9 1 2 3 4 5 6 7 8 9;
 # xte "keydown ISO_Next_Group"
 #echo -n "" | xclip -i -selection primary

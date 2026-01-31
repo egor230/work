@@ -102,8 +102,8 @@ def simplify_html(html, base_url="https://dzen.ru"):
 
 option = get_option()
 driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=option)
-# url = "https://dzen.ru/a/aIXI1UqpY3gfXc-D"
-url = str(pyperclip.paste())
+url = "https://dzen.ru/a/aXCnP6pOEEGFgQ6Z"
+# url = str(pyperclip.paste())
 driver.get(url)
 # Использование BeautifulSoup для парсинга
 res = {}  # Ваш словарь для результатов

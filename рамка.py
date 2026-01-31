@@ -36,7 +36,7 @@ def screenshot(left, top, width, height):
  show_list_id = '''#!/bin/bash
     xclip -selection clipboard -t image/png -i "{0}" # Помещаем изображение в буфер обмена
     sleep 2.9
-    copyq select 0'''.format(file_name_path)
+ '''.format(file_name_path)
 
  subprocess.run(['bash', '-c', show_list_id])
  time.sleep(0.1)

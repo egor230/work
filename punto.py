@@ -5,7 +5,6 @@ import cv2
 import numpy as np
 from PIL import ImageGrab  # для скриншота
 
-
 def find_nemo(): # Проверяет, активно ли окно файлового менеджера Nemo
  get_main_id = '''#!/bin/bash
  active_window_id=$(xdotool getactivewindow 2>/dev/null)

@@ -203,7 +203,7 @@ class MyThread(QThread):
     time.sleep(1)
     aria_label = self.button.get_attribute(self.alisa)
     oknyx_core = self.button.find_element(By.CSS_SELECTOR, f".{self.OKNYX_CORE_CLASS}")
-    filter_elem = oknyx_core.get_attribute(self.DATA_TESTID_ATTR)
+    filter_elem = oknyx_coугу. re.get_attribute(self.DATA_TESTID_ATTR)
 
     if self.mic and "слу" in aria_label and ("su" in filter_elem):
      self.button.click()
