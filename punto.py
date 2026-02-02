@@ -258,7 +258,7 @@ class SmartTyper: # Основной класс для автозамены и �
     return sorted(set(longer_matches), key=len)
    else:
     if len(prefix) >0:
-     self.current_word =prefix[-1]
+     #self.current_word =prefix[-1]
      self._hide_suggestions()
      self._find_word_suggestions(prefix[-1])
     else:
@@ -343,7 +343,8 @@ class SmartTyper: # Основной класс для автозамены и �
   abbre=""
   for key_char in self.current_word:
    trans_key =self._get_translated_key(key_char)
-   abbre += trans_key  #  print(abbre)
+   abbre += trans_key  #
+   print(abbre)
   for abbrev_key in self.sorted_abbrevs:
    if len(self.current_word) == len(abbrev_key) and abbrev_key == abbre:
     self.matched_abbrev_key = abbrev_key
@@ -430,6 +431,7 @@ class SmartTyper: # Основной класс для автозамены и �
    keyboard.Key.f10, keyboard.Key.f11, keyboard.Key.f12  }
   if key in control_keys or key_str in {'.', ',', '\\', '/', '\\', '\'', '"', '<', '>', '?', '~', ':', ';', '{', '}', '[', ']', '0'}:
    self.root.after(0, self._do_hide_all)
+   self._do_replace_abbrev_async()
    self.abbrev_res = ""
    return True
   if self.suggestions and key_str in "123456" :
@@ -440,6 +442,8 @@ class SmartTyper: # Основной класс для автозамены и �
   if hasattr(key, 'char') and key.char and key.char.isprintable() and key_str not in {"+", "-", "*", "/"}:
    key_char = key.char
    self.current_word += key_char
+   print(len(self.current_word))
+   print(self.longest_abbreviation_length)
    if len(self.current_word) > self.longest_abbreviation_length:
     self.current_word = self.current_word[1:]
    self.root.after(0, self._do_update_state)
