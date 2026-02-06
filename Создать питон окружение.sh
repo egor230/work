@@ -1,9 +1,8 @@
 #!/bin/sh
 gnome-terminal -- bash -c ' 
-
 # Переходим в текущую папку откуда запускается скрипт
 cd "$(dirname "$0")" || exit 1
-
+sudo apt install python3.12-venv -y
 alias python="python3.12"
 # Пути
 VENV_PATH="/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/myvenv"
