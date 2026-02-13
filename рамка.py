@@ -12,7 +12,6 @@ from PyQt6.QtWidgets import QApplication, QMainWindow
 копирует в буфер обмена и сохраняет параметры выбора области экрана в JSON-файл.
 '''
 
-
 def screenshot(left, top, width, height):
  time.sleep(0.6)
  # Делаем скриншот с заданными размерами и координатами

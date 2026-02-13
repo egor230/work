@@ -1,17 +1,5 @@
 #!/bin/bash
 
-sleep 1
-cd "$(dirname "$0")" || exit 1
-
-for pkg in rsync pv dconf-cli; do
-  if ! command -v $pkg &> /dev/null; then
-    echo "Пакет $pkg не найден. Устанавливаю..."
-    sudo apt update && sudo apt install -y $pkg
-  fi
-done
-#!/bin/bash
-
-sleep 1
 cd "$(dirname "$0")" || exit 1
 
 for pkg in rsync pv dconf-cli; do

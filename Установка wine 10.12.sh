@@ -1,96 +1,114 @@
 #!/bin/bash
-sudo wineboot -y
-wineserver -k
-killall -9 wineserver wine-preloader wine
-sudo apt remove --purge -y wine* wineserver* winetricks
-sudo apt autoremove -y
-wineserver -k
-sudo rm /etc/apt/sources.list.d/winehq.list
-sudo rm /usr/share/keyrings/winehq-archive.key
-sudo rm /etc/apt/keyrings/winehq-archive.key
-sudo mkdir -pm 755 /etc/apt/keyrings
-sudo wget -O /etc/apt/keyrings/winehq-archive.key https://dl.winehq.org/wine-builds/winehq.key
-echo "--- Установка системных зависимостей ---"
+# Очистка старых процессов и пакетов
+#wineserver -k
+#killall -9 wineserver wine-preloader wine 2>/dev/null
+#sudo apt remove --purge -y wine* wineserver* winetricks
+#sudo apt autoremove -y
+#
+# Удаление старых репозиториев
+sudo rm /etc/apt/sources.list.d/winehq.list 2>/dev/null
+sudo rm /usr/share/keyrings/winehq-archive.key 2>/dev/null
+sudo rm /etc/apt/keyrings/winehq-archive.key 2>/dev/null
+
+# Подготовка архитектуры и зависимостей
+#echo "--- Установка зависимостей ---"
+# 1. Исправление зависимостей и инструментов сборки
+echo "--- Установка инструментов и библиотек (64 и 32 бит) ---"
 sudo dpkg --add-architecture i386
 sudo apt update
-sudo apt install -y build-essential flex bison git wget pv winetricks \
-  libasound2-dev libasound2-dev:i386 libpulse-dev libpulse-dev:i386 \
-  libdbus-1-dev libdbus-1-dev:i386 libfontconfig1-dev libfontconfig1-dev:i386 \
-  libfreetype6-dev libfreetype6-dev:i386 libgnutls28-dev libgnutls28-dev:i386 \
-  libpng-dev libpng-dev:i386 libx11-dev libx11-dev:i386 libxtst-dev libxtst-dev:i386 \
-  libgdiplus libxcomposite-dev libxcomposite-dev:i386 libvulkan-dev libvulkan-dev:i386
+# Устанавливаем недостающие flex, bison и мульти-архитектурный компилятор
+sudo apt install -y flex bison gcc-multilib g++-multilib pkg-config
 
-# Устанавливаем необходимые утилиты для добавления репозиториев
-sudo apt install -y software-properties-common wget
-# Параметры
+# Установка ключевых библиотек разработки для обеих архитектур
+sudo apt install -y \
+  libx11-dev libx11-dev:i386 \
+  libfreetype6-dev libfreetype6-dev:i386 \
+  libvulkan-dev libvulkan-dev:i386 \
+  libxcomposite-dev libxcomposite-dev:i386 \
+  libxcursor-dev libxcursor-dev:i386 \
+  libxfixes-dev libxfixes-dev:i386 \
+  libxi-dev libxi-dev:i386 \
+  libxrandr-dev libxrandr-dev:i386 \
+  libxrender-dev libxrender-dev:i386 \
+  libxext-dev libxext-dev:i386 \
+  libgstreamer1.0-dev libgstreamer1.0-dev:i386 \
+  libgstreamer-plugins-base1.0-dev libgstreamer-plugins-base1.0-dev:i386 \
+  libsdl2-dev libsdl2-dev:i386 \
+  libgnutls28-dev libgnutls28-dev:i386 \
+  libfontconfig1-dev libfontconfig1-dev:i386 \
+  libgpg-error-dev libgpg-error-dev:i386
+
+
+# Параметры сборки
 WINE_VERSION="10.12"
 INSTALL_DIR="/opt/wine-$WINE_VERSION"
-cd "$(dirname "$0")" || exit 1
-mkdir -p "wine_build"
-BUILD_DIR="./wine_build"
+BUILD_DIR="$HOME/wine_build"
 SRC_FILE="wine-$WINE_VERSION.tar.xz"
 SRC_URL="https://dl.winehq.org/wine/source/10.x/$SRC_FILE"
 
-# 3. Работа с исходниками
 mkdir -p "$BUILD_DIR"
-cd "$BUILD_DIR"
+cd "$BUILD_DIR" || exit 1
 
-if [ -f "$SRC_FILE" ]; then
-  echo "--- Исходники найдены, скачивание не требуется ---"
-else
-  echo "--- Скачивание исходников Wine $WINE_VERSION ---"
-  wget --show-progress "$SRC_URL"
+if [[ ! -f "$SRC_FILE" ]]; then
+  echo "Скачиваю $SRC_URL..."
+  wget "$SRC_URL"
 fi
 
-if [ ! -d "wine-$WINE_VERSION" ]; then
-  echo "--- Распаковка архива ---"
-  pv "$SRC_FILE" | tar -xJ
+if [[ ! -d "wine-$WINE_VERSION" ]]; then
+  tar -xJf "$SRC_FILE"
 fi
 
-# 4. Сборка с индикацией
-cd "wine-$WINE_VERSION"
-mkdir -p build && cd build
+cd "wine-$WINE_VERSION" || exit 1
+mkdir -p build64 build32
 
-echo "--- Конфигурация сборки (WoW64) ---"
-../configure --prefix="$INSTALL_DIR" --enable-archs=i386,x86_64
+# 2. Сборка 64-бит
+echo "--- Сборка Wine 64-bit ---"
+cd build64
+if [ ! -f config.status ]; then
+  ../configure --prefix="$INSTALL_DIR" --enable-win64 --with-x
+fi
+make -j4
+cd ..
 
-echo "--- Начало сборки. Это займет время. ---"
-echo "--- Используется ядер процессора: $(nproc) ---"
+# 3. Сборка 32-бит
+echo "--- Сборка Wine 32-bit ---"
+cd build32
+# Здесь магия: указываем компилятору использовать 32 бита и путь к 64-битной сборке
+if [ ! -f config.status ]; then
+  PKG_CONFIG_PATH=/usr/lib/i386-linux-gnu/pkgconfig \
+  CC="gcc -m32" \
+  CXX="g++ -m32" \
+  ../configure --prefix="$INSTALL_DIR" --with-wine64=../build64 --with-x
+fi
+make -j4
+cd ..
 
-# Сборка с выводом прогресса (счетчик строк)
-make -j2 2>&1 | pv -l -p > /dev/null
+# 4. Установка
+echo "--- Установка ---"
+cd build32 && sudo make install
+cd ../build64 && sudo make install
 
-# 5. Установка
-echo "--- Установка Wine в систему ---"
-sudo make install
+# Удаляем старые битые ссылки и создаем новые
+sudo rm -f /usr/local/bin/wine /usr/local/bin/wine64 /usr/local/bin/wineserver
+sudo ln -s "$INSTALL_DIR/bin/wine" /usr/local/bin/wine
+sudo ln -s "$INSTALL_DIR/bin/wine64" /usr/local/bin/wine64
+sudo ln -s "$INSTALL_DIR/bin/wineserver" /usr/local/bin/wineserver
 
-# 6. Создание ссылок для запуска командой 'wine'
-echo "--- Настройка путей запуска ---"
-sudo ln -sf "$INSTALL_DIR/bin/wine" /usr/local/bin/wine
-sudo ln -sf "$INSTALL_DIR/bin/wine64" /usr/local/bin/wine64
-sudo ln -sf "$INSTALL_DIR/bin/winecfg" /usr/local/bin/winecfg
-sudo ln -sf "$INSTALL_DIR/bin/wineserver" /usr/local/bin/wineserver
-
-# 7. Установка библиотек для Word и буфера обмена
-echo "--- Установка библиотек (riched20, gdiplus, ole32) для Word и буфера ---"
-# Обновляем winetricks до свежей версии
-sudo winetricks --self-update
-
-# Устанавливаем компоненты в префикс по умолчанию
-wine wineboot -u
-winetricks -q riched20 riched30 gdiplus windowscodecs ole32
+# Теперь создание префикса
+echo "--- Создание 32-битного префикса ---"
+rm -rf "$HOME/.wine"
+WINEARCH=win32 WINEPREFIX="$HOME/.wine" /usr/local/bin/wine wineboot --init
+# Установка дополнительных компонентов
+#echo "--- Установка дополнительных компонентов ---"
+winetricks -q d3dx9 gdiplus riched20 corefonts msxml6
+winetricks -q vcrun2010 dxvk d3dx10 d3dcompiler_47 xact dotnet48 physx quartz corefonts vcrun2005 vcrun2013 vcrun2022 isolate_home sandbox mfc42 faudio remove_mono winxp dotnet40 gdiplus gdiplus_winxp mfc70 msaa dinput dinput8 corefonts allfonts msxml3 ie8 wmp10 windowscodecs mspatcha  ole32 msxml6 riched30 mscoree fontsmooth=rgb
+#
+# Настройка Wine
+winecfg
 
 echo "--- Установка завершена! ---"
 wine --version
-# Устанавливаем winetricks для удобного управления компонентами Windows
-#sudo apt install winetricks -y
 
-# ⬇️ 2. Устанавливаем нужные библиотеки в текущий префикс Wine
-winetricks -q d3dx9 gdiplus riched20 corefonts msxml6
-
-# ⬇️ 3. Настраиваем Wine — выставляем нужные библиотеки в режим native,builtin
-winetricks -q vcrun2010 dxvk d3dx10 d3dcompiler_47 xact dotnet48 physx quartz corefonts vcrun2005 vcrun2013 vcrun2022 isolate_home sandbox mfc42 faudio remove_mono winxp dotnet40 gdiplus gdiplus_winxp mfc70 msaa dinput dinput8 corefonts allfonts msxml3 ie8 wmp10 windowscodecs mspatcha riched20 ole32 msxml6 riched30 mscoree fontsmooth=rgb
-winecfg
 #sudo apt install -y xclip xsel
 #В открывшемся окне winecfg:
 #

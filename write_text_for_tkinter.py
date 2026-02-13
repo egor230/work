@@ -1,4 +1,4 @@
-import sys, os, subprocess, json, wave, io, threading, re, time, warnings, collections, torch, librosa, math, logging#, webrtcvad
+import sys, os, subprocess, json, wave, io, threading, re, time, warnings, collections, transformers, librosa, math, logging #, webrtcvad
 from queue import Queue
 import sounddevice as sd
 import tkinter as tk

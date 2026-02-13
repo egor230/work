@@ -2,7 +2,6 @@
 gnome-terminal -- bash -c '
 USER_NAME=$(whoami)
 sudo su
-
 SOURCE_DIR="/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux_must_have/python_linux/work/scripts"
 TARGET_DIR="/home/egor/.local/share/nemo/scripts"
 # Проверяем существование исходной директории
@@ -15,7 +14,8 @@ fi
 mkdir -p "$TARGET_DIR"
 
 # Перемещаем файлы
-sudo mv "$SOURCE_DIR"/* "$TARGET_DIR"/
+sudo cp -r "$SOURCE_DIR"/. "$TARGET_DIR"/
+
 exit
 exec bash'
  

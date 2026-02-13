@@ -13,9 +13,6 @@ sudo wget -O /etc/apt/keyrings/winehq-archive.key https://dl.winehq.org/wine-bui
 # Добавляем поддержку 32-битной архитектуры (важно для Wine)
 sudo dpkg --add-architecture i386
 
-# Обновляем список пакетов
-sudo apt update
-
 # Устанавливаем необходимые утилиты для добавления репозиториев
 sudo apt install -y software-properties-common wget
 
@@ -37,10 +34,8 @@ sudo apt install --install-recommends winehq-devel -y
 sudo apt install winetricks -y
 
 # ⬇️ 2. Устанавливаем нужные библиотеки в текущий префикс Wine
-#winetricks -q d3dx9 gdiplus riched20 corefonts msxml6
-
-# ⬇️ 3. Настраиваем Wine — выставляем нужные библиотеки в режим native,builtin
-#winetricks -q vcrun2010 dxvk d3dx10 d3dcompiler_47 xact dotnet48 physx quartz corefonts vcrun2005 vcrun2013 vcrun2022 isolate_home sandbox mfc42 faudio remove_mono winxp dotnet40 gdiplus gdiplus_winxp mfc70 msaa dinput dinput8 corefonts allfonts msxml3 ie8 wmp10 windowscodecs mspatcha riched20 ole32 msxml6 riched30 mscoree fontsmooth=rgb
+winetricks -q d3dx9 gdiplus riched20 corefonts faudio remove_mono winxp dotnet40
+winetricks -q vcrun2010 dxvk d3dx10 d3dcompiler_47 xact dotnet48 physx quartz vcrun2005 vcrun2013 vcrun2022 isolate_home sandbox mfc42 gdiplus gdiplus_winxp mfc70 msaa dinput dinput8 corefonts allfonts msxml3 ie8 wmp10 windowscodecs mspatcha ole32 msxml6 riched30 mscoree fontsmooth=rgb
 winecfg
 #sudo apt install -y xclip xsel
 #В открывшемся окне winecfg:
