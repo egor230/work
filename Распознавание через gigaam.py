@@ -50,17 +50,6 @@ model = check_model()
 print(time.time() - t)
 threading.Thread(target=run_script, daemon=True).start()# print("Скрипт запущен заново.")
 
-def boost_by_db_range(audio_array, low_db, high_db, boost=3):
- # Переводим в dBFS, избегаем логарифма нуля
- abs_audio = np.abs(audio_array)
- db_vals = 20 * np.log10(abs_audio + 1e-9)
- # Создаем маску для участка, попадающего в диапазон
- mask = (db_vals >= low_db) & (db_vals <= high_db)
- # Коэффициент усиления (например, для 3dB это ~1.41)
- factor = 10 ** (boost / 20)
- # Применяем только к выбранным элементам
- audio_array[mask] *= factor
- return np.clip(audio_array, -1.0, 1.0)
 def update_label(root, label, model, source_id):
  def record_and_process():
   try:

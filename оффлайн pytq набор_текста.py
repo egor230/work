@@ -2,15 +2,14 @@ from PyQt6 import QtCore, QtWidgets, QtGui  # Изменено на PyQt6
 from PyQt6.QtGui import QIcon, QAction  # Изменено на PyQt6
 from PyQt6.QtWidgets import QSystemTrayIcon, QMenu, QWidget, QDialog, QLabel, QVBoxLayout, QPushButton, QApplication  # Изменено на PyQt6
 from write_text_for_tkinter import *
-import whisper  # Добавьте импорт Whisper
-from pathlib import Path
+from faster_whisper import WhisperModel
 
 # Установка параметров для оптимизации CPU
 os.environ["OMP_NUM_THREADS"] = "8"
 os.environ["MKL_NUM_THREADS"] = "8"
 torch.set_num_threads(8)
 source_id = get_webcam_source_id()      # ← твоя функция
-set_mute("0", source_id)# Проверка и звука
+set_mute("0", source_id)# Проверка и загрузка модели GigaAMprint("0")
 #  models = {
 #     "tiny": "https://huggingface.co/openai/whisper-tiny/resolve/main/pytorch_model.bin",
 #     "base": "https://huggingface.co/openai/whisper-base/resolve/main/pytorch_model.bin",
@@ -20,22 +19,17 @@ set_mute("0", source_id)# Проверка и звука
 #  }
 # Проверка наличия модели
 models = ["tiny", "base", "small", "medium", "large", "large-v2", "large-v3", "large-v3-turbo"]
+# Выбираем последнюю модель из списка
 model_name = models[-1]
-def boost_by_db_range(audio_array, low_db, high_db, boost=3):
- # Переводим в dBFS, избегаем логарифма нуля
- abs_audio = np.abs(audio_array)
- db_vals = 20 * np.log10(abs_audio + 1e-9)
- # Создаем маску для участка, попадающего в диапазон
- mask = (db_vals >= low_db) & (db_vals <= high_db)
- # Коэффициент усиления (например, для 3dB это ~1.41)
- factor = 10 ** (boost / 20)
- # Применяем только к выбранным элементам
- audio_array[mask] *= factor
- return np.clip(audio_array, -1.0, 1.0)
-# Пример использования:
+cache_dir = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache"
 t = time.time()
-model = whisper.load_model(model_name, download_root="/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache", device="cpu")
-print(time.time() - t)
+
+# Инициализация модели
+model = WhisperModel(  model_name,
+  device="cpu",  compute_type="int8",
+  download_root=cache_dir)
+
+print(f"Время загрузки модели: {time.time() - t:.2f} сек")
 
 class MyThread(QtCore.QThread):
  mysignal = QtCore.pyqtSignal(str)
@@ -55,13 +49,13 @@ class MyThread(QtCore.QThread):
    self.mic = status
 
  def run(self):
+  buffer = collections.deque()
+  silence_time = 0
+  last_speech_time = time.time()
+  min_silence_duration = 1.1
+  fs = 16 * 1000
+  start = False
   while not self._stop:
-   buffer = collections.deque()
-   silence_time = 0
-   last_speech_time = time.time()
-   min_silence_duration = 1.1
-   fs = 16 * 1000
-   start = False
    self.icon_signal.emit(self.icon1_path)
    try:
      if self.mic:
@@ -88,9 +82,12 @@ class MyThread(QtCore.QThread):
          else:
           silence_time += time.time() - last_speech_time
           last_speech_time = time.time()
-       if is_speech(0.0340, array):
-        array = boost_by_db_range(array, -4,-22)
-        message = model.transcribe(array, fp16=False, language="ru", task="transcribe")["text"]
+       if is_speech(0.066, array):
+        array = boost_by_db_range(array, -4,-22)# Пример вызова транскрибации для массива (array)
+        segments, info = model.transcribe(  array,
+          language="ru", task="transcribe", beam_size=10  )
+        # Чтобы получить весь текст сразу, как вы хотели в переменной message:
+        message = "".join([segment.text for segment in segments])
         buffer.clear()
         if message != " " and len(message) > 0:
          threading.Thread(target=process_text, args=(message,), daemon=True).start()

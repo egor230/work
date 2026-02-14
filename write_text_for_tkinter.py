@@ -1,4 +1,4 @@
-import sys, os, subprocess, json, wave, io, threading, re, time, warnings, collections, transformers, librosa, math, logging #, webrtcvad
+import torch, sys, os, subprocess, json, wave, io, threading, re, time, warnings, collections, transformers, librosa, math, logging #, webrtcvad
 from queue import Queue
 import sounddevice as sd
 import tkinter as tk
@@ -93,6 +93,17 @@ model_path = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_
 #
 #     return response
 
+def boost_by_db_range(audio_array, low_db, high_db, boost=3):
+ # Переводим в dBFS, избегаем логарифма нуля
+ abs_audio = np.abs(audio_array)
+ db_vals = 20 * np.log10(abs_audio + 1e-9)
+ # Создаем маску для участка, попадающего в диапазон
+ mask = (db_vals >= low_db) & (db_vals <= high_db)
+ # Коэффициент усиления (например, для 3dB это ~1.41)
+ factor = 10 ** (boost / 20)
+ # Применяем только к выбранным элементам
+ audio_array[mask] *= factor
+ return np.clip(audio_array, -1.0, 1.0)
 class save_key:
  def __init__(self):
   self.text = ""
