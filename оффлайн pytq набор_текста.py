@@ -130,7 +130,7 @@ class MyWindow(QtWidgets.QWidget):
         self.mic = not self.mic
         self.mythread.mic_toggle_signal.emit(self.mic)
         self.tray_icon.setToolTip("ON" if self.mic else "OFF")
-        set_mute("0" if self.mic else "1")
+        set_mute("0" if self.mic else "1", source_id)
         new_icon = self.icon1_path if self.mic else self.icon2_path
         self.tray_icon.setIcon(QIcon(new_icon))
         self.tray_icon.show()
