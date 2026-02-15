@@ -1,138 +1,187 @@
 #!/bin/bash
 set -e  # останов при любой ошибке
-set -x  # подробный вывод (можно убрать, если не нужно)
-
-echo ">>> ЯДЕРНАЯ ЗАЧИСТКА ВСЕГО, ЧТО СВЯЗАНО С WINE"
-
+set -x  # подробный вывод (можно убрать позже)
 # 1. Убиваем все процессы wine, включая фоновые и системные
-sudo pkill -9 -f "wine|wineserver|wine-preloader" 2>/dev/null || true
-killall -9 wineserver wine wine64 wine-preloader wine64-preloader 2>/dev/null || true
-wineserver -k 2>/dev/null || true
-sudo lsof -ti:2048-2050 | xargs -r sudo kill -9 2>/dev/null || true  # порты wineserver
-sleep 3
 
 # 2. Удаляем все бинарники wine из стандартных и нестандартных мест
+#sudo find /usr/local/bin /usr/bin /bin /opt ~/.local/bin ~/bin -type f -name "*wine*" -exec rm -f {} \; 2>/dev/null || true
+#sudo find /usr/local/bin /usr/bin /bin /opt ~/.local/bin ~/bin -type f -name "*wineserver*" -exec rm -f {} \; 2>/dev/null || true
+#sudo find /usr/local/sbin /usr/sbin /sbin -type f -name "*wine*" -exec rm -f {} \; 2>/dev/null || true
+# -------------------------------
+# Функция для проверки наличия команды
+# -------------------------------
+check_command() {
+    if ! command -v "$1" &> /dev/null; then
+        echo "❌ Команда $1 не найдена. Установите её."
+        exit 1
+    fi
+}
+
+# -------------------------------
+# 1. Полная зачистка процессов
+# 2. Удаление всех бинарников Wine из системы
+# -------------------------------
+echo ">>> 2. Поиск и удаление всех бинарников Wine"
 sudo find /usr/local/bin /usr/bin /bin /opt ~/.local/bin ~/bin -type f -name "*wine*" -exec rm -f {} \; 2>/dev/null || true
 sudo find /usr/local/bin /usr/bin /bin /opt ~/.local/bin ~/bin -type f -name "*wineserver*" -exec rm -f {} \; 2>/dev/null || true
-sudo find /usr/local/sbin /usr/sbin /sbin -type f -name "*wine*" -exec rm -f {} \; 2>/dev/null || true
+sudo find /usr/lib /usr/lib32 /usr/lib64 -name "*wine*" -type f -exec rm -f {} \; 2>/dev/null || true
+sudo rm -rf /opt/wine* /opt/winehq* ~/wine* ~/Wine*
 
-# 3. Удаляем каталоги, где мог быть установлен Wine вручную
-sudo rm -rf /opt/wine* /opt/winehq* ~/wine* ~/Wine* ~/.cache/wine* ~/.config/wine* ~/.local/share/wine* ~/.wine*
-
-# 4. Полное удаление пакетов Wine и winetricks
+# -------------------------------
+# 3. Удаление всех пакетов Wine и winetricks
+# -------------------------------
+#echo ">>> 3. Удаление пакетов"
 sudo apt remove --purge -y wine* winehq* winetricks 2>/dev/null || true
 sudo apt autoremove -y
 sudo apt autoclean
 
-# 5. Удаление всех репозиториев и ключей Wine
+# -------------------------------
+# 4. Удаление репозиториев и ключей
+# -------------------------------
+echo ">>> 4. Удаление репозиториев Wine"
 sudo rm -f /etc/apt/sources.list.d/winehq*
 sudo rm -f /etc/apt/keyrings/winehq*
 sudo rm -f /etc/apt/trusted.gpg.d/winehq.gpg
 sudo rm -f /etc/apt/trusted.gpg.d/winehq.asc
 
-# 6. Очистка PATH от возможных упоминаний старых бинарников
-export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin"
+# -------------------------------
+# 5. Удаление пользовательских конфигов
+# -------------------------------
+#echo ">>> 5. Удаление конфигов и кэша"
+rm -rf "$HOME/.wine"
+rm -rf "$HOME/.cache/wine"
+rm -rf "$HOME/.config/wine"
+rm -rf "$HOME/.local/share/wine"
+rm -rf "$HOME/.winetricks"
+rm -rf "$HOME/.local/share/applications/wine"
+#echo ">>> 7. Настройка WineHQ"
+#sudo dpkg --add-architecture i386
+#sudo mkdir -pm755 /etc/apt/keyrings
+#wget -qO- https://dl.winehq.org/wine-builds/winehq.key | sudo tee /etc/apt/keyrings/winehq-archive.key >/dev/null
+#
+#UBUNTU_NAME=$(grep UBUNTU_CODENAME /etc/os-release | cut -d= -f2)
+#sudo wget -NP /etc/apt/sources.list.d/ https://dl.winehq.org/wine-builds/ubuntu/dists/$UBUNTU_NAME/winehq-$UBUNTU_NAME.sources
+#sudo apt update
+#
+#if ! apt-cache policy winehq-staging | grep -q "Candidate"; then
+#echo "Ошибка: пакет не найден"
+#exit 1
+#fi
+#
 
-echo ">>> ПРОВЕРКА: после зачистки не должно быть wine в PATH"
-which wine 2>/dev/null && echo "ОШИБКА: wine всё ещё найден" && exit 1
-which wineserver 2>/dev/null && echo "ОШИБКА: wineserver всё ещё найден" && exit 1
+UBUNTU_VERSION=$(grep UBUNTU_CODENAME /etc/os-release | cut -d= -f2)
 
-echo ">>> НАСТРОЙКА РЕПОЗИТОРИЯ WINEHQ (ТОЛЬКО STAGING)"
+if [[ "$UBUNTU_VERSION" == "focal" ]]; then
+  REPO="focal"
+elif [[ "$UBUNTU_VERSION" == "jammy" ]]; then
+  REPO="jammy"
+elif [[ "$UBUNTU_VERSION" == "noble" ]]; then
+  REPO="noble"
+elif [[ "$UBUNTU_VERSION" == "bionic" ]]; then
+  REPO="bionic"
+else
+  echo "Не удалось определить версию Ubuntu для Linux Mint. Проверьте вручную."
+  exit 1
+fi
+
+sudo apt update && sudo apt upgrade -y
 sudo dpkg --add-architecture i386
-sudo mkdir -pm755 /etc/apt/keyrings
+sudo apt install -y wget gnupg2 software-properties-common
 
-# Скачиваем ключ
-wget -qO- https://dl.winehq.org/wine-builds/winehq.key | sudo tee /etc/apt/keyrings/winehq-archive.key >/dev/null
+sudo mkdir -pm 755 /etc/apt/keyrings
+wget -O - https://dl.winehq.org/wine-builds/winehq.key | sudo gpg --dearmor -o /etc/apt/keyrings/winehq-archive.key
 
-# Определяем кодовое имя Ubuntu
-UBUNTU_CODENAME=$(lsb_release -sc)
-sudo wget -NP /etc/apt/sources.list.d/ \
-    https://dl.winehq.org/wine-builds/ubuntu/dists/$UBUNTU_CODENAME/winehq-$UBUNTU_CODENAME.sources
+sudo wget -NP /etc/apt/sources.list.d/ https://dl.winehq.org/wine-builds/ubuntu/dists/$REPO/winehq-$REPO.sources
 
 sudo apt update
+sudo apt install --install-recommends winehq-staging -y
 
-# Проверяем, доступен ли winehq-staging
-if ! apt-cache policy winehq-staging | grep -q "Candidate"; then
-    echo "ОШИБКА: winehq-staging не найден. Вывод apt-cache:"
-    apt-cache policy winehq-staging
-    exit 1
-fi
+sudo rm /etc/apt/sources.list.d/winehq-$REPO.sources
+sudo rm /etc/apt/keyrings/winehq-archive.key
 
-echo ">>> УСТАНОВКА WINEHQ-STAGING И WINETRICKS"
-sudo apt install -y --install-recommends winehq-staging winetricks
+wine --version
 
-# Проверка, что бинарники появились
-echo ">>> Проверка установки:"
-ls -la /usr/bin/wine* | head -5
-WINE_BIN=$(which wine)
-WINESERVER_BIN=$(which wineserver)
-echo ">>> wine: $WINE_BIN"
-echo ">>> wineserver: $WINESERVER_BIN"
-
-# Выводим версии
-$WINE_BIN --version
-$WINESERVER_BIN --version
-
-# Убеждаемся, что нет других версий
-if command -v wineserver >/dev/null; then
-    WINESERVER_PATH=$(which wineserver)
-    echo ">>> wineserver path: $WINESERVER_PATH"
-else
-    echo "ОШИБКА: wineserver не найден после установки"
-    exit 1
-fi
-
-echo ">>> СОЗДАНИЕ ЧИСТОГО 32-БИТНОГО ПРЕФИКСА С ПОЛНЫМИ ПУТЯМИ"
+# 9. Создание 32-битного префикса с отключением wow64
+# -------------------------------
+echo ">>> 9. Создание 32-битного префикса (wow64 off)"
 export WINEARCH=win32
 export WINEPREFIX="$HOME/.wine"
 export WINEDEBUG=-all
-export WINE=$WINE_BIN
-export WINESERVER=$WINESERVER_BIN
+# Отключаем wow64 через переменную окружения (для новых версий Wine)
+export WINE_WOW64=0
 
-# Полная инициализация
+# Удаляем возможный старый префикс (на всякий случай)
+rm -rf "$WINEPREFIX"
+# Инициализация
 $WINE_BIN wineboot --init
 
 # Ждём готовности
-echo ">>> Ожидание создания префикса..."
 for i in {1..30}; do
     if [ -f "$WINEPREFIX/system.reg" ]; then
-        echo ">>> Префикс создан"
+        echo "✅ Префикс создан"
         break
     fi
     sleep 2
 done
 
-# Проверяем regedit (используем полный путь)
+# Проверяем, что syswow64 не создан
+if [ -d "$WINEPREFIX/drive_c/windows/syswow64" ]; then
+    echo "❌ ОШИБКА: Префикс 64-битный (syswow64 существует). Отмена."
+    exit 1
+else
+    echo "✅ Префикс 32-битный (syswow64 отсутствует)"
+fi
+
+# Проверяем regedit
 if ! $WINE_BIN regedit /? >/dev/null 2>&1; then
-    echo "ОШИБКА: regedit не отвечает. Содержимое префикса:"
+    echo "❌ regedit не работает. Возможно, проблема с префиксом."
     ls -la "$WINEPREFIX/drive_c/windows"
     exit 1
 fi
-echo ">>> regedit работает корректно"
+echo "✅ regedit работает"
 
-# Убеждаемся, что это 32-битный префикс (нет syswow64)
-if [ -d "$WINEPREFIX/drive_c/windows/syswow64" ]; then
-    echo "ОШИБКА: Префикс 64-битный (обнаружен syswow64). Переменная WINEARCH не сработала."
-    exit 1
-fi
-echo ">>> Префикс 32-битный (syswow64 отсутствует)"
+# -------------------------------
+# 10. Обновление winetricks до последней версии
+# -------------------------------
+echo ">>> 10. Обновление winetricks"
+sudo apt remove -y winetricks 2>/dev/null || true
+wget -q https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks -O /tmp/winetricks
+chmod +x /tmp/winetricks
+sudo mv /tmp/winetricks /usr/local/bin/winetricks
+check_command winetricks
 
-echo ">>> УСТАНОВКА БИБЛИОТЕК ЧЕРЕЗ WINETRICKS"
-# Используем полные пути и явные переменные
-WINETRICKS_CMD="env WINEPREFIX=$WINEPREFIX WINEARCH=$WINEARCH WINEDEBUG=-all winetricks -q"
+# -------------------------------
+# 11. Установка библиотек группами
+# -------------------------------
+echo ">>> 11. Установка библиотек (это займёт время)"
+# Определяем команду winetricks с полными переменными
+WINETRICKS_CMD="env WINEPREFIX=$WINEPREFIX WINEARCH=$WINEARCH WINEDEBUG=-all /usr/local/bin/winetricks -q"
 
-# Устанавливаем группами для надёжности
+# Группа 1: базовые и d3dx9
 $WINETRICKS_CMD d3dx9
-$WINETRICKS_CMD gdiplus riched20 corefonts faudio remove_mono winxp
-$WINETRICKS_CMD dotnet40 gdiplus_winxp mfc70 vcrun2010 dxvk d3dx10 d3dcompiler_47 xact
-$WINETRICKS_CMD dotnet48 physx quartz vcrun2005 vcrun2013 vcrun2022 isolate_home sandbox
+
+# Группа 2: основные рантаймы
+$WINETRICKS_CMD gdiplus riched20 corefonts faudio remove_mono winxp dotnet40 gdiplus_winxp mfc70
+
+# Группа 3: VC++ и DXVK
+$WINETRICKS_CMD vcrun2010 dxvk d3dx10 d3dcompiler_47 xact dotnet48 physx quartz
+
+# Группа 4: остальные VC++ и изоляция
+$WINETRICKS_CMD vcrun2005 vcrun2013 vcrun2022 isolate_home sandbox
+
+# Группа 5: прочие библиотеки
 $WINETRICKS_CMD mfc42 msaa dinput dinput8 allfonts msxml3 ie8 wmp10 windowscodecs mspatcha
+
+# Группа 6: финальные
 $WINETRICKS_CMD ole32 msxml6 riched30 mscoree fontsmooth=rgb
 
-echo ">>> ЗАВЕРШЕНИЕ ФОНОВЫХ ПРОЦЕССОВ"
+# -------------------------------
+# 12. Завершение
+# -------------------------------
+echo ">>> 12. Ожидание завершения фоновых процессов"
 $WINESERVER_BIN -w
 
-echo ">>> ЗАПУСК WINESERVER В ФОНЕ"
+echo ">>> Запуск wineserver в фоне"
 $WINESERVER_BIN -p
 
 echo
@@ -141,31 +190,3 @@ echo "✅ УСТАНОВКА ЗАВЕРШЕНА УСПЕШНО"
 echo "Префикс: $WINEPREFIX (32 бита)"
 echo "Wine: $($WINE_BIN --version)"
 echo "======================================================"
-
-# Опционально: показать окно настроек
-# $WINE_BIN winecfg
-
-# По желанию можно открыть winecfg для дополнительных настроек
-# winecfg
-
-# По желанию можно открыть winecfg для дополнительных настроек
-# winecfg
-
-#sudo apt install -y xclip xsel
-#В открывшемся окне winecfg:
-#
-#Перейди на вкладку «Библиотеки» (Libraries)
-#
-#В поле «Новая библиотека» по очереди добавь:
-#
-#gdiplus
-#
-#ole32
-#
-#oleaut32
-#
-#Для каждой выбери «(native, builtin)» и нажми ОК
-
-#
-#winetricks andale arial comicsans courier georgia impact times trebuchet verdana webdings  calibri physx tahoma lucida 7zip openal baekmuk cambria candara consolas constantia corbel droid eufonts ipamona liberation meiryo micross opensymbol sourcehansans takao uff unifont vlgothic wenquanyi wenquanyizenhei allfonts pptfonts directplay riched30 richtx32 fakechinese fakejapanese fakekorean cjkfonts
-#winetricks

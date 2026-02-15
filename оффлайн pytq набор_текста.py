@@ -20,14 +20,13 @@ set_mute("0", source_id)# Проверка и загрузка модели Giga
 # Проверка наличия модели
 models = ["tiny", "base", "small", "medium", "large", "large-v2", "large-v3", "large-v3-turbo"]
 # Выбираем последнюю модель из списка
-model_name = models[-1]
+model_name = models[-5]
 cache_dir = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache"
 t = time.time()
 
 # Инициализация модели
-model = WhisperModel(  model_name,
-  device="cpu",  compute_type="int8",
-  download_root=cache_dir)
+model = WhisperModel( model_name, device="cpu",
+                      compute_type="int8", download_root=cache_dir)
 
 print(f"Время загрузки модели: {time.time() - t:.2f} сек")
 
@@ -65,35 +64,36 @@ class MyThread(QtCore.QThread):
         mean_amp = np.mean(np.abs(audio_chunk)) * 100
         mean_amp = math.ceil(mean_amp)
         # print(mean_amp)
-        if mean_amp > 4:
+        if mean_amp > 5:
          last_speech_time = time.time()
          silence_time = 0
          start = True
         if start:
          buffer.append(audio_chunk.astype(np.float32).flatten())
          if silence_time > min_silence_duration:
+          self.icon_signal.emit(self.icon2_path)
           array = np.concatenate(buffer)
           duration = len(array) / fs
           print(duration)
           if duration > 3:
-           self.icon_signal.emit(self.icon2_path)
            start = False
            break
          else:
           silence_time += time.time() - last_speech_time
           last_speech_time = time.time()
-       if is_speech(0.066, array):
+       if is_speech(0.053, array):
         array = boost_by_db_range(array, -4,-22)# Пример вызова транскрибации для массива (array)
-        segments, info = model.transcribe(  array,
-          language="ru", task="transcribe", beam_size=10  )
+        segments, info = model.transcribe( array,  language="ru", task="transcribe", beam_size=10, best_of=10  )
         # Чтобы получить весь текст сразу, как вы хотели в переменной message:
         message = "".join([segment.text for segment in segments])
-        buffer.clear()
-        if message != " " and len(message) > 0:
+        self.icon_signal.emit(self.icon1_path)
+        if message != " " or "Субтитры сделал DimaTorzok" in message and len(message) > 0:
          threading.Thread(target=process_text, args=(message,), daemon=True).start()
+       buffer.clear()
+       array= None
    except Exception as ex2:
-     print(ex2)
-
+    print(ex2)
+    pass
  def stop(self):
    self._stop = True
 
