@@ -1,0 +1,93 @@
+{
+  "games_checkmark": {
+    "C:/Windows/explorer.exe": true,
+    "/mnt/807EB5FA7EB5E954/games/Splinter Cell/system/SplinterCell.exe": true,
+    "/mnt/807EB5FA7EB5E954/games/Arx Fatalis - Libertatis/Arx Libertatis/arx.exe": true,
+    "/mnt/807EB5FA7EB5E954/games/Return to Castle Wolfenstein/WolfSP.exe": true
+  },
+  "paths": {
+    "C:/Windows/explorer.exe": "По умолчанию",
+    "/mnt/807EB5FA7EB5E954/games/Splinter Cell/system/SplinterCell.exe": "SplinterCell",
+    "/mnt/807EB5FA7EB5E954/games/Arx Fatalis - Libertatis/Arx Libertatis/arx.exe": "arx",
+    "/mnt/807EB5FA7EB5E954/games/Return to Castle Wolfenstein/WolfSP.exe": "WolfSP"
+  },
+  "key_value": {
+    "C:/Windows/explorer.exe": [
+      "LBUTTON",
+      "RBUTTON",
+      "MBUTTON",
+      " ",
+      " ",
+      "SCROLL_UP",
+      "SCROLL_DOWN"
+    ],
+    "/mnt/807EB5FA7EB5E954/games/Splinter Cell/system/SplinterCell.exe": [
+      "LBUTTON",
+      "W",
+      " ",
+      " ",
+      "R",
+      "SPACE",
+      "KP_Enter"
+    ],
+    "/mnt/807EB5FA7EB5E954/games/Arx Fatalis - Libertatis/Arx Libertatis/arx.exe": [
+      "LBUTTON",
+      "W",
+      "F",
+      "WHEEL_MOUSE_UP",
+      "R",
+      "E",
+      "S"
+    ],
+    "/mnt/807EB5FA7EB5E954/games/Return to Castle Wolfenstein/WolfSP.exe": [
+      "LBUTTON",
+      "W",
+      "WHEEL_MOUSE_BUTTON",
+      "WHEEL_MOUSE_UP",
+      "R",
+      "F",
+      "S"
+    ]
+  },
+  "mouse_press": {
+    "C:/Windows/explorer.exe": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "/mnt/807EB5FA7EB5E954/games/Splinter Cell/system/SplinterCell.exe": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "/mnt/807EB5FA7EB5E954/games/Arx Fatalis - Libertatis/Arx Libertatis/arx.exe": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "/mnt/807EB5FA7EB5E954/games/Return to Castle Wolfenstein/WolfSP.exe": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "start_startup": true,
+  "id": 10,
+  "current_app": "C:/Windows/explorer.exe"
+}
