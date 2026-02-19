@@ -1,7 +1,6 @@
 import sys, subprocess, os
-from PyQt5.QtWidgets import (  QApplication, QWidget, QLabel, QLineEdit,
+from PyQt6.QtWidgets import (  QApplication, QWidget, QLabel, QLineEdit,
   QPushButton, QHBoxLayout, QVBoxLayout, QMessageBox)
-os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = "/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project/myenv/lib/python3.12/site-packages/PyQt5/Qt5/plugins"
 
 class AudioExtractor(QWidget):
   def __init__(self):
@@ -91,4 +90,4 @@ if __name__ == "__main__":
   app = QApplication(sys.argv)
   window = AudioExtractor()
   window.show()
-  sys.exit(app.exec_())
+  sys.exit(app.exec())

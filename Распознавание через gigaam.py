@@ -40,7 +40,8 @@ if result.returncode == 0 and result.stdout.strip():
    try:
     subprocess.run(["kill", "-9", pid], check=True)    # print(f"Убит запущенный процесс {script_name} с PID {pid}")
    except subprocess.CalledProcessError as e:
-    print(f"Не удалось убить PID {pid}: {e}")
+    pass
+    # print(f"Не удалось убить PID {pid}: {e}")
 # Формируем команду запуска
 cmd = f'#!/bin/bash\n"/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/myvenv/bin/python\" \"{script_path}\"'
 def run_script():# Запускаем скрипт в отдельном демонизированном потоке

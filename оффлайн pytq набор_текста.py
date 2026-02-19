@@ -112,12 +112,10 @@ class MyWindow(QtWidgets.QWidget):
     self.mythread = MyThread(self.icon1_path, self.icon2_path)
     self.mythread.icon_signal.connect(self.change_icon)
     self.mythread.error_signal.connect(print)
-
     self.tray_icon.setContextMenu(menu)
     self.tray_icon.setToolTip("ON")
     self.tray_icon.activated.connect(self.on_tray_icon_activated)
     self.tray_icon.show()
-
     self.mythread.start()
 
   def change_icon(self, icon_path):
