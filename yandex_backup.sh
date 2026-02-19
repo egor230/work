@@ -1,6 +1,5 @@
 #!/bin/bash
 cd "$(dirname "$0")" || exit 1
-
 for pkg in rsync pv dconf-cli; do
   if ! command -v $pkg > /dev/null; then
     echo "Пакет $pkg не найден. Устанавливаю..."
@@ -43,10 +42,11 @@ if [ "$choice" == "1" ]; then
   echo "Шаг 3: Копирую темы..."
   [ -d "$source_themes" ] && rsync -a "$source_themes/" "$settings_backup/themes/"
 
-  echo "Шаг 4: Копирую Яндекс Браузер..."
+  echo "Шаг 4: Копирую Яндекс Браузер (профиль и куки)..."
   if [ -d "$source_browser" ]; then
+    # Используем флаг -H для сохранения жестких ссылок и -p для прав доступа
     size=$(du -sb "$source_browser" | awk '{print $1}')
-    rsync -av --delete "$source_browser/" "$browser_backup/" | pv -lep -s "$size" > /dev/null
+    rsync -avH --delete "$source_browser/" "$browser_backup/" | pv -lep -s "$size" > /dev/null
   fi
   echo "Все данные сохранены в $current_directory"
 
@@ -67,10 +67,11 @@ elif [ "$choice" == "2" ]; then
 
   echo "Шаг 4: Восстановление Яндекс Браузера..."
   if [ -d "$browser_backup" ]; then
+    # Сначала очищаем целевую папку, чтобы не было конфликтов старых данных
     [ -d "$source_browser" ] && rm -rf "$source_browser"
     mkdir -p "$source_browser"
     size=$(du -sb "$browser_backup" | awk '{print $1}')
-    rsync -av "$browser_backup/" "$source_browser/" | pv -lep -s "$size" > /dev/null
+    rsync -avH "$browser_backup/" "$source_browser/" | pv -lep -s "$size" > /dev/null
   fi
   
   sudo chown -R "$current_user:$current_user" "$source_browser"
@@ -80,7 +81,6 @@ elif [ "$choice" == "2" ]; then
   
   echo "Восстановление завершено. Перезагрузите Cinnamon (Alt+F2, r, Enter)."
 fi
-
 exit 0
 
 #xdotool key F3;cd /home/$current_user/.config;# Переходим в директорию /home/имя_пользователя

@@ -95,7 +95,7 @@ sudo wget -NP /etc/apt/sources.list.d/ https://dl.winehq.org/wine-builds/ubuntu/
 
 sudo apt update
 sudo apt install --install-recommends winehq-staging -y
-
+sudo apt install winetricks -y
 sudo rm /etc/apt/sources.list.d/winehq-$REPO.sources
 sudo rm /etc/apt/keyrings/winehq-archive.key
 
@@ -174,7 +174,10 @@ $WINETRICKS_CMD mfc42 msaa dinput dinput8 allfonts msxml3 ie8 wmp10 windowscodec
 
 # Группа 6: финальные
 $WINETRICKS_CMD ole32 msxml6 riched30 mscoree fontsmooth=rgb
+sudo apt update && sudo apt install --only-upgrade wine winetricks -y
 
+# 2. Устанавливаем дополнительные зависимости для Wine, включая libEGL
+sudo apt install libasound2-plugins:i386 libsdl2-2.0-0:i386 libfreetype6:i386 libdbus-glib-1-2:i386 libglu1-mesa:i386 libegl1-mesa:i386 -y
 # -------------------------------
 # 12. Завершение
 # -------------------------------
