@@ -256,7 +256,7 @@ mouse_move_and_click = '''#!/bin/bash
  done'''
 
 def clean_dictionary_keys(res):  # Список недопустимых символов в именах файлов
-  invalid_chars = ['<', '>', ':', '"', '/', '\\', '|', '?', '*']
+  invalid_chars = ['<', '>', ':', '"', '/', '\\', '|', '?', '*', '!']
    # Создаем новый словарь
   cleaned_res = {}
   # Проходим по всем парам ключ-значение в исходном словаре
@@ -353,10 +353,10 @@ def open_documents_from_dict(res1, driver, folder_path="статьи для кн
    filename = f"{title}.doc"
    file_path = os.path.join(os.getcwd(), folder_path, filename)
    try:
+    print(file_path)
     thread = run_wine_command(file_path)  # Замените "your_file.exe" на имя вашего файла
     thread.join()
     # copy_to_clipboard(url)
-    print(file_path)
 
     subprocess.call(['bash', '-c', f])  #
     # input()
@@ -379,7 +379,7 @@ def copy_and_rename_file(res, source_file="/home/egor/Шаблоны/doc.doc", t
     for title in res.keys():
      # Очищаем название от недопустимых символов для имени файла
      # Можно добавить больше символов в список, если нужно
-     invalid_chars = ['<', '>', ':', '"', '/', '\\', '|', '?', '*']
+     invalid_chars = ['<', '>', ':', '"', '/', '\\', '|', '?', '*', '!']
      clean_title = str(title)
      for char in invalid_chars:
       clean_title = clean_title.replace(char, '')

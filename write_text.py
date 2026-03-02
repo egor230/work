@@ -499,7 +499,7 @@ def set_mute(mute: str, source_id: str):
  # Опционально — сразу ставим нормальную громкость
  subprocess.run(["pactl", "set-source-volume", source_id, "99%"], check=True)
 source_id = get_webcam_source_id()      # ← твоя функция
-set_mute("1", source_id)
+set_mute("0", source_id)
 def get_mute_status(source_id):  # Получает статус Mute для источника '54' с помощью pactl и grep.
  try:
   r = subprocess.run(["pactl", "get-source-mute", source_id],  capture_output=True, text=True, check=True)

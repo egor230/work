@@ -493,7 +493,6 @@ def get_webcam_source_id():# Определяет текущий Source ID (на
   print(f"pactl вернул ошибку: {e}", file=sys.stderr)
   return None
 
-
 def set_mute(mute: str, source_id: str):
  if source_id is None:
   print("source_id = None → ничего не делаем", file=sys.stderr)
@@ -502,7 +501,7 @@ def set_mute(mute: str, source_id: str):
  # Опционально — сразу ставим нормальную громкость
  subprocess.run(["pactl", "set-source-volume", source_id, "99%"], check=True)
 source_id = get_webcam_source_id()      # ← твоя функция
-set_mute("1", source_id)
+set_mute("0", source_id)
 
 def get_mute_status(source_id: str) -> bool:  # Получает статус 'Mute' для указанного источника (source) в PulseAudio.
  # Поддерживает английский (yes/no) и русский (да/нет) вывод.
