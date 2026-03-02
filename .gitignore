@@ -2,7 +2,12 @@
 *
 # Разрешить .gitignore
 !.gitignore
+/updata git.sh
 !*.py
+!*/*.py
 !*.txt
+!*/*.txt
 !*.sh
+!*/*.sh
 !*.json
+!*/*.json

@@ -35,7 +35,7 @@ class MyThread(QThread):
   self.alisa = "aria-label"
   self.chat_list = ".ChatListGroup-List .ChatListItem"
   self.chat_list_more = ".ChatListItem-Button_more"
-  self.stream = ".AliceChat-StreamingPlaceholder"
+  self.stream = "AliceChat-StreamingPlaceholder"
   self.ready = "AliceChat-Thinking"
 
  def is_text_stable(self, timeout=4):
@@ -58,21 +58,6 @@ class MyThread(QThread):
   except:
    time.sleep(0.5)
    return False
-
- def get_user_messages(self):
-  try:
-   user_m = WebDriverWait(self.driver, 3).until(
-    EC.presence_of_all_elements_located((By.CSS_SELECTOR, ".MessageBubble-Container_from-user")))
-   if user_m:
-    last_user_container = user_m[-1]
-    message = last_user_container.find_element(By.CSS_SELECTOR, ".MessageBubble").text.strip()
-    if message:
-     counts = len(user_m)
-     return message, counts
-   return "", 0
-  except Exception as ex:
-   print(ex)
-   return "", 0
 
  def update_mic_state(self, mic):
   self.mic = mic
@@ -184,24 +169,6 @@ class MyThread(QThread):
   except Exception as e:
    print(f"Ошибка удаления чатов: {e}")
 
- def get_latest_message(self, len_c=0):
-  try:
-   self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-
-   element = WebDriverWait(self.driver, 4).until(
-    EC.visibility_of_all_elements_located((By.CLASS_NAME, self.ready)))
-
-   if element:
-    message, counts = self.get_user_messages()
-    return message, counts
-   else:
-    self.is_text_stable()
-    print("0300")
-    message, counts = self.get_user_messages()
-    return message, counts
-  except Exception as ex:
-   return "", len_c
-
  def selenium_worker(self):
   """Отслеживает состояние и нажимает кнопку когда Алиса думает"""
   while self._running:
@@ -213,62 +180,111 @@ class MyThread(QThread):
      oknyx_core = mic_button.find_element(By.CSS_SELECTOR, f".{self.OKNYX_CORE_CLASS}")
      aria_label = mic_button.get_attribute(f"{self.alisa}")
      classes = oknyx_core.get_attribute("class")
-
      user_m = self.driver.find_elements(By.CSS_SELECTOR, ".MessageBubble-Container_from-user")
      if user_m:
       last_user_container = user_m[-1]
       message = last_user_container.find_element(By.CSS_SELECTOR, ".MessageBubble").text.strip()
-      if "collapsedOut" in classes or ("начни слушать" in aria_label and "lis" not in classes):
-       self.button.click()
-       print("треугольник")
-       time.sleep(2)
-      # ВАРИАНТ 3: Отсутствие standby/listening
-      if (
-        "стоп" in aria_label
-        and "lis" not in classes
-        and "think" not in classes
-        and "thinking" not in classes
-        and "standby" not in classes
-      ):
-       print("⬜ белый квадратик")
-       self.button.click()
-       time.sleep(2)
-       print("⬜ белый квадратик3")
-       time.sleep(3)
-       self.button.click()
-       time.sleep(2)
-      if "стоп" in aria_label and "lis" not in classes and "think" not in classes and "collapse" not in classes and "standby" not in classes:
-       self.button.click()
-       time.sleep(2)
       # Показываем сообщение когда слушаем
-      if "lis" in classes and "thinking" not in classes and "стоп" in aria_label and "standby" not in classes:
+      if "lis" in classes  and "стоп" in aria_label and "standby" not in classes:
        time.sleep(1)
        self.show_message(message, self.mic)
       else:
        self.show_message(None, False)
        # Когда Алиса думает ("подготавливаю ответ") - ждём и нажимаем кнопку
-      if "think" in classes and "стоп" in aria_label:
-        self.button.click()
-        time.sleep(3)
+      # if "think" in classes and "стоп" in aria_label:
+      #   self.button.click()
+      #   time.sleep(3)
    except Exception as e:
     pass
+
+ def get_user_message(self, len_c):
+  try:
+   # Проверим, есть ли iframe
+   iframes = self.driver.find_elements(By.TAG_NAME, "iframe")
+   #print(f"Найдено iframe: {len(iframes)}")
+   # Попробуем разные селекторы
+   selectors = [
+    ".MessageBubble-Container_from-user",
+    "[data-testid='message-bubble-container-from-user']",
+    ".Message_from_user",
+    ".AliceTextBubble_from_user"
+   ]
+
+   for selector in selectors:
+    elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
+   # Основной поиск
+   user_m = WebDriverWait(self.driver, 10).until(
+    EC.presence_of_all_elements_located((By.CSS_SELECTOR, ".MessageBubble-Container_from-user"))   )
+
+ #  print(f"Найдено сообщений пользователя: {len(user_m)}")
+   last_user_container = user_m[-1]
+   message = last_user_container.find_element(By.CSS_SELECTOR, ".AliceTextBubble").text.strip()
+  # print(f"Последнее сообщение: '{message}'")
+
+   if user_m and message:
+    counts = len(user_m)
+    return message, counts
+   return "", len_c
+  except Exception as ex:
+   print(f"Ошибка: {ex}")
+   return "", len_c
+ def get_latest_message(self, len_c=0):
+  try:
+   self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+   # Проверяем состояние кнопки Алисы (самый надёжный способ)
+   aria_label = self.button.get_attribute("aria-label")
+   oknyx_core = self.button.find_element(By.CSS_SELECTOR, ".StandaloneOknyxCore")
+   classes = oknyx_core.get_attribute("class").lower()
+
+   message, len_c = self.get_user_message(len_c)
+   # Алиса "думает/готовит ответ" если:
+   # 1. В классах есть "thinking" ИЛИ
+   # 2. aria-label содержит "стоп" И нет "listening"
+   is_processing = (
+     "thinking" in classes or
+     ("стоп" in aria_label and "lis" not in classes)
+   )
+   if is_processing:
+    print("stop")
+    return message, len_c
+   return message, len_c
+  except Exception as ex:
+   print(ex)
+   return "", len_c
 
  def run(self):
   self.start_selenium()
   while self._running:
    try:
-    time.sleep(0.5)  # Уменьшили с 1 секунды
+    time.sleep(2.5)  # Уменьшили с 1 секунды
     aria_label = self.button.get_attribute(self.alisa)
     oknyx_core = self.button.find_element(By.CSS_SELECTOR, f".{self.OKNYX_CORE_CLASS}")
     filter_elem = oknyx_core.get_attribute(self.DATA_TESTID_ATTR)
-
+    classes = oknyx_core.get_attribute("class")
+    # print(classes)
+    if "think" in classes and ("начни слушать" in aria_label and "lis" not in classes):
+     time.sleep(3)
+     self.button.click()
+     print("треугольник")
+    # ВАРИАНТ 3: Отсутствие standby/listening
+    if (
+      "стоп" in aria_label
+      and "lis" not in classes
+      or "think"  in classes
+      and "standby" not in classes
+    ):
+     print("⬜ белый квадратик")
+     time.sleep(1)
+     self.message, counts1 = self.get_latest_message(self.counts)
+     self.button.click()
     # Нажимаем кнопку когда Алиса готова слушать
     if self.mic and "слу" in aria_label and ("su" in filter_elem):
+     time.sleep(3)
      self.button.click()
-
-    self.message, counts1 = self.get_latest_message(self.counts)
+     self.message, counts1 = self.get_latest_message(self.counts)
     if counts1 > self.counts and self.mic and self.message and not any(phrase in self.message for phrase in excluded_phrases):
-     self.counts = self.counts + 1
+     print(counts1)
+     self.counts = counts1
      self.mic = False
 
      thread = threading.Thread(target=process_text, args=(self.message,))
@@ -278,14 +294,18 @@ class MyThread(QThread):
      thr.daemon = True
      thr.start()
 
-     print(counts1)
-
-    if counts1 == 0:
-     self.counts = counts1
-
    except Exception as ex1:
     pass
 
+    # else:
+    #  self.is_text_stable()
+    #  print("0300")
+    #  message, counts = self.get_user_messages()
+    # if counts1 == 0:
+    #  self.counts = counts1
+    # if "стоп" in aria_label and "lis" not in classes and "think" not in classes and "collapse" not in classes and "standby" not in classes:
+    #  self.button.click()
+    #  time.sleep(2)
 
 class MyWindow(QWidget):
  def __init__(self, parent=None):

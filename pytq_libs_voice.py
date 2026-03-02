@@ -121,7 +121,7 @@ def get_option():
   # option.add_argument("--media-cache-size=0")
   # option.add_argument("--disable-images")
   # option.add_argument("--automatic-wait-for-preview")
-  option.add_argument("--enable-features=WebRtcHideLocalIpsWithMdns")
+  # option.add_argument("--enable-features=WebRtcHideLocalIpsWithMdns")
   # option.add_argument("--disable-extensions")
   # option.add_argument("--disable-autofill")
   option.add_argument("--disable-background-timer-throttling")  # Отключение ограничения фоновых таймеров
