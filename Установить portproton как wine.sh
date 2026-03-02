@@ -1,12 +1,3 @@
-#!/usr/bin/env bash
-#
-# Скрипт делает твою сборку Wine → системной (заменяет всё)
-# Полная чистка старого Wine + префикса
-# Один общий префикс ~/.wine (32-битный)
-# Только необходимые компоненты для Office 2003
-# Без алиасов, без отдельных папок — просто wine = твой Word 2003
-#
-
 set -euo pipefail
 
 # Путь к твоей кастомной сборке (не меняй, если путь правильный)
@@ -76,18 +67,18 @@ export PATH="/opt/wine/bin:$PATH"
 export WINEARCH=win32
 export WINEDEBUG=-all
 
-# 6. Создаём чистый 32-битный префикс ~/.wine
-echo "Создаём чистый префикс ~/.wine ..." | tee -a "$LOG"
 rm -rf "$HOME/.wine" 2>/dev/null || true
 wineboot --init >/dev/null 2>&1
-sleep 5
+# 6. Создаём чистый 32-битный префикс ~/.wine
+echo "Создаём чистый префикс ~/.wine ..." | tee -a "$LOG"
+sleep 3
 
-# 7. Самый стабильный набор для Office 2003
-echo "Установка компонентов winetricks (Office 2003)..." | tee -a "$LOG"
-winetricks -q  corefonts tahoma fontfix \
-    riched20 riched30 msxml3 gdiplus mfc42 \
-    fontsmooth=rgb \
-    2>&1 | tee -a "$LOG"
+# 7. Установка компонентов winetricks
+echo "Установка библиотек winetricks..." | tee -a "$LOG"
+winetricks -q corefonts tahoma fontfix riched20 riched30 msxml3 gdiplus mfc42 fontsmooth=rgb mscoree DXVK 2>&1 | tee -a "$LOG"
 
+echo "Готово! Скрипт завершен успешно." | tee -a "$LOG"
+
+winecfg
 echo "Готово! Wine настроен для работы с Word 2003."
 

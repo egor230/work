@@ -8,8 +8,9 @@ from PyQt6.QtCore import Qt, QPoint, QRect, QTimer, QThread, pyqtSignal
 from PyQt6.QtGui import QPainter, QPen, QMouseEvent, QFont, QIcon, QAction
 from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QLabel, QVBoxLayout, QSystemTrayIcon, QMenu
 
-source_id = get_webcam_source_id()  # ← твоя функция
+source_id = get_webcam_source_id()
 set_mute("0", source_id)
+
 
 class MyThread(QThread):
  text_signal = pyqtSignal(str, bool)
@@ -32,12 +33,12 @@ class MyThread(QThread):
   self.OKNYX_CORE_CLASS = "StandaloneOknyxCore"
   self.MIC_BUTTON_CLASS = "StandaloneOknyx"
   self.alisa = "aria-label"
-  self.ready = "AliceChat-Thinking"
   self.chat_list = ".ChatListGroup-List .ChatListItem"
   self.chat_list_more = ".ChatListItem-Button_more"
-  self.stream = "background_response_streaming_in_read_dialog"
+  self.stream = ".AliceChat-StreamingPlaceholder"
+  self.ready = "AliceChat-Thinking"
 
- def is_text_stable(self, timeout=8):
+ def is_text_stable(self, timeout=4):
   try:
    print("is_text_stable")
    while 1:
@@ -90,43 +91,64 @@ class MyThread(QThread):
   try:
    option = get_option()
    self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=option)
-   self.driver.get("https://alice.yandex.ru/chat/01938823-14ea-4000-bd7a-3cca57830d6a/")
-   self.url = self.driver.current_url
-   self.driver.refresh()
+   self.driver.get("https://alice.yandex.ru/")
 
-   # Ожидание полной загрузки DOM
-   WebDriverWait(self.driver, 5).until(
-    lambda d: d.execute_script("return document.readyState") == "complete")
+   # keyboard = Controller()  # Если не планируешь сам нажимать кнопки кодом, это не нужно
 
-   html_content = self.driver.page_source
-   self.driver.implicitly_wait(1)
+   def get_elements_data():
+    try:
+     # Получаем исходный код страницы в момент нажатия
+     html_content = self.driver.page_source
+     print(html_content)
+     # Здесь можно добавить логику парсинга html_content
+    except Exception as e:
+     print(f"Ошибка при чтении страницы: {e}")
+
+   def on_press(key):
+    try:
+     # Проверка через атрибуты pynput более надежна в Linux
+     if key == Key.alt_l:
+      print("Нажат левый Alt")
+      get_elements_data()
+      pass
+    except Exception as e:
+     print(f"Ошибка в обработчике: {e}")
+
+   def start_listener():
+    # Используем демон-поток, чтобы листенер не мешал завершению программы
+    listener = Listener(on_press=on_press)
+    listener.daemon = True
+    listener.start()
+
+   start_listener()
 
    selenium_thread = threading.Thread(target=self.selenium_worker, daemon=True)
    selenium_thread.start()
 
    self.del_all_chats(self.driver, self.chat_list, self.chat_list_more)
 
-   new_chat_button = WebDriverWait(self.driver, 5).until(
-    EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Новый чат')]")))
+   try:
+    new_chat_button = WebDriverWait(self.driver, 5).until(
+     EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Новый чат')]")))
+    new_chat_button.click()
+    time.sleep(1)
+   except Exception as e:
+    print(f"Кнопка 'Новый чат' не найдена: {e}")
+    self.driver.get("https://alice.yandex.ru/chat/")
 
-   # self.button = self.driver.find_element(
-   #  By.CSS_SELECTOR, 'button.StandaloneOknyx[aria-label="Алиса, начни слушать"]')
    self.button = self.driver.find_element(
-    By.XPATH, '//button[@aria-label="Алиса, начни слушать"]'
-   )
-   # with open('page_content.html', 'w', encoding='utf-8') as file:
-   #    file.write(html_content)
-   # Найдите все элементы с классом message-bubble
-   #  html_content = driver.page_source  # Используйте BeautifulSoup для парсинга HTML
-   # soup = BeautifulSoup(html_content, 'html.parser')
+    By.CSS_SELECTOR, 'button.StandaloneOknyx[aria-label="Алиса, начни слушать"]')
+
    self.init_ui_signal.emit()
    self.show_message("Давай поговорите", self.mic)
    self.button.click()
-#   self.driver.minimize_window()
+   # self.driver.minimize_window()
   except Exception as e:
+   print(f"Ошибка в start_selenium: {e}")
    pass
 
  def del_all_chats(self, driver, chat_list, chat_list_more):
+  """Удаляет все чаты через JavaScript"""
   try:
    WebDriverWait(driver, 2).until(
     EC.presence_of_element_located((By.CSS_SELECTOR, chat_list)))
@@ -137,24 +159,30 @@ class MyThread(QThread):
      break
 
     target_chat = chats[0]
-    more_button = target_chat.find_element(By.CSS_SELECTOR, chat_list_more)
 
-    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", more_button)
-    time.sleep(1.3)
-    more_button.click()
+    # Показываем ControlsWrapper и кликаем more через JavaScript
+    driver.execute_script("""
+     var chat = arguments[0];
+     var controlsWrapper = chat.querySelector('.ChatListItem-ControlsWrapper');
+     if (controlsWrapper) {
+      controlsWrapper.style.opacity = '1';
+      controlsWrapper.style.pointerEvents = 'auto';
+     }
+     var moreBtn = chat.querySelector('.ChatListItem-Button_more');
+     if (moreBtn) moreBtn.click();
+    """, target_chat)
+    time.sleep(0.3)
 
-    delete_button = WebDriverWait(driver, 7).until(
-     EC.element_to_be_clickable((
-      By.XPATH, "//div[@role='button' and contains(@class, 'ContextMenuItem')]"
-                "[.//span[@class='ContextMenuItem-Text' and text()='Удалить']]")))
+    # Кликаем "Удалить" - ищем по тексту
+    delete_button = WebDriverWait(driver, 5).until(
+     EC.element_to_be_clickable((By.XPATH, "//*[contains(text(), 'Удалить')]")))
 
     driver.execute_script("arguments[0].click();", delete_button)
-    WebDriverWait(driver, 7).until(EC.staleness_of(target_chat))
-    time.sleep(1.3)
+    WebDriverWait(driver, 5).until(EC.staleness_of(target_chat))
+    time.sleep(0.3)
 
   except Exception as e:
-   print(f"Неожиданная ошибка: {e}")
-   pass
+   print(f"Ошибка удаления чатов: {e}")
 
  def get_latest_message(self, len_c=0):
   try:
@@ -175,6 +203,7 @@ class MyThread(QThread):
    return "", len_c
 
  def selenium_worker(self):
+  """Отслеживает состояние и нажимает кнопку когда Алиса думает"""
   while self._running:
    try:
     if not self.mic:
@@ -183,20 +212,44 @@ class MyThread(QThread):
      mic_button = self.driver.find_element(By.CSS_SELECTOR, f".{self.MIC_BUTTON_CLASS}")
      oknyx_core = mic_button.find_element(By.CSS_SELECTOR, f".{self.OKNYX_CORE_CLASS}")
      aria_label = mic_button.get_attribute(f"{self.alisa}")
-     user_m = self.driver.find_elements(By.CLASS_NAME, "AliceTextBubble_from_user")
-     if user_m:
-      message = user_m[-1].text.strip()
-      filter_elem = oknyx_core.get_attribute(self.DATA_TESTID_ATTR)
-      classes = self.driver.find_element(By.CSS_SELECTOR, f".{self.OKNYX_CORE_CLASS}").get_attribute("class")
+     classes = oknyx_core.get_attribute("class")
 
+     user_m = self.driver.find_elements(By.CSS_SELECTOR, ".MessageBubble-Container_from-user")
+     if user_m:
+      last_user_container = user_m[-1]
+      message = last_user_container.find_element(By.CSS_SELECTOR, ".MessageBubble").text.strip()
+      if "collapsedOut" in classes or ("начни слушать" in aria_label and "lis" not in classes):
+       self.button.click()
+       print("треугольник")
+       time.sleep(2)
+      # ВАРИАНТ 3: Отсутствие standby/listening
+      if (
+        "стоп" in aria_label
+        and "lis" not in classes
+        and "think" not in classes
+        and "thinking" not in classes
+        and "standby" not in classes
+      ):
+       print("⬜ белый квадратик")
+       self.button.click()
+       time.sleep(2)
+       print("⬜ белый квадратик3")
+       time.sleep(3)
+       self.button.click()
+       time.sleep(2)
+      if "стоп" in aria_label and "lis" not in classes and "think" not in classes and "collapse" not in classes and "standby" not in classes:
+       self.button.click()
+       time.sleep(2)
+      # Показываем сообщение когда слушаем
       if "lis" in classes and "thinking" not in classes and "стоп" in aria_label and "standby" not in classes:
+       time.sleep(1)
        self.show_message(message, self.mic)
       else:
        self.show_message(None, False)
-       if "think" in classes and "стоп" in aria_label:
-        time.sleep(3)
-        time.sleep(2)
+       # Когда Алиса думает ("подготавливаю ответ") - ждём и нажимаем кнопку
+      if "think" in classes and "стоп" in aria_label:
         self.button.click()
+        time.sleep(3)
    except Exception as e:
     pass
 
@@ -204,25 +257,28 @@ class MyThread(QThread):
   self.start_selenium()
   while self._running:
    try:
-    time.sleep(1)
+    time.sleep(0.5)  # Уменьшили с 1 секунды
     aria_label = self.button.get_attribute(self.alisa)
     oknyx_core = self.button.find_element(By.CSS_SELECTOR, f".{self.OKNYX_CORE_CLASS}")
-    filter_elem = oknyx_coугу. re.get_attribute(self.DATA_TESTID_ATTR)
+    filter_elem = oknyx_core.get_attribute(self.DATA_TESTID_ATTR)
+
+    # Нажимаем кнопку когда Алиса готова слушать
     if self.mic and "слу" in aria_label and ("su" in filter_elem):
      self.button.click()
-     time.sleep(1)
+
     self.message, counts1 = self.get_latest_message(self.counts)
     if counts1 > self.counts and self.mic and self.message and not any(phrase in self.message for phrase in excluded_phrases):
      self.counts = self.counts + 1
      self.mic = False
+
      thread = threading.Thread(target=process_text, args=(self.message,))
      thread.start()
      thread.join()
      thr = threading.Thread(target=lambda: [time.sleep(3.7), setattr(self, 'mic', True)])
      thr.daemon = True
      thr.start()
+
      print(counts1)
-     time.sleep(3.7)
 
     if counts1 == 0:
      self.counts = counts1
@@ -255,7 +311,6 @@ class MyWindow(QWidget):
   self.tray_icon.activated.connect(self.on_tray_icon_activated)
   self.tray_icon.show()
 
-  # PyQt6 window flags
   self.setWindowFlags(
    Qt.WindowType.FramelessWindowHint |
    Qt.WindowType.WindowStaysOnTopHint |
