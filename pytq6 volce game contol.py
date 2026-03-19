@@ -26,7 +26,7 @@ def get_pres12():
 
 def get_gigaam_model():
   global model
-  from sber_gegaam_without_cuda import load_model
+  from ctc_sber_gegaam_without_cuda import load_model
   if model is None:
    try:
     cache_dir = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache/gigaam"
