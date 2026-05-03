@@ -20,13 +20,11 @@ set_mute("0", source_id)# Проверка и загрузка модели Giga
 # Проверка наличия модели
 models = ["tiny", "base", "small", "medium", "large", "large-v2", "large-v3", "large-v3-turbo"]
 # Выбираем последнюю модель из списка
-model_name = models[-5]
+model_name = models[-1]
 cache_dir = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache"
 t = time.time()
-
 # Инициализация модели
-model = WhisperModel( model_name, device="cpu",
-                      compute_type="int8", download_root=cache_dir)
+model = WhisperModel( model_name, device="cpu", compute_type="int8", download_root=cache_dir)
 
 print(f"Время загрузки модели: {time.time() - t:.2f} сек")
 
@@ -35,7 +33,6 @@ class MyThread(QtCore.QThread):
  error_signal = QtCore.pyqtSignal(str)
  icon_signal = QtCore.pyqtSignal(str)
  mic_toggle_signal = QtCore.pyqtSignal(bool)
-
  def __init__(self, icon1_path, icon2_path, parent=None):
    super().__init__(parent)
    self.icon1_path = icon1_path
@@ -81,10 +78,9 @@ class MyThread(QtCore.QThread):
          else:
           silence_time += time.time() - last_speech_time
           last_speech_time = time.time()
-       if is_speech(0.053, array):
+       if is_speech(0.0363, array):
         array = boost_by_db_range(array, -4,-22)# Пример вызова транскрибации для массива (array)
-        segments, info = model.transcribe( array,  language="ru", task="transcribe", beam_size=10, best_of=10  )
-        # Чтобы получить весь текст сразу, как вы хотели в переменной message:
+        segments, info = model.transcribe( array,  language="ru", task="transcribe", beam_size=10, best_of=10 )
         message = "".join([segment.text for segment in segments])
         self.icon_signal.emit(self.icon1_path)
         if message != " " or "Субтитры сделал DimaTorzok" in message and len(message) > 0:

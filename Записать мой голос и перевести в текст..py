@@ -36,13 +36,14 @@ try:
   # option.add_argument("--automatic-wait-for-preview")
   option.add_argument("--enable-features=WebRtcHideLocalIpsWithMdns")
   option.add_argument("--disable-site-isolation-trials")
+  option.add_argument("/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/VPN-YouTube-Browsec-VPN-Chrome.crx")
   option.add_argument('--user-data-dir=/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache/google-chrome')
   try:
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=option)
     driver.get("https://chat.mistral.ai/chat")  # открыть сайт        # Пауза для загрузки контента
     html_content = driver.page_source
-    with open('page_content.html', 'w', encoding='utf-8') as file:
-       file.write(html_content)
+    # with open('page_content.html', 'w', encoding='utf-8') as file:
+    #    file.write(html_content)
     # Поиск кнопки по атрибуту aria-label
     # Ждём, пока кнопка станет кликабельной (самый надёжный способ)
     time.sleep(2)  # React иногда рисует кнопку чуть позже

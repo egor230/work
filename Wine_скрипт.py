@@ -60,7 +60,7 @@ export WINEPREFIX="/home/egor/PortProton/data/prefixes/DEFAULT"
 # Запуск через gamescope
 #gamescope $GAMESCOPE_ARGS -- "$WINE_PATH" "$GAME_PATH"
 cd \"{0}\"
-DXVK_HUD=fps gamescope -f -w 1920 -h 1080 -r 90 -- \"/home/egor/PortProton/data/dist/PROTON-SAREK10-17-ASYNC/bin/wine\" {1}
+DXVK_HUD=fps gamescope -f -w 1920 -h 1080 -r 90 -- \"/home/egor/PortProton/data/dist/PROTON-SAREK10-29-ASYNC/bin/wine\" {1}
 exit; '''.format(file1, filename)  # показать список устройств в терминале
 file=str(os.path.join(directory, filename_without_extension))+".sh"
 with open(file, 'w') as file:    # Записываем текст в файл

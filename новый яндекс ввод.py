@@ -1,18 +1,9 @@
 from exceptiongroup import catch
-
 from pytq_libs_voice import *
 from write_text import *
-import json, os, pyautogui, subprocess, sys, time, threading
-from datetime import datetime
-
-# PyQt6 импорты
-from PyQt6.QtCore import Qt, QPoint, QRect, QTimer, QThread, pyqtSignal
-from PyQt6.QtGui import QPainter, QPen, QMouseEvent, QFont, QIcon, QAction
-from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QLabel, QVBoxLayout, QSystemTrayIcon, QMenu
 
 source_id = get_webcam_source_id()
 set_mute("0", source_id)
-
 
 class MyThread(QThread):
  text_signal = pyqtSignal(str, bool)
@@ -35,8 +26,8 @@ class MyThread(QThread):
   self.OKNYX_CORE_CLASS = "StandaloneOknyxCore"
   self.MIC_BUTTON_CLASS = "StandaloneOknyx"
   self.alisa = "aria-label"
-  self.chat_list = ".ChatListGroup-List .ChatListItem"
-  self.chat_list_more = ".ChatListItem-Button_more"
+  # Селекторы для обновлённой страницы
+  self.chat_list = ".ChatListGroup-List .SidebarListItem"
   self.stream = "AliceChat-StreamingPlaceholder"
   self.ready = "AliceChat-Thinking"
 
@@ -45,12 +36,14 @@ class MyThread(QThread):
    print("is_text_stable")
    while 1:
     time.sleep(timeout)
-    initial_text = self.driver.find_elements(By.CLASS_NAME, 'message-bubble_container_from-user')[-1].text
-    print(initial_text)
-    if "Message:" in initial_text:
+    user_m = self._find_user_messages()
+    last_user_container = user_m[-1]
+    message = self._extract_message_text(last_user_container)
+    if initial_text and "Message:" in initial_text:
      break
+    print(initial_text)
     time.sleep(timeout)
-    final_text = self.driver.find_elements(By.CLASS_NAME, 'message-bubble_container_from-user')[-1].text
+    final_text = self._get_last_user_message_text()
     print(final_text)
     if initial_text != final_text:
      continue
@@ -74,209 +67,293 @@ class MyThread(QThread):
   else:
    self.text_signal.emit(None, mic)
 
- def del_all_chats(self, driver, chat_list, chat_list_more):
-  """Удаляет все чаты через JavaScript"""
+ def del_all_chats(self):
+  """
+  Удаляет ВСЕ чаты через контекстное меню, устойчиво к случайным пунктам.
+  """
   try:
-   WebDriverWait(driver, 2).until(
-    EC.presence_of_element_located((By.CSS_SELECTOR, chat_list)))
+   print("🔹 Запуск удаления всех чатов")
+   self.driver.execute_script("""
+      const sidebar = document.querySelector('.ChatSidebar');
+      if (sidebar && sidebar.classList.contains('ChatSidebar_collapsed')) {
+        const expandBtn = document.querySelector('.ChatSidebar-ExpandButton');
+        if (expandBtn) {
+          expandBtn.style.cssText = 'visibility:visible !important; opacity:1 !important; pointer-events:auto !important;';
+          expandBtn.click();
+        }
+      }
+    """)
+   time.sleep(3)
+   deleted = 0
+   max_deleted = 50
 
-   while True:
-    chats = driver.find_elements(By.CSS_SELECTOR, chat_list)
-    if len(chats) <= 0:
+   while deleted < max_deleted:
+    # 1. Получаем список чатов заново на каждой итерации
+    chat_items = self.driver.find_elements(By.CSS_SELECTOR, '.ChatListItem')
+    if not chat_items:
+     print("✅ Чатов больше нет. Удалено всего:", deleted)
      break
 
-    target_chat = chats[0]
+    target = chat_items[0]
 
-    # Показываем ControlsWrapper и кликаем more через JavaScript
-    driver.execute_script("""
-     var chat = arguments[0];
-     var controlsWrapper = chat.querySelector('.ChatListItem-ControlsWrapper');
-     if (controlsWrapper) {
-      controlsWrapper.style.opacity = '1';
-      controlsWrapper.style.pointerEvents = 'auto';
-     }
-     var moreBtn = chat.querySelector('.ChatListItem-Button_more');
-     if (moreBtn) moreBtn.click();
-    """, target_chat)
-    time.sleep(0.3)
+    # 2. Кликаем по кнопке «Ещё»
+    more_ok = self.driver.execute_script("""
+        const chat = arguments[0];
+        const moreBtn = chat.querySelector('.ChatListItem-Button_more');
+        if (!moreBtn) return false;
+        moreBtn.style.cssText = 'opacity:1 !important; visibility:visible !important; pointer-events:auto !important;';
+        ['mouseenter','mousedown','mouseup','click'].forEach(ev =>
+          moreBtn.dispatchEvent(new MouseEvent(ev, {bubbles: true}))
+        );
+        return true;
+      """, target)
 
-    # Кликаем "Удалить" - ищем по тексту
-    delete_button = WebDriverWait(driver, 5).until(
-     EC.element_to_be_clickable((By.XPATH, "//*[contains(text(), 'Удалить')]")))
+    if not more_ok:
+     print("⚠️ Кнопка «Ещё» не найдена, пробуем следующий")
+     time.sleep(1)
+     continue
 
-    driver.execute_script("arguments[0].click();", delete_button)
-    WebDriverWait(driver, 5).until(EC.staleness_of(target_chat))
-    time.sleep(0.3)
+    # 3. Ждем меню и кликаем «Удалить»
+    try:
+     WebDriverWait(self.driver, 13).until(
+      EC.presence_of_element_located((By.CSS_SELECTOR, '[role="menu"], .Popup2'))
+     )
+     time.sleep(3.5)
 
+     self.driver.execute_script("""
+          const items = document.querySelectorAll('.Popup2 [role="menuitem"], .Popup2 button, .Popup2 [role="button"]');
+          for (let item of items) {
+            if (item.textContent.includes('Удалить')) {
+              item.click();
+              return true;
+            }
+          }
+        """)
+    except:
+     print("⚠️ Не удалось взаимодействовать с меню")
+     self.driver.execute_script("document.body.click();")
+     time.sleep(1)
+     continue
+
+    # 4. ОБРАБОТКА ОКНА ПОДТВЕРЖДЕНИЯ (если оно есть)
+    time.sleep(3.8)
+    print("удалить")
+    return 0
+    self.driver.execute_script("""
+        // Ищем кнопки в модальных окнах подтверждения (обычно содержат текст "Удалить" или "Да")
+        const modalButtons = document.querySelectorAll('.Modal button, .Dialog button, button[class*="confirm"]');
+        for (let btn of modalButtons) {
+          const txt = btn.textContent.toLowerCase();
+          if (txt.includes('удалить') || txt === 'да' || txt.includes('confirm')) {
+            btn.click();
+          }
+        }
+      """)
+
+    # 5. Ждем физического исчезновения элемента из DOM
+    try:
+     WebDriverWait(self.driver, 25).until(EC.staleness_of(target))
+     print(f"🗑️ Чат удалён (всего {deleted + 1})")
+     deleted += 1
+    except:
+     # Если элемент не исчез, пробуем принудительно обновить список через паузу
+     print("⚠️ Элемент застрял в DOM, ожидание обновления...")
+     time.sleep(3.5)
+
+    time.sleep(3.5)
+
+   print(f"🏁 Завершено. Удалено чатов: {deleted}")
+   return True
   except Exception as e:
-   print(f"Ошибка удаления чатов: {e}")
+   print(f"💥 Ошибка в del_all_chats: {e}")
+   return False
 
+ def _collapse_sidebar(self):
+  """Сворачивает боковую панель обратно."""
+  try:
+   # Когда сайдбар развёрнут, видим CollapseButton
+   result = self.driver.execute_script("""
+    var collapseBtn = document.querySelector('.ChatSidebar-CollapseButton');
+    if (collapseBtn) {
+     collapseBtn.click();
+     return 'collapsed';
+    }
+    var btns = document.querySelectorAll(
+     '[aria-label*="Свернуть"], [aria-label*="боковую панель"]'
+    );
+    for (var i = 0; i < btns.length; i++) {
+     btns[i].click();
+     return 'collapsed_via_aria';
+    }
+    return 'not_found';
+   """)
+   # print(f"Сворачивание сайдбара: {result}")
+   time.sleep(0.5)
+  except Exception as e:
+   print(f"Ошибка сворачивания сайдбара: {e}")
+
+ def track_all_dom_changes(self, timeout_sec=3):
+   if not hasattr(self, '_class_snapshot'):
+    self._class_snapshot = {}
+
+   from selenium.webdriver.common.by import By
+   elements = self.driver.find_elements(By.XPATH, "//*[@class]")
+
+   current_classes = {}
+   for el in elements:
+    try:
+     tag = el.tag_name
+     el_id = el.get_attribute('id') or f"no-id-{hash(el)}"
+     key = f"{tag}#{el_id}"
+     current_classes[key] = el.get_attribute('class') or ''
+    except:
+     pass
+
+   changes = []
+   for key, new_class in current_classes.items():
+    old_class = self._class_snapshot.get(key)
+    if old_class is not None and old_class != new_class:
+     changes.append(f"{key}: '{old_class}' -> '{new_class}'")
+
+   self._class_snapshot = current_classes
+
+   if changes:
+    print(f"\n[ИЗМЕНЕНИЯ КЛАССОВ] Найдено {len(changes)} изменений:")
+    for change in changes:
+     print(f"  • {change}")
+   else:
+    print("Нет изменений классов")
+
+   return changes
  def start_selenium(self):
   try:
    option = get_option()
+   option.add_argument("--disable-extensions")
+   option.add_argument('--user-data-dir=/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/google-chrome')
+
    self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=option)
    self.driver.get("https://alice.yandex.ru/")
 
-   # keyboard = Controller()  # Если не планируешь сам нажимать кнопки кодом, это не нужно
+   # Ждём загрузки страницы
+   time.sleep(3)
 
-   def get_elements_data():
-    try:
-     # Получаем исходный код страницы в момент нажатия
-     html_content = self.driver.page_source
-     print(html_content)
-     # Здесь можно добавить логику парсинга html_content
-    except Exception as e:
-     print(f"Ошибка при чтении страницы: {e}")
+   self._collapse_sidebar()
+   # # Удаляем все чаты (сначала развернёт сайдбар внутри)
+   # self.del_all_chats()
 
+   # Сворачиваем сайдбар обратно после удаления
+   # time.sleep(1)
    def on_press(key):
     try:
-     # Проверка через атрибуты pynput более надежна в Linux
      if key == Key.alt_l:
       print("Нажат левый Alt")
       get_elements_data()
-      pass
     except Exception as e:
      print(f"Ошибка в обработчике: {e}")
 
    def start_listener():
-    # Используем демон-поток, чтобы листенер не мешал завершению программы
     listener = Listener(on_press=on_press)
     listener.daemon = True
     listener.start()
 
    start_listener()
-   self.del_all_chats(self.driver, self.chat_list, self.chat_list_more)
 
    selenium_thread = threading.Thread(target=self.selenium_worker, daemon=True)
    selenium_thread.start()
-   collapse_btn = self.driver.find_element(
-    By.CSS_SELECTOR,
-    ".ChatSidebar-CollapseButton, [aria-label*='Развернуть'], [aria-label*='Развернуть']"
-   )
-   collapse_btn.click()
 
-   # try:
-   #  new_chat_button = WebDriverWait(self.driver, 5).until(
-   #   EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Новый чат')]")))
-   #  new_chat_button.click()
-   #  time.sleep(1)
-   # except Exception as e:
-   #  print(f"Кнопка 'Новый чат' не найдена: {e}")
-   #  self.driver.get("https://alice.yandex.ru/chat/")
+   # Кнопка микрофона
+   self.button = None
+   aria_variants = [
+    'button.StandaloneOknyx[aria-label="Алиса, начни слушать"]',
+    'button.StandaloneOknyx[aria-label*="слушать"]',
+    'button.StandaloneOknyx[aria-label*="Алиса"]',
+    'button.StandaloneOknyx',
+   ]
+   for selector in aria_variants:
+    try:
+     self.button = self.driver.find_element(By.CSS_SELECTOR, selector)
+     if self.button:
+      break
+    except:
+     continue
 
-   self.button = self.driver.find_element(
-    By.CSS_SELECTOR, 'button.StandaloneOknyx[aria-label="Алиса, начни слушать"]')
-
+   if not self.button:
+    try:
+     oknyx_core_elem = self.driver.find_element(By.CSS_SELECTOR, f".{self.OKNYX_CORE_CLASS}")
+     self.button = oknyx_core_elem.find_element(By.XPATH, "./..")
+    except:
+     pass
    self.init_ui_signal.emit()
    self.show_message("Давай поговорите", self.mic)
-   self.button.click()
-   # self.driver.minimize_window()
+   if self.button:
+    self.button.click()
   except Exception as e:
    print(f"Ошибка в start_selenium: {e}")
-   pass
 
- def track_all_dom_changes(self):
-    js_script = """
-    var allElements = document.querySelectorAll('*');
-    var result = {};
+ def get_user_message(self, len_c):
+  """
+  Получает последнее сообщение пользователя и количество сообщений
+  """
+  try:
+   # Селекторы для поиска контейнеров сообщений пользователя
+   user_selectors = [
+    ".MessageBubble-Container_from-user",
+    "[data-testid='message-bubble-container-from-user']",
+    ".Message_from_user",
+    ".AliceTextBubble_from_user",
+    ".FuturisTextBubble_from_user",
+   ]
 
-    // Генерируем стабильный XPath для элемента
-    function getXPath(element) {
-        if (element.id) {
-            return '//*[@id="' + element.id + '"]';
-        }
+   # Поиск всех сообщений пользователя
+   user_messages = []
+   for selector in user_selectors:
+    try:
+     elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
+     if elements:
+      user_messages = elements
+      break
+    except:
+     continue
 
-        var paths = [];
-        for (; element && element.nodeType === Node.ELEMENT_NODE; element = element.parentNode) {
-            var index = 0;
-            var sibling = element.previousSibling;
-            while (sibling) {
-                if (sibling.nodeType === Node.ELEMENT_NODE && sibling.tagName === element.tagName) {
-                    index++;
-                }
-                sibling = sibling.previousSibling;
-            }
-            var tagName = element.tagName.toLowerCase();
-            var pathIndex = (index ? "[" + (index + 1) + "]" : "");
-            paths.unshift(tagName + pathIndex);
-        }
-        return '/' + paths.join('/');
-    }
+   if not user_messages:
+    return "", len_c
 
-    // Получаем классы как отсортированный массив
-    function getClasses(element) {
-        if (!element.className || typeof element.className !== 'string') {
-            return [];
-        }
-        return element.className.split(/\\s+/).filter(c => c.length > 0).sort();
-    }
+   # Селекторы для текста внутри контейнера
+   text_selectors = [
+    ".MessageBubble",
+    ".AliceTextBubble",
+    ".FuturisTextBubble",
+    ".MessageBubble-Text",
+   ]
 
-    for (var i = 0; i < allElements.length; i++) {
-        var el = allElements[i];
-        var xpath = getXPath(el);
-        var classes = getClasses(el);
+   # Извлечение текста из последнего сообщения
+   last_user_container = user_messages[-1]
+   message = ""
 
-        result[xpath] = {
-            'tag': el.tagName.toLowerCase(),
-            'id': el.id || '',
-            'classes': classes,
-            'text': (el.textContent || '').substring(0, 50).trim()
-        };
-    }
+   for selector in text_selectors:
+    try:
+     elem = last_user_container.find_element(By.CSS_SELECTOR, selector)
+     if elem and elem.text.strip():
+      message = elem.text.strip()
+      break
+    except:
+     continue
 
-    return result;
-    """
+   # Если не нашли текст через селекторы, берем весь текст контейнера
+   if not message:
+    try:
+     message = last_user_container.text.strip()
+    except:
+     message = ""
 
-    current_snapshot = self.driver.execute_script(js_script)
+   if user_messages and message:
+    return message, len(user_messages)
 
-    if not hasattr(self, '_prev_snapshot'):
-     self._prev_snapshot = current_snapshot
-     self._prev_xpaths = set(current_snapshot.keys())
-     print(f"📸 Первый снимок: {len(current_snapshot)} элементов")
-     return
+   return "", len_c
 
-    current_xpaths = set(current_snapshot.keys())
-    prev_xpaths = self._prev_xpaths
-
-    # === НОВЫЕ ЭЛЕМЕНТЫ ===
-    new_xpaths = current_xpaths - prev_xpaths
-    if new_xpaths:
-     print("\n🟢 === НОВЫЕ ЭЛЕМЕНТЫ ===")
-     for xpath in new_xpaths:
-      attrs = current_snapshot[xpath]
-      print(f"  ➕ [{attrs['tag']}] class=\"{' '.join(attrs['classes'])}\"")
-      if attrs['text']:
-       print(f"     text: \"{attrs['text']}\"")
-
-    # === УДАЛЁННЫЕ ЭЛЕМЕНТЫ ===
-    removed_xpaths = prev_xpaths - current_xpaths
-    if removed_xpaths:
-     print("\n🔴 === УДАЛЁННЫЕ ЭЛЕМЕНТЫ ===")
-     for xpath in removed_xpaths:
-      attrs = self._prev_snapshot[xpath]
-      print(f"  ➖ [{attrs['tag']}] class=\"{' '.join(attrs['classes'])}\"")
-
-    # === ИЗМЕНЕНИЯ КЛАССОВ ===
-    common_xpaths = current_xpaths & prev_xpaths
-    for xpath in common_xpaths:
-     prev_classes = set(self._prev_snapshot[xpath]['classes'])
-     curr_classes = set(current_snapshot[xpath]['classes'])
-
-     if prev_classes != curr_classes:
-      added = curr_classes - prev_classes
-      removed = prev_classes - curr_classes
-
-      tag = current_snapshot[xpath]['tag']
-
-      print(f"\n🔄 [{tag}] ИЗМЕНЕНИЕ КЛАССОВ:")
-      if added:
-       print(f"   ➕ Добавлены: {sorted(added)}")
-      if removed:
-       print(f"   ➖ Удалены: {sorted(removed)}")
-
-    # Сохраняем текущее состояние
-    self._prev_snapshot = current_snapshot
-    self._prev_xpaths = current_xpaths
+  except Exception as ex:
+   print(f"Ошибка: {ex}")
+   return "", len_c
 
  def selenium_worker(self):
   """Отслеживает состояние и нажимает кнопку когда Алиса думает"""
@@ -289,140 +366,60 @@ class MyThread(QThread):
      oknyx_core = mic_button.find_element(By.CSS_SELECTOR, f".{self.OKNYX_CORE_CLASS}")
      aria_label = mic_button.get_attribute(f"{self.alisa}")
      classes = oknyx_core.get_attribute("class")
-     user_m = self.driver.find_elements(By.CSS_SELECTOR, ".MessageBubble-Container_from-user")
-     last_user_container = user_m[-1]
-     if last_user_container:
-      message = last_user_container.find_element(By.CSS_SELECTOR, ".MessageBubble").text.strip()
-      # Показываем сообщение когда слушаем
-      if "lis" in classes  and "стоп" in aria_label :#and "standby" not in classes:
-       time.sleep(1)
-       self.show_message(message, self.mic)
-      else:
-       self.show_message(None, False)
-       # Когда Алиса думает ("подготавливаю ответ") - ждём и нажимаем кнопку
-      # if "think" in classes and "стоп" in aria_label:
-      #   self.button.click()
-      #   time.sleep(3)
+     message, counts1 = self.get_user_message(self.counts)
+     if "lis" in classes and "стоп" in aria_label:
+      time.sleep(1)
+      self.show_message(message, self.mic)
+     else:
+      self.show_message(None, False)
    except Exception as e:
     pass
- def get_user_message(self, len_c):
-  try:
-   # Проверим, есть ли iframe
-   iframes = self.driver.find_elements(By.TAG_NAME, "iframe")
-   #print(f"Найдено iframe: {len(iframes)}")
-   # Попробуем разные селекторы
-   selectors = [
-    ".MessageBubble-Container_from-user",
-    "[data-testid='message-bubble-container-from-user']",
-    ".Message_from_user",
-    ".AliceTextBubble_from_user"
-   ]
-
-   for selector in selectors:
-    elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
-   # Основной поиск
-   user_m = WebDriverWait(self.driver, 10).until(
-    EC.presence_of_all_elements_located((By.CSS_SELECTOR, ".MessageBubble-Container_from-user"))   )
-
- #  print(f"Найдено сообщений пользователя: {len(user_m)}")
-   last_user_container = user_m[-1]
-   message = last_user_container.find_element(By.CSS_SELECTOR, ".AliceTextBubble").text.strip()
-  # print(f"Последнее сообщение: '{message}'")
-
-   if user_m and message:
-    counts = len(user_m)
-    return message, counts
-   return "", len_c
-  except Exception as ex:
-   print(f"Ошибка: {ex}")
-   return "", len_c
- def get_latest_message(self, len_c=0):
-  try:
-   self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-   # Проверяем состояние кнопки Алисы (самый надёжный способ)
-   # aria_label = self.button.get_attribute("aria-label")
-   # oknyx_core = self.button.find_element(By.CSS_SELECTOR, ".StandaloneOknyxCore")
-   # classes = oknyx_core.get_attribute("class").lower()   # Найти элемент, который УЖЕ имеет нужный класс
-   # oknyx_thinking = self.button.find_elements(By.CSS_SELECTOR, ".StandaloneOknyxCore.StandaloneOknyxCore_animation_thinking")
-   message, len_c = self.get_user_message(len_c)
-   # Алиса "думает/готовит ответ" если:
-   # 1. В классах есть "thinking" ИЛИ
-   # 2. aria-label содержит "стоп" И нет "listening"
-   # is_processing = ( oknyx_thinking or
-   #   "thin" or "collapsedOut" in classes
-   #   # or ("стоп" in aria_label or "lis" not in classes)
-   # )
-   # if is_processing:
-   #  print("stop")
-   #  message, len_c = self.get_user_message(len_c)
-   #  return message, len_c
-   return message, len_c
-  except Exception as ex:
-   print(ex)
-   return "", len_c
 
  def run(self):
   self.start_selenium()
   while self._running:
    try:
-    time.sleep(2.5)  # Уменьшили с 1 секунды
+    time.sleep(1.5)
     aria_label = self.button.get_attribute(self.alisa)
     oknyx_core = self.button.find_element(By.CSS_SELECTOR, f".{self.OKNYX_CORE_CLASS}")
-    filter_elem = oknyx_core.get_attribute(self.DATA_TESTID_ATTR)
-    classes = oknyx_core.get_attribute("class")
-    try:
-     oknyx_core = self.driver.find_element(By.CSS_SELECTOR, ".StandaloneOknyxCore")
-     classes = oknyx_core.get_attribute("class")
-     is_anim = "animation_thinking" in classes
-    except:
-     is_anim = False
+
+    filter_elem = oknyx_core.get_attribute("data-testid") or ""
+    classes = oknyx_core.get_attribute("class") or ""
     # self.track_all_dom_changes()
-
-    # print(aria_label)
-      # and "expandedOut"  in classes
-      # and "standby" not in classes
-
-    # if "think" in classes or "think" in filter_elem and ("начни слушать" in aria_label):
-    #  # time.sleep(1)
-    #  self.button.click()
-    #  print("треугольник")
-    # ВАРИАНТ 3: Отсутствие standby/listening
+    # 🔥 Алиса ГОВОРИТ (твое "мигание")
     # print(filter_elem)
-    if (  "th" in filter_elem or "collapsedOut" in classes or is_anim # and "сл" in aria_label
-    ):
-     print("⬜ белый квадратик")
-     self.message, counts1 = self.get_latest_message(self.counts)
-     # time.sleep(3)
-     self.button.click()
-     if counts1 > self.counts:# and self.mic and self.message and not any(phrase in self.message for phrase in excluded_phrases):
-       print(counts1)
-       self.counts = counts1
-       self.mic = False
-       thread = threading.Thread(target=process_text, args=(self.message,))
-       thread.start()
-       thread.join()
-       time.sleep(3)
-       self.button.click()
-       self.mic = True
+    # print(classes)
+    if "collapsedOut" in classes or "thinking" in classes:
+     # print("Алиса говорит (мигает)")
      # time.sleep(1)
-    # Нажимаем кнопку когда Алиса готова слушать
-    if self.mic and "слу" in aria_label and "su" in filter_elem or "standby" in classes:
-     time.sleep(2)
-     # self.message, counts1 = self.get_latest_message(self.counts)
+     self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+     self.message, counts1 = self.get_user_message(self.counts)
+
      self.button.click()
+     if counts1 > self.counts:
+      print(counts1)
+      self.counts = counts1
+      self.mic = False
+      thread = threading.Thread(target=process_text, args=(self.message,))
+      thread.start()
+      thread.join()
+      time.sleep(3)
+
+      self.mic = True
+      # 🔥 нажимаем СТОП (это важно)
+      self.button.click()
+
+    # 🎤 режим ожидания / слушает
+    if self.mic and "su" in filter_elem and "сл" in aria_label and "st" in classes:
+     print("вкл")
+     time.sleep(2)
+     self.button.click()
+     # time.sleep(2)
+     # self.button.click()
+
 
    except Exception as ex1:
     pass
-
-    # else:
-    #  self.is_text_stable()
-    #  print("0300")
-    #  message, counts = self.get_user_messages()
-    # if counts1 == 0:
-    #  self.counts = counts1
-    # if "стоп" in aria_label and "lis" not in classes and "think" not in classes and "collapse" not in classes and "standby" not in classes:
-    #  self.button.click()
-    #  time.sleep(2)
 
 class MyWindow(QWidget):
  def __init__(self, parent=None):
