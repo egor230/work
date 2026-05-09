@@ -167,7 +167,6 @@ def process_text(previous_message1):
   else:
     press_keys(text)
 
-
 def enhance_speech_for_recognition(audio, sample_rate=48000):
  try:
   audio = audio.astype(np.float32)
@@ -265,7 +264,6 @@ def get_webcam_source_id():# Определяет текущий Source ID (на
  except subprocess.CalledProcessError as e:
   print(f"pactl вернул ошибку: {e}", file=sys.stderr)
   return None
-
 
 def set_mute(mute: str, source_id: str):
  if source_id is None:

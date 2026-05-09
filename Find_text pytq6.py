@@ -3,7 +3,6 @@ from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QLi
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPalette, QColor
 
-
 class SaveDict:
  def __init__(self): self.labels, self.res, self.count = [], [], 0
 

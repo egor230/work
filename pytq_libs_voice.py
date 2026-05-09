@@ -127,7 +127,7 @@ def get_option():
   option.add_argument("--disable-background-timer-throttling")  # Отключение ограничения фоновых таймеров
   option.add_argument("--disable-background-networking")  # Отключение фоновой сетевой активности
   # option.add_argument('--user-data-dir=/home/egor/.config/google-chrome')
-  # option.add_argument('--user-data-dir=/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/google-chrome')
+  option.add_argument('--user-data-dir=/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/google-chrome')
   option.add_argument("--disable-notifications")
   option.add_experimental_option("useAutomationExtension", False)
   option.add_argument('--mute-audio')  # Отключаем звук на всех страницах

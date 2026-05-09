@@ -1,144 +1,97 @@
-import json
-import sys
-import os
+import json, sys, time, os
 from typing import List, Tuple
+from llama_cpp import Llama
 
-# ------------------- НАСТРОЙКИ -------------------
-# Используем Qwen2.5 14B GGUF через ModelScope
-MODEL_DISPLAY_NAME = "qwen2.5:14b"
-MODELSCOPE_MODEL_ID = "qwen/Qwen2.5-14B-Instruct-GGUF"
-GGUF_FILENAME = "qwen2.5-14b-instruct-q4_k_m.gguf"  # подберите нужный квантизатор
+# ================== НАСТРОЙКИ ==================
+MODEL_PATH = "/mnt/807EB5FA7EB5E954/Program Files/ai models/mradermacher/gemma-4-E2B-it-heretic-GGUF/gemma-4-E2B-it-heretic.Q4_K_S.gguf"
+# MMPROJ_PATH = "/mnt/807EB5FA7EB5E954/Program Files/ai models/lmstudio-community/gemma-4-E2B-it-GGUF/mmproj-gemma-4-E2B-it-BF16.gguf"
 
-# Пути (оставлены как у вас)
-REPLACEMENTS_PATH = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/list for replacements.json"
-CACHE_DIR = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache/"
-MODELS_DIR = os.path.join(CACHE_DIR, "models")
-os.makedirs(MODELS_DIR, exist_ok=True)
+if not os.path.exists(MODEL_PATH):
+ print("Нет модели:", MODEL_PATH)
+ sys.exit(1)
+t = time.time()
+llm = Llama(
+    model_path=MODEL_PATH,
+    # mmproj=MMPROJ_PATH,  # 🔥 Оставь, только если реально используешь мультимодальность
+    n_ctx=1024,          # ⬇️ Уменьши, если не нужен полный 4096. Экономит память и время старта
+    n_threads=os.cpu_count() or 8,
+    n_batch=512,         # Влияет на скорость обработки промпта, не на загрузку
+    logits_all=False,
+    verbose=False,
+    use_mmap=True,       # 🔥 Ключевое для скорости загрузки. Включает memory mapping
+    use_mlock=False,     # Лучше False: True блокирует память сразу и замедляет старт
+)
+prompt = """
+Ты — продвинутый корректор текста с функцией восстановления смысла.
 
-# ------------------- ЗАГРУЗКА МОДЕЛИ ЧЕРЕЗ MODELSCOPE -------------------
-def download_model() -> str:
-    """Скачивает GGUF-файл из ModelScope в MODELS_DIR и возвращает полный путь."""
-    model_path = os.path.join(MODELS_DIR, GGUF_FILENAME)
-    if os.path.exists(model_path):
-        print(f"✅ Модель уже существует: {model_path}")
-        return model_path
+Твоя задача: максимально точно исправить текст, даже если он сильно искажен.
 
-    print(f"⚠️ Модель не найдена. Начинаю загрузку через ModelScope...")
-    print(f"Репозиторий: {MODELSCOPE_MODEL_ID}, файл: {GGUF_FILENAME}")
+РАЗРЕШЕНО:
+- заменять слова полностью, если они искажены
+- исправлять фонетические ошибки (как при плохом распознавании речи)
+- восстанавливать слова по контексту
+- исправлять грамматику и орфографию
+- менять форму слов (склонение, род, число)
+- заменять бессмысленные фразы на осмысленные
 
-    try:
-        from modelscope.hub.file_download import model_file_download
-        # model_file_download скачивает конкретный файл в кэш, возвращает локальный путь
-        downloaded_path = model_file_download(
-            model_id=MODELSCOPE_MODEL_ID,
-            file_path=GGUF_FILENAME,
-            cache_dir=MODELS_DIR,
-            revision='master'   # можно указать нужную ветку/тег
-        )
-        # Проверяем, что файл скачался и скопируем/переместим в MODELS_DIR, если нужно
-        # Но model_file_download уже сохраняет в подпапку кэша. Для простоты будем использовать его напрямую.
-        print(f"✅ Модель загружена: {downloaded_path}")
-        return downloaded_path
-    except ImportError:
-        print("❌ Модуль modelscope не установлен. Установите: pip install modelscope")
-        sys.exit(1)
-    except Exception as e:
-        print(f"❌ Ошибка загрузки модели через ModelScope: {e}")
-        print("Проверьте название модели и файла. Доступные GGUF для Qwen: https://modelscope.cn/models?page=1&name=Qwen+GGUF")
-        sys.exit(1)
+ЗАПРЕЩЕНО:
+- удалять смысл текста
+- придумывать новый смысл, которого нет в оригинале
 
-# Инициализация модели
-model_path = download_model()
-print(f"Загружаю модель из {model_path}...")
+ПРАВИЛА:
+1. Если слово похоже на другое по звучанию — исправь его:
+   пример: "дея" → "дела"
+2. Если фраза не имеет смысла — восстанови её по контексту
+3. Исправляй регистр:
+   вы → Вы, вам → Вам, ваш → Ваш
+4. Исправляй имена и термины (с заглавной буквы)
+5. Используй агрессивную коррекцию, если текст явно испорчен
+6. Если сомневаешься — выбери наиболее вероятный вариант
 
-try:
-    from llama_cpp import Llama
-    llm = Llama(
-        model_path=model_path,
-        n_ctx=4096,
-        n_threads=8,       # подберите под ваш CPU
-        verbose=False
-    )
-    print("✅ Модель загружена в память")
-except ImportError:
-    print("❌ llama-cpp-python не установлен. Установите: pip install llama-cpp-python")
-    sys.exit(1)
-except Exception as e:
-    print(f"❌ Ошибка при загрузке модели в память: {e}")
-    sys.exit(1)
+ВАЖНО:
+- НЕ сохраняй ошибочные слова, если они явно неправильные
+- Приоритет: ЧИТАЕМОСТЬ и СМЫСЛ
 
-# ------------------- ОСТАЛЬНОЙ КОД (без изменений) -------------------
-def load_replacements() -> List[Tuple[str, str]]:
-    """Загружает словарь замен из JSON."""
-    try:
-        with open(REPLACEMENTS_PATH, encoding="utf-8") as f:
-            data = json.load(f)
-        if isinstance(data, dict):
-            return list(data.items())[:30]
-        elif isinstance(data, list):
-            return data[:30]
-        return []
-    except FileNotFoundError:
-        print(f"⚠️ Файл {REPLACEMENTS_PATH} не найден. Работаем без замен.")
-        return []
-    except Exception as e:
-        print(f"⚠️ Ошибка загрузки замен: {e}")
-        return []
-
-def get_correction_prompt(dirty_text: str, replacements: List[Tuple[str, str]]) -> str:
-    prompt = """Ты — профессиональный корректор русского текста, специализирующийся на исправлении ошибок автоматического распознавания речи (ASR).
-
-Пользователь отправляет текст, полученный из голосового ввода. В нём часто бывают фонетические ошибки, опечатки, неправильные предлоги, окончания и слитные слова.
-
-Твоя задача: исправить все ошибки, сделать текст грамматически правильным и естественным, но максимально сохранить оригинальный смысл. 
-Не перефразируй, не добавляй ничего от себя.
-
-Правила:
-- Исправляй только ошибки.
-- Сохраняй имена, названия, цифры и термины без изменений.
-- Выводи ТОЛЬКО исправленный текст. Без объяснений и комментариев.
-
+Отвечай только исправленным текстом.
 """
-    if replacements:
-        prompt += "\nПри исправлении обязательно учитывай следующие частые замены:\n"
-        for wrong, correct in replacements[:15]:
-            prompt += f'"{wrong}" → "{correct}"\n'
-    prompt += f"\nТекст для исправления:\n{dirty_text}"
-    return prompt
+def correct(text: str) -> str:
+ if not text.strip():
+  return text
 
-def correct_text(dirty_text: str) -> str:
-    replacements = load_replacements()
-    prompt = get_correction_prompt(dirty_text, replacements)
+ try:
+  response = llm.create_chat_completion(
+   messages=[
+    {"role": "system", "content": prompt},
+    {"role": "user", "content": text}
+   ],
+   max_tokens=256,
+   temperature=0.0,
+  )
 
-    try:
-        response = llm(
-            prompt,
-            max_tokens=2048,
-            temperature=0.2,
-            stop=["</s>"],   # стоп-токен для Qwen
-            echo=False
-        )
-        return response['choices'][0]['text'].strip()
-    except Exception as e:
-        print(f"Ошибка при обращении к модели: {e}")
-        return dirty_text
+  return response["choices"][0]["message"]["content"].strip()
 
-# ------------------- ЗАПУСК -------------------
+ except Exception as e:
+  print("Ошибка:", e)
+  return text
+
+# ================== ЗАПУСК ==================
 if __name__ == "__main__":
-    print("=== Исправитель ошибок голосового ввода (Python) ===\n")
-    print(f"Используется модель: {MODELSCOPE_MODEL_ID} / {GGUF_FILENAME}")
-    print(f"Модель хранится в: {model_path}\n")
+ print("=== ASR Corrector (Gemma-4) ===\n")
 
-    while True:
-        text = input("Введи текст с ошибками (или 'выход' для завершения):\n> ")
-        if text.lower() in ["выход", "exit", "quit", "йцукен"]:
-            break
-        if not text.strip():
-            continue
+ print(time.time() - t)
+ while True:
+  try:
+   user_input = input("Текст > ")
+  except:
+   break
 
-        print("\nИсправляю...")
-        fixed = correct_text(text)
+  if user_input.lower() in ["выход", "exit", "quit", "йцукен"]:
+   break
 
-        print("\n✅ Исправленный текст:")
-        print(fixed)
-        print("-" * 70)
+  if not user_input.strip():
+   continue
+
+  print("→ Исправляю...")
+  result = correct(user_input)
+  print("✅", result)
+  print("-" * 70)

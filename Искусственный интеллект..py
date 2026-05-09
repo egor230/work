@@ -1,194 +1,242 @@
-# Импорт необходимых библиотек
 import sys
 import os
-import re
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QLineEdit, QPushButton
-from PyQt5.QtCore import Qt
-from llama_cpp import Llama
 import contextlib
+from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtWidgets import (
+    QApplication,
+    QMainWindow,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QTextEdit,
+    QLineEdit,
+    QPushButton,
+    QLabel,
+)
 
-# Путь к плагинам PyQt5
-os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = "myenv/lib/python3.12/site-packages/PyQt5/Qt5/plugins"
+from llama_cpp import Llama
 
-# Путь к модели
-model_path = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache/ollama/gemma-3-270m-it-F16.gguf"
+MODEL_PATH = "/mnt/807EB5FA7EB5E954/Program Files/ai models/lmstudio-community/gemma-4-E2B-it-GGUF/gemma-4-E2B-it-Q4_K_M.gguf"
 
-# Функция для подавления вывода
+
 @contextlib.contextmanager
 def suppress_output():
-  with open(os.devnull, 'w') as devnull:
-    old_stderr = sys.stderr
-    sys.stderr = devnull
+    with open(os.devnull, "w") as devnull:
+        old_stdout = sys.stdout
+        old_stderr = sys.stderr
+        sys.stdout = devnull
+        sys.stderr = devnull
+        try:
+            yield
+        finally:
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
+
+
+class ModelLoaderThread(QThread):
+    finished = pyqtSignal(object, str)
+
+    def run(self):
+        if not os.path.exists(MODEL_PATH):
+            self.finished.emit(None, f"Файл модели не найден:\n{MODEL_PATH}")
+            return
+
+        try:
+            with suppress_output():
+                llm = Llama(
+                    model_path=MODEL_PATH,
+                    n_ctx=4096,
+                    n_threads=8,
+                    n_batch=256,
+                    verbose=False,
+                )
+            self.finished.emit(llm, "")
+        except Exception as e:
+            self.finished.emit(None, str(e))
+
+
+def generate_response(llm, prompt: str) -> str:
+    if llm is None:
+        return "Ошибка: модель не загружена."
+
+    # правильный формат для Gemma instruct
+        # усиливаем инструкцию (это критично)
+    full_prompt = (
+     "<start_of_turn>system\n"
+     "Ты полезный ассистент. Всегда давай полный и законченный ответ.\n"
+     "но нужно отвечать на русском языке. \n"
+     "<end_of_turn>\n"
+     "<start_of_turn>user\n"
+     f"{prompt}\n"
+     "<end_of_turn>\n"
+     "<start_of_turn>model\n"
+    )
+
     try:
-      yield
-    finally:
-      sys.stderr = old_stderr
+        output = llm(
+            full_prompt,
+            max_tokens=256,
+            temperature=0.5,
+            top_p=0.9,
+            stop=["<end_of_turn>"],
+            echo=False,
+        )
 
-# Загрузка модели
-try:
-  with suppress_output():
-    llm = Llama(
-      model_path=model_path,
-      n_ctx=4096,
-      n_threads=8,
-      n_batch=512,
-      verbose=False
-    )
-except Exception as e:
-  print(f"Ошибка при загрузке модели: {e}")
-  def generate_response(prompt):
-    return f"Ошибка: Не удалось загрузить LLM. Проверьте путь к модели: {model_path}"
-  llm = None
-else:
-  def generate_response(prompt):
-    system_prompt = "Отвечай кратко и по существу. Если вопрос — это вычисление, просто дай ответ без пояснений."
-    full_prompt = f"{system_prompt}\n\nВопрос: {prompt}\nОтвет:"
-    output = llm(
-      full_prompt,
-      max_tokens=128,
-      temperature=0.3,
-      top_p=0.9,
-      echo=False
-    )
-    raw_text = output['choices'][0]['text'].strip()
+        text = output["choices"][0]["text"].strip()
 
-    # Убираем возможные повторы системного промпта, вопроса и лишние части
-    cleaned = re.sub(r'(Вопрос:|Ответ:).*', '', raw_text, flags=re.IGNORECASE | re.DOTALL).strip()
-    if not cleaned:
-      cleaned = raw_text
-    return cleaned
+        return text if text else "Модель не дала ответа."
 
-# Главное окно чата
+    except Exception as e:
+        return f"Ошибка генерации: {e}"
+
+
+class GenerationWorker(QThread):
+    result_ready = pyqtSignal(str)
+
+    def __init__(self, llm, prompt: str):
+        super().__init__()
+        self.llm = llm
+        self.prompt = prompt
+
+    def run(self):
+        response = generate_response(self.llm, self.prompt)
+        self.result_ready.emit(response)
+
+
 class ChatBotWindow(QMainWindow):
-  def __init__(self):
-    super().__init__()
-    self.init_ui()
+    def __init__(self):
+        super().__init__()
+        self.llm = None
+        self.worker = None
+        self.loader_thread = None
 
-  def init_ui(self):
-    self.setWindowTitle("Локальный Чат-бот Gemma")
-    self.setGeometry(100, 100, 800, 600)
+        self.init_ui()
+        self.init_model()
 
-    central_widget = QWidget()
-    self.setCentralWidget(central_widget)
-    layout = QVBoxLayout(central_widget)
+    def init_model(self):
+        self.input_field.setEnabled(False)
+        self.send_button.setEnabled(False)
+        self.status_label.setText("Загрузка модели...")
 
-    # История чата
-    self.chat_history = QTextEdit()
-    self.chat_history.setReadOnly(True)
-    self.chat_history.setAcceptRichText(True)
-    self.chat_history.setStyleSheet("font-family: 'Noto Sans', sans-serif;")
-    layout.addWidget(self.chat_history)
+        self.loader_thread = ModelLoaderThread()
+        self.loader_thread.finished.connect(self.on_model_loaded)
+        self.loader_thread.start()
 
-    # Поле ввода и кнопка
-    input_layout = QHBoxLayout()
-    self.input_field = QLineEdit()
-    self.input_field.setPlaceholderText("Введите ваш вопрос...")
-    input_layout.addWidget(self.input_field)
+    def on_model_loaded(self, llm, error):
+        if llm:
+            self.llm = llm
+            self.status_label.setText("Модель загружена")
+        else:
+            self.status_label.setText(f"Ошибка: {error}")
 
-    self.send_button = QPushButton("Отправить")
-    self.send_button.setFixedWidth(120)
-    self.send_button.clicked.connect(self.send_message)
-    input_layout.addWidget(self.send_button)
+        self.input_field.setEnabled(True)
+        self.send_button.setEnabled(True)
+        self.input_field.setFocus()
 
-    layout.addLayout(input_layout)
+    def init_ui(self):
+        self.setWindowTitle("Локальный чат бот Gemma")
+        self.setMinimumSize(900, 650)
 
-    self.input_field.returnPressed.connect(self.send_message)
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        layout = QVBoxLayout(central_widget)
 
-    # Тёмная тема
-    self.setStyleSheet("""
-      QMainWindow {
-        background-color: #1a1a1a;
-        color: #e0e0e0;
-      }
-      QTextEdit {
-        background-color: #262626;
-        color: #e0e0e0;
-        border: 2px solid #3a3a3a;
-        border-radius: 12px;
-        padding: 15px;
-        font-size: 15px;
-        line-height: 1.5;
-      }
-      QLineEdit {
-        background-color: #333333;
-        color: #ffffff;
-        border: 1px solid #4a4a4a;
-        border-radius: 15px;
-        padding: 10px 15px;
-        font-size: 15px;
-      }
-      QLineEdit:focus {
-        border: 1px solid #00aaff;
-      }
-      QPushButton {
-        background-color: #00aaff;
-        color: #ffffff;
-        border: none;
-        border-radius: 15px;
-        padding: 10px;
-        font-size: 15px;
-        font-weight: bold;
-      }
-      QPushButton:hover {
-        background-color: #0099e6;
-      }
-      QPushButton:pressed {
-        background-color: #0077b3;
-      }
-    """)
+        self.status_label = QLabel("Ожидание...")
+        layout.addWidget(self.status_label)
 
-  def send_message(self):
-    user_input = self.input_field.text().strip()
-    if not user_input:
-      return
+        self.chat_history = QTextEdit()
+        self.chat_history.setReadOnly(True)
+        self.chat_history.setStyleSheet("font-family: 'Noto Sans', sans-serif;")
+        layout.addWidget(self.chat_history)
 
-    # Сообщение пользователя (справа)
-    user_message = f"""
-    <div style='display: flex; justify-content: flex-end; width: 100%; margin: 8px 0;'>
-      <div style='background-color: #00aaff; color: #ffffff; border-radius: 15px 15px 0 15px;
-                  padding: 10px 14px; max-width: 70%; font-size: 14px; white-space: pre-wrap;'>
-        <b>Вы:</b> {user_input}
-      </div>
-    </div>
-    """
-    self.chat_history.insertHtml(user_message)
-    self.chat_history.insertHtml("<div style='clear: both;'></div>")
-    self.chat_history.verticalScrollBar().setValue(self.chat_history.verticalScrollBar().maximum())
+        input_layout = QHBoxLayout()
 
-    self.input_field.clear()
+        self.input_field = QLineEdit()
+        self.input_field.setPlaceholderText("Введите ваш вопрос...")
+        input_layout.addWidget(self.input_field)
 
-    # Сообщение "Модель думает..."
-    thinking_tag = "<div id='thinking' style='color: #888; font-style: italic; margin: 10px; text-align: center;'>Модель думает...</div>"
-    self.chat_history.insertHtml(thinking_tag)
-    self.chat_history.verticalScrollBar().setValue(self.chat_history.verticalScrollBar().maximum())
-    QApplication.processEvents()
+        self.send_button = QPushButton("Отправить")
+        self.send_button.setFixedWidth(120)
+        self.send_button.clicked.connect(self.send_message)
+        input_layout.addWidget(self.send_button)
 
-    # Генерация ответа
-    if llm:
-      response = generate_response(user_input)
-    else:
-      response = "Не удалось сгенерировать ответ (модель не загружена)."
+        layout.addLayout(input_layout)
 
-    # Удаление "Модель думает..."
-    html = self.chat_history.toHtml().replace(thinking_tag, "")
-    self.chat_history.setHtml(html)
+        self.input_field.returnPressed.connect(self.send_message)
 
-    # Сообщение бота (слева)
-    bot_message = f"""
-    <div style='display: flex; justify-content: flex-start; width: 100%; margin: 8px 0;'>
-      <div style='background-color: #333333; color: #e0e0e0; border-radius: 15px 15px 15px 0;
-                  padding: 10px 14px; max-width: 70%; font-size: 14px; white-space: pre-wrap;'>
-        <b>Бот:</b> {response}
-      </div>
-    </div>
-    """
-    self.chat_history.insertHtml(bot_message)
-    self.chat_history.insertHtml("<div style='clear: both;'></div>")
-    self.chat_history.verticalScrollBar().setValue(self.chat_history.verticalScrollBar().maximum())
+        self.setStyleSheet("""
+            QMainWindow {
+                background-color: #1a1a1a;
+                color: #e0e0e0;
+            }
+            QTextEdit {
+                background-color: #262626;
+                color: #e0e0e0;
+                border: 2px solid #3a3a3a;
+                border-radius: 12px;
+                padding: 16px;
+                font-size: 16px;
+            }
+            QLineEdit {
+                background-color: #333333;
+                color: #ffffff;
+                border: 1px solid #4a4a4a;
+                border-radius: 16px;
+                padding: 10px 16px;
+                font-size: 16px;
+            }
+            QLineEdit:focus {
+                border: 1px solid #00aaff;
+            }
+            QPushButton {
+                background-color: #00aaff;
+                color: #ffffff;
+                border: none;
+                border-radius: 16px;
+                padding: 10px;
+                font-size: 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #0099e6;
+            }
+            QPushButton:pressed {
+                background-color: #0077b3;
+            }
+        """)
 
-# Запуск приложения
-if __name__ == '__main__':
-  app = QApplication(sys.argv)
-  window = ChatBotWindow()
-  window.show()
-  sys.exit(app.exec_())
+    def send_message(self):
+        user_input = self.input_field.text().strip()
+        if not user_input:
+            return
+
+        self.chat_history.append(f"<b>Вы:</b> {user_input}")
+        self.input_field.clear()
+
+        if self.llm:
+            self.input_field.setEnabled(False)
+            self.send_button.setEnabled(False)
+
+            self.worker = GenerationWorker(self.llm, user_input)
+            self.worker.result_ready.connect(self.on_response_ready)
+            self.worker.start()
+
+    def on_response_ready(self, response):
+        self.chat_history.append(f"<b>Бот:</b> {response}")
+
+        self.input_field.setEnabled(True)
+        self.send_button.setEnabled(True)
+        self.input_field.setFocus()
+
+    def closeEvent(self, event):
+        if self.worker and self.worker.isRunning():
+            self.worker.quit()
+            self.worker.wait()
+        event.accept()
+
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    window = ChatBotWindow()
+    window.show()
+    sys.exit(app.exec())

@@ -296,12 +296,9 @@ class MyThread(QThread):
   """
   try:
    # Селекторы для поиска контейнеров сообщений пользователя
-   user_selectors = [
-    ".MessageBubble-Container_from-user",
+   user_selectors = [   ".MessageBubble-Container_from-user",
     "[data-testid='message-bubble-container-from-user']",
-    ".Message_from_user",
-    ".AliceTextBubble_from_user",
-    ".FuturisTextBubble_from_user",
+    ".Message_from_user",    ".AliceTextBubble_from_user",    ".FuturisTextBubble_from_user",
    ]
 
    # Поиск всех сообщений пользователя
@@ -319,12 +316,9 @@ class MyThread(QThread):
     return "", len_c
 
    # Селекторы для текста внутри контейнера
-   text_selectors = [
-    ".MessageBubble",
-    ".AliceTextBubble",
-    ".FuturisTextBubble",
-    ".MessageBubble-Text",
-   ]
+   text_selectors = [  ".MessageBubble",
+    ".AliceTextBubble",   ".FuturisTextBubble",
+    ".MessageBubble-Text",   ]
 
    # Извлечение текста из последнего сообщения
    last_user_container = user_messages[-1]
@@ -411,13 +405,11 @@ class MyThread(QThread):
 
     # 🎤 режим ожидания / слушает
     if self.mic and "su" in filter_elem and "сл" in aria_label and "st" in classes:
-     print("вкл")
+     # print("вкл")
      time.sleep(2)
      self.button.click()
      # time.sleep(2)
      # self.button.click()
-
-
    except Exception as ex1:
     pass
 

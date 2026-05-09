@@ -25,7 +25,6 @@ cache_dir = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_l
 t = time.time()
 # Инициализация модели
 model = WhisperModel( model_name, device="cpu", compute_type="int8", download_root=cache_dir)
-
 print(f"Время загрузки модели: {time.time() - t:.2f} сек")
 
 class MyThread(QtCore.QThread):
