@@ -20,7 +20,7 @@ source_id = get_webcam_source_id()      # ← твоя функция
 set_mute("0", source_id)# Проверка и загрузка модели GigaAMprint("0")
 def check_model():
  models = ["v1_ssl", "v2_ssl", "ssl", "ctc", "v1_ctc", "v2_ctc", "rnnt", "v1_rnnt", "v2_rnnt", "emo", "v3_e2e_rnnt", "v3_e2e_ctc"]
- model_name = models[-1]  # v2_rnnt
+ model_name = models[-2]  # v2_rnnt
  try:  # Проверка наличия файла (указываем полный путь, как это делает gigaam)
   cache_dir = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache/gigaam"
   model = load_model(model_name, cache_dir ) # 4. Указываем корневой каталог, где лежит модель (GigaAM сам добавит /gigaam)
@@ -101,7 +101,7 @@ def update_label(root, label, model, source_id):
           last_speech_time = time.time()
      root.withdraw()#
      if is_speech(0.030, array):
-      array = boost_by_db_range(array, -4,-20)
+      # array = boost_by_db_range(array, -4,-20)
       print(f"Пауз обнаружено: {pause_count}")
       pause_count=0
       message = model.transcribe(array)

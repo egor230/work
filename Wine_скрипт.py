@@ -32,36 +32,35 @@ export VKD3D_FEATURE_LEVEL="12_2"
 export LOCALE_SELECT="ru_RU.utf"
 export FPS_LIMIT="90"
 export USE_FSYNC="1"
-export GUI_DISABLED_CS="0"
 export USE_GAMEMODE="1"
 export USE_D3D_EXTRAS="1"
 export FIX_VIDEO_IN_GAME="1"
 export USE_GSTREAMER="1"
 export FORCE_LARGE_ADDRESS_AWARE="1"
-export USE_SHADER_CACHE="1"
+# export USE_SHADER_CACHE="1"
 export USE_RUNTIME="1"
-export AMD_VULKAN_USE="radv"
+#export AMD_VULKAN_USE="radv"
 export MESA_VK_WSI_PRESENT_MODE="mailbox"
-# Включаем MangoHud
-# export MANGOHUD="1"
+# export MANGOHUD="1" # Включаем MangoHud
 # export MANGOHUD_USER_CONF="0"
 # export MANGOHUD_CONFIG="fps_metrics,horizontal,horizontal_stretch,hud_compact,font_size=24"
 export WINE_FULLSCREEN_FSR="1"
 export WINE_FULLSCREEN_FSR_STRENGTH="5"
-export SOUND_DRIVER_USE="alsa"
+export SOUND_DRIVER_USE="pulse"
 # Параметры gamescope
 GAMESCOPE_ARGS="-f -W 1920 -H 1080 -w 1920 -h 1080 -r 90 -S auto -F fsr --sharpness 20"
 # GAMESCOPE_ARGS="-f --fullscreen -W 1920 -H 1080 -w 1280 -h 720 -r 90 -S auto -F fsr --sharpness 20"
-
-# Пути
 # Назначаем переменные
 export WINEPREFIX="/home/egor/PortProton/data/prefixes/DEFAULT"
 
 # Запуск через gamescope
 #gamescope $GAMESCOPE_ARGS -- "$WINE_PATH" "$GAME_PATH"
 cd \"{0}\"
-DXVK_HUD=fps gamescope -f -w 1920 -h 1080 -r 90 -- \"/home/egor/PortProton/data/dist/PROTON-SAREK10-29-ASYNC/bin/wine\" {1}
-exit; '''.format(file1, filename)  # показать список устройств в терминале
+#DXVK_HUD=fps gamescope -f -w 1920 -h 1080 -r 90 -- 
+wine {1}
+exit; '''.format(directory, filename)  # показать список устройств в терминале
+# Пути
+# \"/home/egor/PortProton/data/dist/PROTON-SAREK10-29-ASYNC/bin/wine\"
 file=str(os.path.join(directory, filename_without_extension))+".sh"
 with open(file, 'w') as file:    # Записываем текст в файл
     file.write(show_list_id)

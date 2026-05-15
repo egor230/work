@@ -122,11 +122,7 @@ def get_option():
   # option.add_argument("--disable-images")
   # option.add_argument("--automatic-wait-for-preview")
   # option.add_argument("--enable-features=WebRtcHideLocalIpsWithMdns")
-  # option.add_argument("--disable-extensions")
-  # option.add_argument("--disable-autofill")
-  option.add_argument("--disable-background-timer-throttling")  # Отключение ограничения фоновых таймеров
-  option.add_argument("--disable-background-networking")  # Отключение фоновой сетевой активности
-  # option.add_argument('--user-data-dir=/home/egor/.config/google-chrome')
+  # option.add_argument("--disable-extensions")cle-chrome')
   # option.add_argument('--user-data-dir=/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/google-chrome')
   option.add_argument("--disable-notifications")
   option.add_experimental_option("useAutomationExtension", False)

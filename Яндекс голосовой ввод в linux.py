@@ -1,166 +1,226 @@
-from libs_voice import *
-import tkinter as tk
-from tkinter import Frame, Label
-from pynput import keyboard
-from pynput.keyboard import Controller as Contr1, Key
-driver = 0
-previous_message = None
-def on_press(key):  # обработчик клави.  # print(key )
- key = str(key).replace(" ", "")
- if key == "Key.shift_r":  #
-  k.set_flag(True)
-  return True
- if key == "Key.space" or key == "Key.right" or key == "Key.left" \
-  or key == "Key.down" or key == "Key.up":
-  k.set_flag(False)
-  return True
- if key == "Key.alt":
-  driver = k.get_driver()
-  k.update_dict()
-  return True
- else:
-  return True
-def on_release(key):
- pass
- return True
-def start_listener():
- global listener
- listener = keyboard.Listener(on_press=on_press, on_release=on_release)
- listener.start()
+from pytq_libs_voice import *
+from write_text import *
 
-start_listener()  # Запускаем слушатель# driver.set_window_position(1, 505)
-option = get_option()  # Включить настройки.# option.add_argument("--headless")  # Включение headless-режима
-driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=option)  # driver.set_window_size(553, 357)  # optiol
-driver.get("https://alice.yandex.ru/chat/01938823-14ea-4000-bd7a-3cca57830d6a/")  # открыть сайт
-# Размер окна: Ширина = 693, Высота = 407  # Координаты окна: X = 662, Y = 292
-excluded_phrases = ["С чего начнём?Нарисовать картинку", "Для звонков телефон как-то удобнее, давайте попробую там.", "Яндекс — с АлисойБыстрый поиск и Алиса всегда рядомПоиск текстом, картинкой или голосомУмная",
-                    "Три заветных слова: мобильное приложение Яндекса. Там такое наверняка можно сделать."]  # input()      # Получение текущего адреса страницы
+# ====================== НАСТРОЙКИ ======================
+from pynput import mouse
 
-html = driver.page_source
-# with open('page_source.txt', 'w', encoding='utf-8') as file:
-#   file.write(html)
+logging.basicConfig(level=logging.INFO, format=' - %(message)s')
 
-# ---------- настройки ----------
-ICON_PATH = "/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project/голос.png"
-mic_on = True
-tray = None   # будет создано в start_tray()
-counts = 0  # len([message.text.strip() for message in driver.find_elements(By.CLASS_NAME, 'message-bubble_container_from-user')])
-previous_message = ""
-def tray_left(icon, button):
- global mic_on
- mic_on = not mic_on
- set_mute("0" if mic_on else "1")
- icon.title = "OFF" if mic_on else "ON"
+class VoiceThread(QThread):
+ icon_signal = pyqtSignal(str)
+ status_signal = pyqtSignal(str)
+ stop_request = pyqtSignal()  # Сигнал для остановки записи по клику мыши
 
-def start_tray():
- global tray
- img = Image.open(ICON_PATH)
- tray = Icon("OFF" if mic_on else "ON", img, title="OFF" if mic_on else "ON",
-             menu=Menu(MenuItem("ON OFF", tray_left)) )
- tray.on_click = tray_left
- tray.run()
-set_mute("0" if mic_on else "1")
-driver.implicitly_wait(5)  # Даём странице время загрузиться
-new_chat_button = WebDriverWait(driver, 10).until(
- EC.element_to_be_clickable((By.XPATH, "//button[.//span[@class='AliceButton-Icon']]")))
+ def __init__(self, icon_mic_path, icon_stop_path, parent=None):
+  super().__init__(parent)
+  self.icon_mic = icon_mic_path
+  self.icon_stop = icon_stop_path
+  self._running = True
+  self.recording = False
+  self.driver = None
+  self.stop_request.connect(self.stop_recording)  # Подключаем сигнал к слоту
 
-del_all_chats(driver)  # Ждём кнопку переключения режима
+ def stop_recording(self):
+  """Останавливает запись, если она активна (безопасно из главного потока)"""
+  if self.recording:
+   self.toggle()
 
-new_chat_button.click()  # Нажимаем на кнопку
-url = str(driver.current_url)
-
-
-class LabelUpdater:
- def __init__(self, root, driver, url, excluded_phrases, k):
-  self.root = root
-  self.driver = driver
-  self.url = url
-  self.excluded_phrases = excluded_phrases
-  self.k = k
-  self.counts = 0
-  self.last_message = "..."
-  self.mic_on = True  # предполагаем, что mic_on будет управляться отдельно
-  
-  self.setup_ui()
- 
- def setup_ui(self):
-  self.frame = tk.Frame(self.root)
-  self.label = tk.Label(self.frame, text=self.last_message, font='Times 14', anchor="center")
-  self.label.pack(padx=3, fill=tk.X, expand=True)
-  self.frame.pack(fill=tk.X)
-  
-  self.root.overrideredirect(True)
-  self.root.resizable(True, True)
-  self.root.attributes("-topmost", True)
- 
- def update_label(self):
+ def find_mic_button(self):
+  if not self.driver:
+   return None
   try:
-   button = self.driver.find_element(By.CSS_SELECTOR, "button[data-testid='oknyx']")  # повторно находим кнопку
-   if not self.mic_on:
-    self.root.withdraw()  # Сначала скрываем окно
+   wait = WebDriverWait(self.driver, 10)
+   svg = wait.until(EC.presence_of_element_located(
+    (By.CSS_SELECTOR, "button.AliceButton_pin_circle.AliceButton_size_m svg path[d*='M3.374 10']")
+   ))
+   mic_btn = svg.find_element(By.XPATH, "./ancestor::button")
+   return mic_btn
+  except Exception as e:
+   logging.warning(f"Микрофон не найден: {e}")
+   return None
+
+ def find_stop_button(self):
+  if not self.driver:
+   return None
+  selectors = [
+   (By.CSS_SELECTOR, '.StandaloneRichInput-ControlsPlayer button.AliceButton_view_secondary'),
+   (By.CSS_SELECTOR, 'button.AliceButton_view_secondary.AliceButton_square'),
+  ]
+  wait = WebDriverWait(self.driver, 10)
+  for by, sel in selectors:
+   try:
+    btn = wait.until(EC.element_to_be_clickable((by, sel)))
+    return btn
+   except:
+    continue
+  return None
+
+ def get_recognized_text(self):
+  """Улучшенное извлечение текста"""
+  if not self.driver:
+   return ""
+  selectors = [
+   (By.CSS_SELECTOR, "input[role='textbox'], textarea[role='textbox']"),
+   (By.CSS_SELECTOR, ".StandaloneInput-Field input, .StandaloneInput-Field textarea"),
+  ]
+  for by, selector in selectors:
+   try:
+    element = WebDriverWait(self.driver, 3).until(
+     EC.presence_of_element_located((by, selector))
+    )
+    text = (element.get_attribute("value") or element.text or "").strip()
+    if len(text) > 2:
+     return text
+   except:
+    continue
+  return ""
+
+ def clear_input_field(self):
+  try:
+   field = WebDriverWait(self.driver, 3).until(
+    EC.element_to_be_clickable((By.CSS_SELECTOR, "input[role='textbox'], textarea"))
+   )
+   field.click()
+   self.driver.execute_script("arguments[0].value = '';", field)
+   self.driver.execute_script("arguments[0].dispatchEvent(new Event('input', {bubbles: true}));", field)
+   time.sleep(0.2)
+   if field.get_attribute("value"):
+    field.send_keys(Keys.CONTROL + "a")
+    field.send_keys(Keys.DELETE)
+   remaining = field.get_attribute("value")
+   if remaining:
+    for _ in range(len(remaining)):
+     field.send_keys(Keys.BACKSPACE)
+  except Exception as e:
+   logging.warning(f"Очистка поля не удалась: {e}")
+
+ def click_element(self, button):
+  if not button:
+   return False
+  for method_name, action in [
+   ("ActionChains", lambda: ActionChains(self.driver).move_to_element(button).pause(0.1).click().perform()),
+   ("JS", lambda: self.driver.execute_script("arguments[0].click();", button)),
+   ("Native", lambda: button.click())
+  ]:
+   try:
+    action()
+    logging.info(f"Клик выполнен ({method_name})")
+    return True
+   except:
+    continue
+  return False
+
+ def start_selenium(self):
+  options = get_option()
+  options.add_argument("--disable-extensions")
+  options.add_argument('--user-data-dir=/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/google-chrome')
+  self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+  self.driver.get("https://alice.yandex.ru/")
+  try:
+   WebDriverWait(self.driver, 15).until(
+    EC.presence_of_element_located((By.CSS_SELECTOR, "button.AliceButton_pin_circle"))
+   )
+  except:
+   logging.warning("Не дождались кнопки микрофона, но продолжаем")
+  time.sleep(1)
+
+ def run(self):
+  self.start_selenium()
+  time.sleep(1)
+  self.toggle()  # автоматический старт записи
+
+  def start_mouse_listener_with_delay():
+   """Функция для запуска слушателя мыши через 10 секунд в отдельном потоке"""
+   time.sleep(10)
+
+   def on_click(x, y, button, pressed):
+    # Нам нужен клик левой кнопкой (нажатие)
+    if button == mouse.Button.left and pressed:
+     # Сигнал должен быть испущен в потоке слушателя,
+     self.stop_request.emit()
+
+   # Запускаем слушатель в демоническом потоке, чтобы он не блокировал завершение
+   listener = mouse.Listener(on_click=on_click)
+   listener.daemon = True
+   listener.start()
+   logging.info("Глобальный слушатель мыши активирован через 10 секунд (клик левой кнопкой останавливает запись)")
+
+   # Запускаем функцию в отдельном потоке
+
+  listener_thread = threading.Thread(target=start_mouse_listener_with_delay, daemon=True)
+  listener_thread.start()
+
+  while self._running:
+   time.sleep(0.5)
+
+ def toggle(self):
+  if not self.recording:
+   button = self.find_mic_button()
+   if button and self.click_element(button):
+    self.recording = True
+    self.icon_signal.emit(self.icon_stop)
+    self.status_signal.emit("Внимательно вас слушаю")
    else:
-    self.root.deiconify()  # Всегда показываем окно когда микрофон включен
-    message, counts1 = get_latest_message(self.driver, self.counts)
-    
-    # Обновляем текст только если есть новое сообщение
-    if message and len(message.strip()) > 0:
-     self.last_message = message
-    # Если message пустое, сохраняем предыдущее значение
-    
-    self.label.config(text=str(self.last_message))
-    len_message = len(self.last_message) * 10
-    if self.last_message and len(self.last_message) < 4:
-     len_message = len(self.last_message) * 10 + 12
-    self.root.geometry(f"{len_message}x20+600+1025")
-    
-    mic_button = self.driver.find_element(By.CSS_SELECTOR, ".StandaloneOknyx")  # Альтернатива без ожидания, если элемент точно есть
-    oknyx_core = mic_button.find_element(By.CSS_SELECTOR, ".StandaloneOknyxCore")
-    aria_label = mic_button.get_attribute('aria-label')
-    filter_elem = oknyx_core.get_attribute("data-testid")  # Получаем значение атрибута data-testid
-    
-    if 'слушать' in aria_label or "sus" in filter_elem:  # print("on")# 'listening' in filter_elem or
-     button.click()  # Находим ВНУТРИ него элемент с классом StandaloneOknyxCore, который содержит data-testid
-    
-    if 'стоп' in aria_label:  # Жor "sus" in filter_elem:  # print("on")# 'listening' in filter_elem or
-     print(filter_elem)
-     # self.root.withdraw()  # Сначала скрываем окно
-     self.root.deiconify()
-    
-    if (counts1 > self.counts and len(self.last_message) != 0 and not any(phrase in self.last_message for phrase in self.excluded_phrases)):
-     thread = threading.Thread(target=process_text, args=(self.last_message, self.k,))  # break  #
-     # thread.daemon
-     thread.start()  #
+    logging.error("Не удалось включить микрофон")
+  else:
+   logging.info("⏹️ Остановка записи...")
+   button = self.find_stop_button()
+   if button and self.click_element(button):
+    time.sleep(2.5)
+    text = self.get_recognized_text()
+    self.clear_input_field()
+    if text:
+     thread = threading.Thread(target=process_text, args=(text,))
+     thread.start()
      thread.join()
-     print("+++++++")
-     print(counts1)  # print(counts)
-     self.counts = counts1  # break
-     time.sleep(1.7)
-     button.click()  # print(filter_elem)
-  except Exception as ex1:  # print(ex1)
-   current_url = str(self.driver.current_url)  # Получение текущего адреса страницы
-   if "/search/" in current_url:  # Проверка, содержится ли в адресе строка "/alice.yandex.ru/chat/"
-    print("22222")
-    self.driver.get(self.url)
-    time.sleep(4)  # Ждём, пока список чатов загрузится
-    self.counts = 0
-    # del_all_chats(driver)
-    # button.click()
+   self.recording = False
+   self.icon_signal.emit(self.icon_mic)
+
+ def stop(self):
+  self._running = False
+  if self.driver:
+   try:
+    self.driver.quit()
+   except:
     pass
-   pass
-  finally:
-   self.root.after(650, self.update_label)
 
-root = tk.Tk()
-frame = tk.Frame(root)
-label = tk.Label(frame, text="...", font='Times 14', anchor="center")
-label.pack(padx=3, fill=tk.X, expand=True)
-frame.pack(fill=tk.X)
-root.overrideredirect(True)
-root.resizable(True, True)
-root.attributes("-topmost", True)
+class MyWindow(QWidget):
+ def __init__(self):
+  super().__init__()
+  BASE_PATH = os.path.dirname(os.path.abspath(__file__))
+  self.icon_mic = os.path.join(BASE_PATH, "voice.png")
+  self.icon_stop = os.path.join(BASE_PATH, "stop.png")
+  self.thread = VoiceThread(self.icon_mic, self.icon_stop)
+  self.thread.icon_signal.connect(self.change_icon)
+  self.thread.status_signal.connect(self.update_tooltip)
+  self.tray = QSystemTrayIcon(QIcon(self.icon_mic), self)
+  self.tray.setToolTip("Голосовой ввод Алиса — OFF")
+  menu = QMenu()
+  quit_act = QAction("Выход", self)
+  quit_act.triggered.connect(self.quit_app)
+  menu.addAction(quit_act)
+  self.tray.setContextMenu(menu)
+  self.tray.activated.connect(self.tray_clicked)
+  self.tray.show()
+  self.thread.start()
 
-# Предполагается, что driver, url, excluded_phrases, k определены где-то ранее
-updater = LabelUpdater(root, driver, url, excluded_phrases, k)
-threading.Thread(target=start_tray, daemon=True).start()
-root.after(650, updater.update_label)
-root.mainloop()
+ def tray_clicked(self, reason):
+  if reason == QSystemTrayIcon.ActivationReason.Trigger:
+   self.thread.toggle()
+
+ def change_icon(self, path):
+  self.tray.setIcon(QIcon(path))
+
+ def update_tooltip(self, text):
+  self.tray.setToolTip(f"Голосовой ввод Алиса — {text}")
+
+ def quit_app(self):
+  self.thread.stop()
+  self.thread.wait(3000)
+  QApplication.quit()
+
+
+if __name__ == "__main__":
+ app = QApplication(sys.argv)
+ window = MyWindow()
+ sys.exit(app.exec())
