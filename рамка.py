@@ -11,7 +11,6 @@ from PyQt6.QtWidgets import QApplication, QMainWindow
 Эта программа позволяет выбрать область экрана, делает её скриншот, 
 копирует в буфер обмена и сохраняет параметры выбора области экрана в JSON-файл.
 '''
-
 def screenshot(left, top, width, height):
  time.sleep(0.6)
  # Делаем скриншот с заданными размерами и координатами
@@ -28,7 +27,6 @@ def screenshot(left, top, width, height):
 
  # Сохраняем изображение во временный файл
  screenshot.save(file_name_path, format="PNG")
-
  time.sleep(0.1)
 
  # Скрипт для помещения изображения в буфер обмена через copyq
@@ -41,7 +39,6 @@ def screenshot(left, top, width, height):
  subprocess.run(['bash', '-c', show_list_id])
  time.sleep(0.1)
 
-
 def do_screenshot(begin_point, end_point):
  # Рассчитываем координаты top-left угла и размеры для скриншота
  left = min(begin_point.x(), end_point.x())
@@ -51,7 +48,6 @@ def do_screenshot(begin_point, end_point):
 
  # Вызываем функцию скриншота с расчитанными параметрами
  screenshot(left, top, width, height)
-
 
 class TransparentWindow(QMainWindow):
  def __init__(self):
@@ -110,7 +106,6 @@ class TransparentWindow(QMainWindow):
    self.drawing = False
    self.update()
    self.setMouseTracking(False)
-
    # Делаем скриншот всего экрана
    screenshot(0, 0, 1920, 1080)
    self.close()
