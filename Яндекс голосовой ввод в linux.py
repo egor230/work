@@ -1,16 +1,15 @@
 from pytq_libs_voice import *
 from write_text import *
-
-# ====================== НАСТРОЙКИ ======================
 from pynput import mouse
-
+# ====================== НАСТРОЙКИ ======================
 logging.basicConfig(level=logging.INFO, format=' - %(message)s')
+
 
 class VoiceThread(QThread):
  icon_signal = pyqtSignal(str)
  status_signal = pyqtSignal(str)
- stop_request = pyqtSignal()  # Сигнал для остановки записи по клику мыши
-
+ stop_request = pyqtSignal()
+ 
  def __init__(self, icon_mic_path, icon_stop_path, parent=None):
   super().__init__(parent)
   self.icon_mic = icon_mic_path
@@ -18,13 +17,12 @@ class VoiceThread(QThread):
   self._running = True
   self.recording = False
   self.driver = None
-  self.stop_request.connect(self.stop_recording)  # Подключаем сигнал к слоту
-
+  self.stop_request.connect(self.stop_recording)
+ 
  def stop_recording(self):
-  """Останавливает запись, если она активна (безопасно из главного потока)"""
   if self.recording:
    self.toggle()
-
+ 
  def find_mic_button(self):
   if not self.driver:
    return None
@@ -38,7 +36,7 @@ class VoiceThread(QThread):
   except Exception as e:
    logging.warning(f"Микрофон не найден: {e}")
    return None
-
+ 
  def find_stop_button(self):
   if not self.driver:
    return None
@@ -54,9 +52,8 @@ class VoiceThread(QThread):
    except:
     continue
   return None
-
+ 
  def get_recognized_text(self):
-  """Улучшенное извлечение текста"""
   if not self.driver:
    return ""
   selectors = [
@@ -74,7 +71,7 @@ class VoiceThread(QThread):
    except:
     continue
   return ""
-
+ 
  def clear_input_field(self):
   try:
    field = WebDriverWait(self.driver, 3).until(
@@ -93,7 +90,7 @@ class VoiceThread(QThread):
      field.send_keys(Keys.BACKSPACE)
   except Exception as e:
    logging.warning(f"Очистка поля не удалась: {e}")
-
+ 
  def click_element(self, button):
   if not button:
    return False
@@ -109,7 +106,7 @@ class VoiceThread(QThread):
    except:
     continue
   return False
-
+ 
  def start_selenium(self):
   options = get_option()
   options.add_argument("--disable-extensions")
@@ -123,36 +120,45 @@ class VoiceThread(QThread):
   except:
    logging.warning("Не дождались кнопки микрофона, но продолжаем")
   time.sleep(1)
-
+ 
  def run(self):
   self.start_selenium()
   time.sleep(1)
-  self.toggle()  # автоматический старт записи
+  self.toggle()
 
   def start_mouse_listener_with_delay():
-   """Функция для запуска слушателя мыши через 10 секунд в отдельном потоке"""
    time.sleep(10)
-
+   
    def on_click(x, y, button, pressed):
-    # Нам нужен клик левой кнопкой (нажатие)
     if button == mouse.Button.left and pressed:
-     # Сигнал должен быть испущен в потоке слушателя,
      self.stop_request.emit()
-
-   # Запускаем слушатель в демоническом потоке, чтобы он не блокировал завершение
+   
+   def on_press(key):
+    try:
+     key_name = str(key).replace("'", "").replace(" ", "").replace("Key.", "")
+     if key_name=="end":
+      print(f"Нажата клавиша: {key_name}")
+      self.toggle()
+    except Exception as e:
+     print(f"Ошибка при обработке: {e}")
+   
+   def start_listener():
+    listener = Listener(on_press=on_press)
+    listener.daemon = True
+    listener.start()
+    print("Слушатель клавиатуры запущен...")
+   
+   start_listener()
    listener = mouse.Listener(on_click=on_click)
    listener.daemon = True
    listener.start()
-   logging.info("Глобальный слушатель мыши активирован через 10 секунд (клик левой кнопкой останавливает запись)")
-
-   # Запускаем функцию в отдельном потоке
-
+  
   listener_thread = threading.Thread(target=start_mouse_listener_with_delay, daemon=True)
   listener_thread.start()
-
+  
   while self._running:
    time.sleep(0.5)
-
+ 
  def toggle(self):
   if not self.recording:
    button = self.find_mic_button()
@@ -175,7 +181,7 @@ class VoiceThread(QThread):
      thread.join()
    self.recording = False
    self.icon_signal.emit(self.icon_mic)
-
+ 
  def stop(self):
   self._running = False
   if self.driver:
@@ -183,6 +189,7 @@ class VoiceThread(QThread):
     self.driver.quit()
    except:
     pass
+
 
 class MyWindow(QWidget):
  def __init__(self):
@@ -203,17 +210,17 @@ class MyWindow(QWidget):
   self.tray.activated.connect(self.tray_clicked)
   self.tray.show()
   self.thread.start()
-
+ 
  def tray_clicked(self, reason):
   if reason == QSystemTrayIcon.ActivationReason.Trigger:
    self.thread.toggle()
-
+ 
  def change_icon(self, path):
   self.tray.setIcon(QIcon(path))
-
+ 
  def update_tooltip(self, text):
   self.tray.setToolTip(f"Голосовой ввод Алиса — {text}")
-
+ 
  def quit_app(self):
   self.thread.stop()
   self.thread.wait(3000)
