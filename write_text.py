@@ -16,7 +16,7 @@ import numpy as np
 from pathlib import Path
 # from faster_whisper import WhisperModel
 from pynput.keyboard import Controller, Key, Listener
-from pynput import keyboard
+from pynput import keyboard, mouse
 from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor
 import torch, librosa, math
 import logging

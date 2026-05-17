@@ -1,9 +1,64 @@
 from pytq_libs_voice import *
 from write_text import *
-from pynput import mouse
 # ====================== НАСТРОЙКИ ======================
-logging.basicConfig(level=logging.INFO, format=' - %(message)s')
+# logging.basicConfig(level=logging.INFO, format=' - %(message)s')
+def repeat(text1: str):  # text = "linux менч установить линукс минт помоги мне установить "
+ text = text1.replace("!", ".")  # .replace(".", "")
+ k.save_text(text)
+ text1 = ""
+ res = k.get_dict()
+ k.save_words(res)
+ words = k.get_words()  # print(words)
+ try:  # Создаем регулярное выражение для всех слов и словосочетаний из словаря
+  words_regex = r'\b(' + r'|'.join(map(re.escape, words)) + r')\b'
+  # Выполняем замену с учетом регистра
+  text1 = re.sub(words_regex, lambda m: res.get(m.group(0).lower(), m.group(0)), k.get_text(), flags=re.IGNORECASE)
+  k.save_text(text1)
+  # Дополнительная замена для слов из словаря res
+  # for word, replacement in res.items():
+  #  text1 = re.sub(r'\b' + re.escape(word) + r'\b', replacement, text1, flags=re.IGNORECASE)
+ except Exception as ex:
+  print(f"Ошибка: {ex}")  # Выводим ошибку для диагностики
+ return text1
 
+def press_keys(text):  # xte 'keyup Shift_L'
+ try:  #
+  text = repeat(text)
+  print(text)
+  key_s = '''#!/bin/bash
+   xte 'keyup Shift_R'
+   sleep 0.1
+   xte 'keyup Shift_L'
+   xkbset -sticky
+   xte "key Num_Lock"
+   exit '''  # text="lunix mint"
+  # command = 'xte "key Num_Lock"'
+  # subprocess.run(command, shell=True)
+  char_to_xdotool = {",": "comma", ":": "colon"}  # Без shift, а сам символ
+  liters_en = ['a', 'A', 'b', 'B', 'c', 'C', 'd', 'D', 'e', 'E', 'f', 'F', 'g', 'G', 'h', 'H', 'i', 'I', 'j', 'J', 'k', 'K', 'l', 'L', 'm', 'M',
+               'n', 'N', 'o', 'O', 'p', 'P', 'q', 'Q', 'r', 'R', 's', 'S', 't', 'T', 'u', 'U', 'v', 'V', 'w', 'W', 'x', 'X', 'y', 'Y', 'z', 'Z']  # Диапазон от пробела до тильды (ASCII 32-126)#
+  for char in text:
+   if char in char_to_xdotool:
+    subprocess.run(['bash', '-c', key_s])
+    subprocess.call(['xdotool', 'key', char_to_xdotool[char]])
+    continue
+   if char in liters_en:
+    subprocess.call(['xdotool', 'type', '--delay', '3', char])
+   else:
+    if char.isupper():  # Если символ заглавный
+     keyboard.press(char.upper())  # Нажимаем строчную версию символа
+     keyboard.release(char.upper())
+     # keyboard.release(Key.shift)  # Отпустить Shift
+     # subprocess.run(['bash', '-c', key_s])
+    else:
+     keyboard.press(char)
+     keyboard.release(char)
+   time.sleep(0.03)  # Уменьшение задержки
+  # Включить sticky keys
+  subprocess.call(['xkbset', 'sticky'])
+ except Exception as ex1:
+  print(ex1)
+  return
 
 class VoiceThread(QThread):
  icon_signal = pyqtSignal(str)
@@ -24,8 +79,6 @@ class VoiceThread(QThread):
    self.toggle()
  
  def find_mic_button(self):
-  if not self.driver:
-   return None
   try:
    wait = WebDriverWait(self.driver, 10)
    svg = wait.until(EC.presence_of_element_located(
@@ -38,12 +91,8 @@ class VoiceThread(QThread):
    return None
  
  def find_stop_button(self):
-  if not self.driver:
-   return None
-  selectors = [
-   (By.CSS_SELECTOR, '.StandaloneRichInput-ControlsPlayer button.AliceButton_view_secondary'),
-   (By.CSS_SELECTOR, 'button.AliceButton_view_secondary.AliceButton_square'),
-  ]
+  selectors = [ (By.CSS_SELECTOR, '.StandaloneRichInput-ControlsPlayer button.AliceButton_view_secondary'),
+   (By.CSS_SELECTOR, 'button.AliceButton_view_secondary.AliceButton_square'), ]
   wait = WebDriverWait(self.driver, 10)
   for by, sel in selectors:
    try:
@@ -54,12 +103,8 @@ class VoiceThread(QThread):
   return None
  
  def get_recognized_text(self):
-  if not self.driver:
-   return ""
-  selectors = [
-   (By.CSS_SELECTOR, "input[role='textbox'], textarea[role='textbox']"),
-   (By.CSS_SELECTOR, ".StandaloneInput-Field input, .StandaloneInput-Field textarea"),
-  ]
+  selectors = [  (By.CSS_SELECTOR, "input[role='textbox'], textarea[role='textbox']"),
+   (By.CSS_SELECTOR, ".StandaloneInput-Field input, .StandaloneInput-Field textarea"), ]
   for by, selector in selectors:
    try:
     element = WebDriverWait(self.driver, 3).until(
@@ -94,11 +139,9 @@ class VoiceThread(QThread):
  def click_element(self, button):
   if not button:
    return False
-  for method_name, action in [
-   ("ActionChains", lambda: ActionChains(self.driver).move_to_element(button).pause(0.1).click().perform()),
+  for method_name, action in [  ("ActionChains", lambda: ActionChains(self.driver).move_to_element(button).pause(0.1).click().perform()),
    ("JS", lambda: self.driver.execute_script("arguments[0].click();", button)),
-   ("Native", lambda: button.click())
-  ]:
+   ("Native", lambda: button.click())  ]:
    try:
     action()
     logging.info(f"Клик выполнен ({method_name})")
@@ -114,8 +157,7 @@ class VoiceThread(QThread):
   self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
   self.driver.get("https://alice.yandex.ru/")
   try:
-   WebDriverWait(self.driver, 15).until(
-    EC.presence_of_element_located((By.CSS_SELECTOR, "button.AliceButton_pin_circle"))
+   WebDriverWait(self.driver, 15).until( EC.presence_of_element_located((By.CSS_SELECTOR, "button.AliceButton_pin_circle"))
    )
   except:
    logging.warning("Не дождались кнопки микрофона, но продолжаем")
@@ -137,7 +179,7 @@ class VoiceThread(QThread):
     try:
      key_name = str(key).replace("'", "").replace(" ", "").replace("Key.", "")
      if key_name=="end":
-      print(f"Нажата клавиша: {key_name}")
+      # print(f"Нажата клавиша: {key_name}")
       self.toggle()
     except Exception as e:
      print(f"Ошибка при обработке: {e}")
@@ -176,7 +218,7 @@ class VoiceThread(QThread):
     text = self.get_recognized_text()
     self.clear_input_field()
     if text:
-     thread = threading.Thread(target=process_text, args=(text,))
+     thread = threading.Thread(target=press_keys, args=(text,))
      thread.start()
      thread.join()
    self.recording = False
@@ -189,7 +231,6 @@ class VoiceThread(QThread):
     self.driver.quit()
    except:
     pass
-
 
 class MyWindow(QWidget):
  def __init__(self):
@@ -225,7 +266,6 @@ class MyWindow(QWidget):
   self.thread.stop()
   self.thread.wait(3000)
   QApplication.quit()
-
 
 if __name__ == "__main__":
  app = QApplication(sys.argv)

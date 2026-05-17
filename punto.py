@@ -63,8 +63,8 @@ def search_image():
     region = (1400, 100, 1500, 900)
     region1 = (268, 44, 182, 108)
 
-    image_path = 'Search button.png'
-    image_path1 = 'Search text.png'
+    image_path = '/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/Search button.png'
+    image_path1 = '/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/Search text.png'
 
     # --- фикс: если region меньше картинки, расширяем ---
     img_w, img_h = pyautogui.size()  # запасной вариант
@@ -475,8 +475,8 @@ class SmartTyper: # Основной класс для автозамены и �
   if hasattr(key, 'char') and key.char and key.char.isprintable() and key_str not in {"+", "-", "*", "/"}:
    key_char = key.char
    self.current_word += key_char
-   print(len(self.current_word))
-   print(self.longest_abbreviation_length)
+   # print(len(self.current_word))
+   # print(self.longest_abbreviation_length)
    if len(self.current_word) > self.longest_abbreviation_length:
     self.current_word = self.current_word[1:]
    self.root.after(0, self._do_update_state)
