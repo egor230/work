@@ -38,84 +38,39 @@ simple_key_map = {
  "<65032>" : "L_Ctrl"
 }
 
-# --- глобальные переменные ---
-active_devices = {}
 lock = threading.Lock()
-
-# --- поиск всех клавиатур ---
-def find_keyboards():
-    devices = []
-
-    for path in list_devices():
-        try:
-            dev = InputDevice(path)
-            caps = dev.capabilities().get(ecodes.EV_KEY, [])
-
-            if ecodes.KEY_A in caps:
-                devices.append(dev)
-
-        except Exception:
-            continue
-
-    return devices
-
-
-
-devices = find_keyboards()
-# --- менеджер устройств ---
-def device_manager():
- global devices
- 
- with lock:
+# Для каждого устройства запускаем отдельный поток чтения
+def read_device():
+ try:
+  target_dev = None
+  devices = [InputDevice(path) for path in list_devices()]
   for dev in devices:
-   try:
-    # читаем одно событие без блокировки
-    event = dev.read_one()
-    if event is None:
-     continue
-    
-    if event.type != ecodes.EV_KEY:
-     continue
-    
-    if event.value != 1:
-     continue
-    
-    key_event = ecodes.KEY.get(event.code, f"UNKNOWN_{event.code}")
-    key_name = simple_key_map.get(key_event, key_event)
-    
-    print(key_name)
-    return key_name  # сразу выходим после первого найденного
+   caps = dev.capabilities().get(ecodes.EV_KEY, [])
+   dev_str_lower = str(dev).lower()
    
-   except BlockingIOError:
-    continue
-   except OSError:
-    continue
+   if ecodes.KEY_A in caps and "keyboard" in dev_str_lower and "phys" in dev_str_lower and "rival" not in dev_str_lower:
+    target_dev = dev
+    break
+  
+  if target_dev is None:
+   print("[-] Подходящее устройство клавиатуры не найдено")
+   return
+  
+  print(f"[+] Запущен слушатель для {target_dev.name}")
+  for event in target_dev.read_loop():
+   if event.type == ecodes.EV_KEY and event.value == 1:
+    with lock:
+     key_event = ecodes.KEY.get(event.code, f"UNKNOWN_{event.code}")
+     key_name = simple_key_map.get(key_event, key_event).replace("KEY_", "")
+     print(key_name)
  
- return None
-
-# --- pynput (второй слушатель) ---
-def on_press(key):
-    try:
-        print(f"[PYNPUT] {key}")
-        result = device_manager()
-        if result:
-            print(f"[EVDEV RESULT] {result}")
-    except Exception as e:
-        print(f"[PYNPUT ERROR] {e}")
+ except OSError as e:
+  print(f"[-] Ошибка устройства: {e}")
+ except Exception as e:
+  print(f"[-] Неожиданная ошибка: {e}")
 
 
-def start_pynput():
-    listener = Listener(on_press=on_press)
-    listener.daemon = True
-    listener.start()
-
-
-# --- запуск ---
-if __name__ == "__main__":
-    print("🚀 Ultimate keyboard listener запущен")
-
-    # threading.Thread(target=device_manager, daemon=True).start()
-    start_pynput()
-
-    while True:
-        time.sleep(1)
+thread = threading.Thread(target=read_device, args=(), daemon=True)
+thread.start()
+while True:
+ time.sleep(1)
