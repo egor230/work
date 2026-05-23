@@ -309,6 +309,7 @@ if result.returncode == 0 and result.stdout.strip():
     # print(f"Убит запущенный процесс {script_name} с PID {pid}")
    except subprocess.CalledProcessError as e:
     print(f"Не удалось убить PID {pid}: {e}")
+    pass
 # Формируем команду запуска
 cmd = f'bash -c "cd \\"{script_dir}\\" && source myenv/bin/activate && python \\"{script_path}\\""'
 def run_script():# Запускаем скрипт в отдельном демонизированном потоке
