@@ -1,8 +1,4 @@
-import sys
-import os
-import re
-import shutil
-import tomllib
+import os, re, shutil, tomllib, sys
 from pathlib import Path
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -11,7 +7,6 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QPropertyAnimation, QEasingCurve
 from PyQt6.QtGui import QColor, QFont
-
 
 class GlowButton(QPushButton):
     def __init__(self, text="", glow_color="#0298ff", parent=None):
@@ -128,6 +123,33 @@ class VirtualKeyboard(QDialog):
         second_column_keys = ['4\n←', '5\n', '6\n→']
         third_column_keys = ['1\nEnd', '2\n↓', '3\nPgDn', 'KEnter']
 
+        special_map = {
+            'Esc': 'ESCAPE', 'F1': 'F1', 'F2': 'F2', 'F3': 'F3', 'F4': 'F4',
+            'F5': 'F5', 'F6': 'F6', 'F7': 'F7', 'F8': 'F8', 'F9': 'F9',
+            'F10': 'F10', 'F11': 'F11', 'F12': 'F12',
+            'Insert': 'INSERT', 'Delete': 'DELETE', 'Home': 'HOME', 'End': 'END',
+            'PgUp': 'PAGEUP', 'PgDn': 'PAGEDOWN', 'Backspace': 'BACKSPACE',
+            'Tab': 'TAB', 'Caps Lock': 'CAPSLOCK', '\nEnter\n': 'ENTER',
+            'Shift_L': 'LEFTSHIFT', 'Shift_R': 'RIGHTSHIFT',
+            'Ctrl': 'LEFTCTRL', 'Ctrl_r': 'RIGHTCTRL',
+            'Windows': 'LEFTMETA', 'Alt_L': 'LEFTALT', 'Alt_r': 'RIGHTALT',
+            'space': 'SPACE', 'Fn': 'FN', 'Menu': 'MENU',
+            'up': 'UP', 'down': 'DOWN', 'left': 'LEFT', 'right': 'RIGHT',
+            'Left': 'LEFT', 'Down': 'DOWN', 'Right': 'RIGHT',
+            'Num Lock': 'NUMLOCK', '/': 'NUMPADDIVIDE', '*': 'NUMPADMULTIPLY',
+            '-': 'NUMPADMINUS', '+': 'NUMPADPLUS', 'KEnter': 'NUMPADENTER',
+            '~\n`': '`', '!\n1': '1', '@\n2': '2', '#\n3': '3', '$\n4': '4',
+            '%\n5': '5', '^\n6': '6', '&\n7': '7', '*\n8': '8', '(\n9': '9',
+            ')\n0': '0', '_\n-': '-', '+\n=': '=',
+            '{\n[': '[', '}\n]': ']', '|\n\\': '\\',
+            ':\n;': ';', '"\n\'': "'",
+            '<\n,': ',', '>\n.': '.', '?\n/': '/',
+            ' 7\nHome': 'NUMPAD7', '8\n↑': 'NUMPAD8', '9\nPgUp': 'NUMPAD9',
+            '4\n←': 'NUMPAD4', '5\n': 'NUMPAD5', '6\n→': 'NUMPAD6',
+            '1\nEnd': 'NUMPAD1', '2\n↓': 'NUMPAD2', '3\nPgDn': 'NUMPAD3',
+            '0\nIns': 'NUMPAD0', ' . ': 'NUMPADDECIMAL'
+        }
+
         for i, row in enumerate(keyboard_layout):
             for j, key in enumerate(row):
                 x1 = BASE_X_STEP * j + X_OFFSET
@@ -138,27 +160,7 @@ class VirtualKeyboard(QDialog):
                 btn = QPushButton(key, keyboard_widget)
 
                 if self.callback_func:
-                    clean_key = key.split('\n')[0].strip()
-                    special_map = {
-                        'Esc': 'ESCAPE', 'F1': 'F1', 'F2': 'F2', 'F3': 'F3', 'F4': 'F4',
-                        'F5': 'F5', 'F6': 'F6', 'F7': 'F7', 'F8': 'F8', 'F9': 'F9',
-                        'F10': 'F10', 'F11': 'F11', 'F12': 'F12',
-                        'Insert': 'INSERT', 'Delete': 'DELETE', 'Home': 'HOME', 'End': 'END',
-                        'PgUp': 'PAGEUP', 'PgDn': 'PAGEDOWN', 'Backspace': 'BACKSPACE',
-                        'Tab': 'TAB', 'Caps Lock': 'CAPSLOCK', 'Enter': 'ENTER',
-                        'Shift_L': 'LEFTSHIFT', 'Shift_R': 'RIGHTSHIFT',
-                        'Ctrl': 'LEFTCTRL', 'Ctrl_r': 'RIGHTCTRL',
-                        'Windows': 'LEFTMETA', 'Alt_L': 'LEFTALT', 'Alt_r': 'RIGHTALT',
-                        'space': 'SPACE', 'Fn': 'FN', 'Menu': 'MENU',
-                        'up': 'UP', 'down': 'DOWN', 'left': 'LEFT', 'right': 'RIGHT',
-                        'Num Lock': 'NUMLOCK', '/': 'NUMPADDIVIDE', '*': 'NUMPADMULTIPLY',
-                        '-': 'NUMPADMINUS', '+': 'NUMPADPLUS', 'KEnter': 'NUMPADENTER',
-                        '0\nIns': 'INSERT', ' . ': 'NUMPADDECIMAL'
-                    }
-                    for num in range(10):
-                        special_map[str(num)] = str(num)
-                        special_map[f' {num}\n'] = str(num)
-                    key_for_xenia = special_map.get(clean_key, clean_key.upper())
+                    key_for_xenia = special_map.get(key, key.upper())
                     btn.clicked.connect(
                         lambda checked, k=key_for_xenia: (self.callback_func(k), self.accept())
                     )
@@ -839,11 +841,6 @@ class XeniaUltimateEditor(QMainWindow):
         config_browse_btn.setStyleSheet(f"background-color: {self.colors['btn_blue']}; color: white; border: none;")
         config_browse_btn.setGeometry(570, 66, 80, 28)
         config_browse_btn.clicked.connect(self.browse_config_dir)
-
-        reload_btn = QPushButton("Перезагрузить", header)
-        reload_btn.setStyleSheet(f"background-color: {self.colors['btn_blue']}; color: white; border: none;")
-        reload_btn.setGeometry(660, 66, 110, 28)
-        reload_btn.clicked.connect(self.load_config_manager)
 
         # Основная область
         main = QWidget(self)

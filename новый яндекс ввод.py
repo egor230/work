@@ -256,9 +256,9 @@ class MyThread(QThread):
   def get_user_message(self, len_c):
     try:
       user_selectors = [
-        "[data-testid='message-bubble-container-from-user']",
         ".MessageBubble-Container_from-user",
         ".Message.Message_from_user",
+        "[data-testid='message-bubble-container-from-user']",
         ".AliceTextBubble_from_user",
         ".FuturisTextBubble_from_user",
       ]
@@ -277,10 +277,10 @@ class MyThread(QThread):
         return "", len_c
 
       text_selectors = [
+        ".MessageBubble-Text",
         ".AliceTextBubble",
         ".MessageBubble",
         ".FuturisTextBubble",
-        ".MessageBubble-Text",
         ".MarkdownText",
       ]
 
@@ -366,7 +366,6 @@ class MyThread(QThread):
      except Exception as ex1:
        pass
 
-
 class MyWindow(QWidget):
   def __init__(self, parent=None):
     super(MyWindow, self).__init__(parent)
@@ -435,19 +434,19 @@ class MyWindow(QWidget):
 
   def on_tray_icon_activated(self, reason):
     try:
-      if reason == QSystemTrayIcon.ActivationReason.Trigger:
-        self.mic = not getattr(self, "mic", True)
-        self.tray_icon.setToolTip("ON" if self.mic else "OFF")
-        set_mute("0" if self.mic else "1", source_id)
-        self.tray_icon.show()
-        self.mythread.icon_signal.emit(self.icon2_path if self.mic else self.icon1_path)
-        self.mythread.update_mic_state(self.mic)
-        if self.mic:
-          self.show()
-        else:
-          self.hide()
+     if reason == QSystemTrayIcon.ActivationReason.Trigger:
+       self.mic = not getattr(self, "mic", True)
+       self.tray_icon.setToolTip("ON" if self.mic else "OFF")
+       set_mute("0" if self.mic else "1", source_id)
+       self.tray_icon.show()
+       self.mythread.icon_signal.emit(self.icon2_path if self.mic else self.icon1_path)
+       self.mythread.update_mic_state(self.mic)
+       if self.mic:
+         self.show()
+       else:
+         self.hide()
     except Exception as e:
-      print(f"on_tray_icon_activated error: {e}")
+     print(f"on_tray_icon_activated error: {e}")
 
   def quit_t(self):
     try:
@@ -457,7 +456,6 @@ class MyWindow(QWidget):
     except Exception:
       pass
     QApplication.quit()
-
 
 if __name__ == "__main__":
   app = QApplication(sys.argv)
