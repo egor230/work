@@ -6,7 +6,6 @@ from PyQt6.QtCore import Qt, QPropertyAnimation, QEasingCurve
 from PyQt6.QtGui import QColor, QFont
 from XemuLogic import XemuConfigManager
 
-
 class GlowButton(QPushButton):
  def __init__(self, text="", glow_color="#0298ff", parent=None):
   super().__init__(text, parent)
