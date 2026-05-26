@@ -1,649 +1,594 @@
+#!/usr/bin/env python3
+"""
+IPTV Merger v4.0 — Асинхронный сборщик рабочих IPTV-каналов с высокой параллельностью.
+"""
+
 import asyncio
 import argparse
-import os
 import re
 import time
 import logging
+import random
 from dataclasses import dataclass, field
-from urllib.parse import urlparse
-from typing import Optional
+from html import unescape
+from typing import Optional, List, Dict, Set
+from urllib.parse import urlparse, urljoin
+
 import aiohttp
 
-# ============================================================
-# КОНФИГУРАЦИЯ
-# ============================================================
 CONFIG = {
-    # Метод проверки: "http" (быстрый) или "deep" (глубокий, точнее)
-    "CHECK_METHOD": "deep",
-    # Таймауты
-    "HTTP_TIMEOUT": 6,         # HEAD запрос
-    "GET_TIMEOUT": 8,          # GET с чтением тела
-    "READ_TIMEOUT": 5,         # на чтение первых байт
-    # Параллелизм
-    "MAX_PARALLEL_DOWNLOADS": 20,  # одновременная загрузка источников
-    "MAX_PARALLEL_CHECKS": 40,     # одновременная проверка каналов
-    # Целевые показатели
-    "MIN_WORKING_CHANNELS": 50,
-    "MAX_WORKING_CHANNELS": 2000,
-    # Выходной файл
+    "CHECK_TIMEOUT": 5,                
+    "HLS_PROBE_TIMEOUT": 4,            
+    "MAX_PARALLEL_DOWNLOADS": 30,      
+    "MAX_PARALLEL_CHECKS": 200,        
+    "BATCH_SIZE": 200,                 
+    "MIN_WORKING": 20,
+    "MAX_WORKING": 1600,
     "OUTPUT_FILE": "all_tv.m3u",
+    "HEAD_FIRST": True,                
 }
 
-# ============================================================
-# ИСТОЧНИКИ ПЛЕЙЛИСТОВ
-# ============================================================
-SOURCES = [
-    # --- IPTVRU2026/IPTVMIR (~9000 каналов) ---
-    {"name": "IPTVRU2026 MEGA", "url": "https://raw.githubusercontent.com/IPTVRU2026/IPTVMIR/main/IPTV_MEGA_PLAYLIST.m3u", "priority": 12, "country": "ru"},
-    {"name": "IPTVRU2026 ZARUB", "url": "https://raw.githubusercontent.com/IPTVRU2026/IPTVMIR/main/ZARUB.m3u", "priority": 8, "country": "world"},
-
-    # --- m3u.su: Российские общие ---
-    {"name": "m3u.su smolnp Русский", "url": "https://m3u.su/so", "priority": 11, "country": "ru"},
-    {"name": "m3u.su smolnp Русский2", "url": "https://m3u.su/so2", "priority": 10, "country": "ru"},
-    {"name": "m3u.su smolnp Стабильный", "url": "https://m3u.su/ss", "priority": 11, "country": "ru"},
-    {"name": "m3u.su smolnp Мир", "url": "https://m3u.su/sm", "priority": 9, "country": "ru"},
-    {"name": "m3u.su Telekarta RU", "url": "https://m3u.su/tru", "priority": 10, "country": "ru"},
-    {"name": "m3u.su D-TV6", "url": "https://m3u.su/d", "priority": 9, "country": "ru"},
-    {"name": "m3u.su Dmitry-tv HD", "url": "https://m3u.su/dh", "priority": 9, "country": "ru"},
-    {"name": "m3u.su ZABAVA", "url": "https://m3u.su/dz", "priority": 9, "country": "ru"},
-    {"name": "m3u.su СМОТРИМ", "url": "https://m3u.su/ds", "priority": 8, "country": "ru"},
-    {"name": "m3u.su Playlist-01", "url": "https://m3u.su/d1", "priority": 7, "country": "ru"},
-    {"name": "m3u.su Playlist-04", "url": "https://m3u.su/d4", "priority": 7, "country": "ru"},
-    {"name": "m3u.su Playlist-05", "url": "https://m3u.su/d5", "priority": 7, "country": "ru"},
-    {"name": "m3u.su Karnei4 Zabava", "url": "https://m3u.su/kk2", "priority": 8, "country": "ru"},
-    {"name": "m3u.su ТВОЕ ТВ", "url": "https://m3u.su/tvoe", "priority": 8, "country": "ru"},
-    {"name": "m3u.su iptv-org RU NTV", "url": "https://m3u.su/runtv", "priority": 9, "country": "ru"},
-    {"name": "m3u.su iptv-org RU RT", "url": "https://m3u.su/rurt", "priority": 9, "country": "ru"},
-    {"name": "m3u.su iptv-org RU Smotrim", "url": "https://m3u.su/rusm", "priority": 9, "country": "ru"},
-    {"name": "m3u.su iptv-org RU TV24", "url": "https://m3u.su/rut", "priority": 8, "country": "ru"},
-    {"name": "m3u.su iptv-org RU Zabava", "url": "https://m3u.su/ruz", "priority": 9, "country": "ru"},
-
-    # --- m3u.su: МСК+2 (Екатеринбург / Урал) ---
-    {"name": "m3u.su МСК+2 Екб", "url": "https://m3u.su/de2", "priority": 13, "country": "ru", "tz": 2},
-    {"name": "m3u.su ZABAVA Екб", "url": "https://m3u.su/dze", "priority": 13, "country": "ru", "tz": 2},
-    {"name": "m3u.su ZABAVA Челябинск", "url": "https://m3u.su/dzcb", "priority": 13, "country": "ru", "tz": 2},
-    {"name": "m3u.su ZABAVA Н.Тагил", "url": "https://m3u.su/dznt", "priority": 12, "country": "ru", "tz": 2},
-    {"name": "m3u.su ZABAVA Тюмень", "url": "https://m3u.su/dzty", "priority": 12, "country": "ru", "tz": 2},
-    {"name": "m3u.su ZABAVA Пермь", "url": "https://m3u.su/dzpr", "priority": 11, "country": "ru", "tz": 2},
-    {"name": "m3u.su ZABAVA Курган", "url": "https://m3u.su/dzku", "priority": 11, "country": "ru", "tz": 2},
-
-    # --- m3u.su: Другие часовые пояса РФ (полезно для сравнения) ---
-    {"name": "m3u.su МСК+0 Москва", "url": "https://m3u.su/dzmo", "priority": 9, "country": "ru", "tz": 0},
-    {"name": "m3u.su МСК+1 Самара", "url": "https://m3u.su/dzs", "priority": 8, "country": "ru", "tz": 1},
-    {"name": "m3u.su МСК+3 Омск", "url": "https://m3u.su/dzom", "priority": 7, "country": "ru", "tz": 3},
-
-    # --- m3u.su: Украина ---
-    {"name": "m3u.su Харьков", "url": "https://m3u.su/h", "priority": 8, "country": "ua"},
-
-    # --- m3u.su: Музыка / Радио ---
-    {"name": "m3u.su Музыка", "url": "https://m3u.su/mus2", "priority": 5, "country": "ru"},
-    {"name": "m3u.su Музыка2", "url": "https://m3u.su/mus3", "priority": 5, "country": "ru"},
-
-    # --- GitHub: iptv-org ---
-    {"name": "iptv-org Russia", "url": "https://iptv-org.github.io/iptv/countries/ru.m3u", "priority": 9, "country": "ru"},
-    {"name": "iptv-org Ukraine", "url": "https://iptv-org.github.io/iptv/countries/ua.m3u", "priority": 8, "country": "ua"},
+STATIC_SOURCES = [
+    {"name": "IPTVMIR Mega",       "url": "https://raw.githubusercontent.com/IPTVRU2026/IPTVMIR/main/IPTV_MEGA_PLAYLIST.m3u", "priority": 12, "country": "ru"},
+    {"name": "IPTVMIR Зарубежные", "url": "https://raw.githubusercontent.com/IPTVRU2026/IPTVMIR/main/ZARUB.m3u", "priority": 8, "country": "world"},
+    {"name": "IPTVru Stable",      "url": "https://smolnp.github.io/IPTVru/IPTVstable.m3u8", "priority": 11, "country": "ru"},
+    {"name": "IPTVru Full",        "url": "https://raw.githubusercontent.com/smolnp/IPTVru/refs/heads/gh-pages/IPTVru.m3u", "priority": 10, "country": "ru"},
+    {"name": "m3u.su Русский",     "url": "https://m3u.su/so.m3u8",  "priority": 11, "country": "ru"},
+    {"name": "m3u.su Русский 2",   "url": "https://m3u.su/so2.m3u8", "priority": 10, "country": "ru"},
+    {"name": "m3u.su Стабильный",  "url": "https://m3u.su/ss.m3u8",  "priority": 10, "country": "ru"},
+    {"name": "m3u.su Мир",         "url": "https://m3u.su/sm.m3u8",  "priority": 9,  "country": "world"},
+    {"name": "m3u.su runtv",       "url": "https://m3u.su/runtv.m3u8", "priority": 10, "country": "ru"},
+    {"name": "m3u.su rusm",        "url": "https://m3u.su/rusm.m3u8",  "priority": 10, "country": "ru"},
+    {"name": "m3u.su ruz",         "url": "https://m3u.su/ruz.m3u8",   "priority": 10, "country": "ru"},
+    {"name": "m3u.su rurt",        "url": "https://m3u.su/rurt.m3u8",  "priority": 9,  "country": "ru"},
+    {"name": "m3u.su MSK+2 DVB",   "url": "https://m3u.su/de2.m3u8",  "priority": 13, "country": "ru", "timeshift": 2},
+    {"name": "m3u.su Все пояса",    "url": "https://m3u.su/der.m3u8",  "priority": 10, "country": "ru"},
+    {"name": "m3u.su Екатеринбург", "url": "https://m3u.su/dze.m3u8",  "priority": 9, "country": "ru"},
+    {"name": "m3u.su Челябинск",    "url": "https://m3u.su/dzcb.m3u8", "priority": 9, "country": "ru"},
+    {"name": "m3u.su Москва",       "url": "https://m3u.su/dzmo.m3u8", "priority": 8, "country": "ru"},
+    {"name": "m3u.su СПб",          "url": "https://m3u.su/dzsp.m3u8", "priority": 8, "country": "ru"},
+    {"name": "m3u.su Новосибирск",  "url": "https://m3u.su/dzns.m3u8", "priority": 8, "country": "ru"},
+    {"name": "m3u.su Краснодар",    "url": "https://m3u.su/dzkd.m3u8", "priority": 8, "country": "ru"},
+    {"name": "m3u.su Пермь",        "url": "https://m3u.su/dzpr.m3u8", "priority": 8, "country": "ru"},
+    {"name": "m3u.su Казань",       "url": "https://m3u.su/dzk.m3u8",  "priority": 8, "country": "ru"},
+    {"name": "m3u.su Самара",       "url": "https://m3u.su/dzs.m3u8",  "priority": 8, "country": "ru"},
+    {"name": "m3u.su Zabava",       "url": "https://m3u.su/dz.m3u8",   "priority": 8, "country": "ru"},
+    {"name": "m3u.su Смотрим",      "url": "https://m3u.su/ds.m3u8",   "priority": 8, "country": "ru"},
+    {"name": "m3u.su ТВОЕ ТВ",      "url": "https://m3u.su/tvoe.m3u8", "priority": 7, "country": "ru"},
+    {"name": "iptv-org Russia",     "url": "https://iptv-org.github.io/iptv/countries/ru.m3u", "priority": 9, "country": "ru"},
+    {"name": "iptv-org Ukraine",    "url": "https://iptv-org.github.io/iptv/countries/ua.m3u", "priority": 9, "country": "ua"},
     {"name": "iptv-org Streams RU", "url": "https://raw.githubusercontent.com/iptv-org/iptv/master/streams/ru.m3u", "priority": 8, "country": "ru"},
-    {"name": "iptv-org Streams UA", "url": "https://raw.githubusercontent.com/iptv-org/iptv/master/streams/ua.m3u", "priority": 7, "country": "ua"},
-
-    # --- GitHub: другие ---
-    {"name": "Free-TV Russia", "url": "https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_russia.m3u8", "priority": 8, "country": "ru"},
-    {"name": "Free-TV Ukraine", "url": "https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_ukraine.m3u8", "priority": 7, "country": "ua"},
-    {"name": "Free-TV Main All", "url": "https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8", "priority": 6, "country": "all"},
-    {"name": "HD-IPTV Russia", "url": "https://raw.githubusercontent.com/HD-IPTV/playlist/master/Russia.m3u", "priority": 7, "country": "ru"},
-    {"name": "smolnp IPTVru Stable", "url": "https://smolnp.github.io/IPTVru/IPTVstable.m3u8", "priority": 9, "country": "ru"},
-    {"name": "smolnp IPTVru Full", "url": "https://raw.githubusercontent.com/smolnp/IPTVru/refs/heads/gh-pages/IPTVru.m3u", "priority": 8, "country": "ru"},
-    {"name": "MyPlaylists Russia", "url": "https://myplaylists.github.io/iptv/ru.m3u", "priority": 6, "country": "ru"},
-    {"name": "MyPlaylists Ukraine", "url": "https://myplaylists.github.io/iptv/ua.m3u", "priority": 6, "country": "ua"},
-    {"name": "DenverCoder RU", "url": "https://raw.githubusercontent.com/DenverCoder1/iptv-playlists/main/playlists/ru.m3u", "priority": 5, "country": "ru"},
-    {"name": "Karnei4 IPTV-RU", "url": "https://karnei4.github.io/IPTV-RU/playlist.m3u", "priority": 6, "country": "ru"},
-    {"name": "Best RU Timeshift", "url": "https://raw.githubusercontent.com/4KIPTV/iptv/main/russia.m3u", "priority": 6, "country": "ru"},
-    {"name": "Gist Ageresz RU", "url": "https://gist.githubusercontent.com/ageresz/a1b1790b4febbf219df31ba32094e3bf/raw", "priority": 6, "country": "ru"},
-    {"name": "Gist Ityshchenko UA/RU", "url": "https://gist.githubusercontent.com/ityshchenko/2ab16ce214f03740883428fb789c5cde/raw", "priority": 5, "country": "mixed"},
-    {"name": "m3u.su ВСЕ ЧАСОВЫЕ ПОЯСА", "url": "https://m3u.su/der", "priority": 8, "country": "ru"},
+    {"name": "Free-TV Russia",      "url": "https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_russia.m3u8", "priority": 8, "country": "ru"},
+    {"name": "Free-TV Ukraine",     "url": "https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_ukraine.m3u8", "priority": 8, "country": "ua"},
+    {"name": "HD-IPTV Russia",      "url": "https://raw.githubusercontent.com/HD-IPTV/playlist/master/Russia.m3u", "priority": 7, "country": "ru"},
+    {"name": "Rus-IPTV Full",       "url": "https://raw.githubusercontent.com/rus-iptv/rus-iptv.github.io/master/rus.m3u", "priority": 7, "country": "ru"},
+    {"name": "Best RU Timeshift",   "url": "https://raw.githubusercontent.com/4KIPTV/iptv/main/russia.m3u", "priority": 7, "country": "ru"},
+    {"name": "DenverCoder RU",      "url": "https://raw.githubusercontent.com/DenverCoder1/iptv-playlists/main/playlists/ru.m3u", "priority": 6, "country": "ru"},
+    {"name": "Karnei4 IPTV-RU",     "url": "https://karnei4.github.io/IPTV-RU/playlist.m3u", "priority": 6, "country": "ru"},
 ]
 
-# ============================================================
-# КЛЮЧЕВЫЕ СЛОВА ДЛЯ ОПРЕДЕЛЕНИЯ СТРАНЫ
-# ============================================================
-RU_KEYWORDS = [
-    "россия", "первый канал", "россия 1", "россия1", "нтв", "рен тв", "рен",
-    "стс", "тнт", "звезда", "мир", "отр", "матч", "культура", "ru1", "russia",
-    "ртр", "карусель", "москва 24", "россия 24", "тв центр", "пятница",
-    "ru tv", "тв3", "чо", "суббота", "спас", "78", "тнв", "тамыр",
-    "башкортостан", "ураль", "екатеринбург", "челябинск", "тюмень", "сургут",
-    "забава", "рутв", "1 канал", "match", "chelyabinsk", "ural",
+M3U_SU_PAGES = [1, 2, 3, 4, 5]
+M3U_SU_REGIONAL_CODES = [
+    "de-1", "de0", "de1", "de2", "de3", "de4", "de5", "de6", "de7", "de8", "de9", "der",
+    "dze", "dzcb", "dzmo", "dzsp", "dzns", "dzkd", "dzpr", "dzk", "dzs",
+    "dzom", "dzuf", "dzki", "dzvr", "dzn", "dzr", "dzt", "dznn", "dzvd",
+    "dzvg", "dzv", "dzh", "dzyk", "dzir", "dzm", "dzkl", "dzpe", "dzb",
+    "dzke", "dzkk", "dzu", "dzby", "dzl", "dzyr", "dzc", "dzct", "dzul",
+    "d1", "d5", "dh", "dz", "ds",
 ]
 
-UA_KEYWORDS = [
-    "украина", "україна", "1+1", "интер", "стб", "новый канал", "тет",
-    "украин", "укр", "m1", "m2", "канал украина", "плюстплюс", "ictv",
-    "ua:", "5 канал", "перший", "тризуб", "espresso", "freedom",
-    "unian", "pravda", "hromadske",
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "VLC/3.0.21 LibVLC/3.0.21",
+    "Mozilla/5.0 (SmartTV; SmartTV-2024; Linux; Tizen) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+    "TiviMate/4.7.0 (Linux; Android 11)",
+    "AppleCoreMedia/1.0.0.19G82 (Apple TV; U; CPU OS 15_6 like Mac OS X; ru_ru)",
+    "Mozilla/5.0 (Linux; Android 10; BOX) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.61 Safari/537.36"
 ]
 
-# ============================================================
-# ЛОГИРОВАНИЕ
-# ============================================================
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    datefmt="%H:%M:%S",
-)
-log = logging.getLogger("iptv_merger")
+def get_bypass_headers(url: str) -> dict:
+  parsed = urlparse(url)
+  base_origin = f"{parsed.scheme}://{parsed.netloc}"
+  return {
+      "User-Agent": random.choice(USER_AGENTS),
+      "Accept": "*/*",
+      "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
+      "Origin": base_origin,
+      "Referer": base_origin + "/",
+      "Icy-MetaData": "1",
+      "Connection": "keep-alive"
+  }
 
-# ============================================================
-# МОДЕЛЬ ДАННЫХ
-# ============================================================
+def setup_logging(verbose: bool = False):
+  level = logging.DEBUG if verbose else logging.INFO
+  logging.basicConfig(
+      level=level,
+      format="%(asctime)s [%(levelname)s] %(message)s",
+      datefmt="%H:%M:%S",
+  )
+  return logging.getLogger("iptv_merger")
+
+log = None  
+
 @dataclass
 class Channel:
-    name: str = ""
-    url: str = ""
-    group: str = ""
-    logo: str = ""
-    tvg_id: str = ""
-    source_name: str = ""
-    source_priority: int = 0
-    country: str = ""       # "ru", "ua", "world", "mixed"
-    tz_offset: int = 0      # смещение от МСК (0, +2 и т.д.)
-    is_working: bool = False
-    has_name: bool = False   # есть ли нормальное название (не абракадабра)
+  name: str = ""
+  url: str = ""
+  group: str = "my"       
+  logo: str = ""
+  tvg_id: str = ""
+  tvg_name: str = ""
+  source_name: str = ""
+  source_priority: int = 0
+  country: str = ""       
+  timeshift: int = 0
+  is_working: bool = False
+  check_passed: int = 0   
 
-    @property
-    def clean_name(self) -> str:
-        name = re.sub(r"\s*(HD|SD|UHD|4K|FHD|1080p|720p)\s*$", "", self.name.strip(), flags=re.IGNORECASE)
-        return re.sub(r'\s+', ' ', name).strip()
+  @property
+  def clean_name(self) -> str:
+    n = self.name.strip()
+    n = re.sub(r"\s*(HD|SD|UHD|4K|FHD|1080p|720p|H\.264|H\.265)\s*$", "", n, flags=re.IGNORECASE)
+    n = re.sub(r"\s+", " ", n).strip()
+    return n
 
-    @property
-    def quality_score(self) -> int:
-        score = self.source_priority * 10
-        n = self.name.upper()
-        if "4K" in n or "UHD" in n:
-            score += 40
-        elif "1080" in n or "FHD" in n:
-            score += 30
-        elif "HD" in n:
-            score += 20
-        if self.tz_offset == 2:
-            score += 25  # бонус за +2 к МСК
-        return score
-
-# ============================================================
-# ОПРЕДЕЛЕНИЕ СТРАНЫ КАНАЛА
-# ============================================================
-def detect_country(ch: Channel) -> str:
-    """Определяет страну канала по названию и группе."""
-    text = (ch.name + " " + ch.group).lower()
-
-    # Если в источнике указана страна — учитываем
-    if ch.source_name and "украин" in ch.source_name.lower():
-        return "ua"
-
-    ru_score = sum(1 for kw in RU_KEYWORDS if kw in text)
-    ua_score = sum(1 for kw in UA_KEYWORDS if kw in text)
-
-    if ua_score > ru_score and ua_score >= 1:
-        return "ua"
-    if ru_score >= 1:
-        return "ru"
-    return ch.country or "world"
-
-# ============================================================
-# ПРОВЕРКА: ЯВЛЯЕТСЯ ЛИ НАЗВАНИЕ «АБРАКАДАБРОЙ»
-# ============================================================
-def is_meaningful_name(name: str) -> bool:
-    """Возвращает True, если название выглядит как нормальное название канала."""
-    if not name or len(name) < 2:
-        return False
-    # Если есть кириллица — скорее всего нормальное название
-    cyrillic = sum(1 for c in name if '\u0400' <= c <= '\u04FF')
-    latin = sum(1 for c in name if 'a' <= c.lower() <= 'z')
-    if cyrillic > 2:
-        return True
-    # Латиница: нормальные TV-названия
-    if re.match(r'^[A-Za-z0-9\s\-\+\.]{2,50}$', name):
-        return True
-    # Если совсем короткое — скорее всего мусор
-    if len(name) <= 3 and not cyrillic:
-        return False
-    return len(name) >= 3
-
-# ============================================================
-# МНОГОСЛОЙНАЯ ПРОВЕРКА КАНАЛА (УЛУЧШЕННАЯ)
-# ============================================================
-# Паттерны, которые НЕ являются видео-потоками
-HTML_MARKERS = [b"<!DOCTYPE", b"<html", b"<HTML", b"<!doctype", b"<head", b"<HEAD"]
-ERROR_MARKERS = [b"404", b"403 Forbidden", b"Bad Request", b"Not Found", b"Service Unavailable", b"Error"]
-# Паттерны, которые ЯВЛЯЮТСЯ HLS/M3U плейлистами
-HLS_MARKERS = [b"#EXTM3U", b"#EXT-X-", b"#EXTINF", b"#EXTVLCOPT"]
-
-VALID_CONTENT_TYPES = [
-    "video/", "audio/", "mpegurl", "x-mpegurl", "mp2t",
-    "octet-stream", "mpeg", "application/vnd.apple",
-]
-
-async def check_channel_deep(ch: Channel, session: aiohttp.ClientSession) -> Channel:
-    """
-    Многослойная проверка канала:
-    1. HTTP HEAD — быстрый фильтр (статус + Content-Type)
-    2. HTTP GET с чтением первых 4КБ — анализ содержимого
-    3. Для HLS (.m3u8) — дополнительно проверяем наличие сегментов
-    """
-    url = ch.url
-    headers = {
-        "User-Agent": "VLC/3.0.21 LibVLC/3.0.21",
-        "Accept": "*/*",
-        "Connection": "keep-alive",
-    }
-
-    # --- Слой 1: HEAD запрос (самый быстрый) ---
-    try:
-        timeout = aiohttp.ClientTimeout(total=CONFIG["HTTP_TIMEOUT"])
-        async with session.head(url, timeout=timeout, allow_redirects=True, headers=headers, ssl=False) as resp:
-            if resp.status >= 400:
-                ch.is_working = False
-                return ch
-
-            ct = (resp.headers.get("Content-Type", "") or "").lower()
-
-            # Если Content-Type явно говорит «не видео» — отбрасываем
-            if any(bad in ct for bad in ["text/html", "text/xml", "application/json", "application/xml"]):
-                ch.is_working = False
-                return ch
-
-            # Если Content-Type явно видео/аудио/поток — скорее всего работает
-            if any(good in ct for good in VALID_CONTENT_TYPES):
-                ch.is_working = True
-                return ch
-
-            # Если Content-Type непонятный (text/plain и т.п.) — идём к слою 2
-    except (aiohttp.ClientError, asyncio.TimeoutError):
-        ch.is_working = False
-        return ch
-
-    # --- Слой 2: GET + чтение первых 4КБ ---
-    try:
-        timeout = aiohttp.ClientTimeout(total=CONFIG["GET_TIMEOUT"])
-        async with session.get(url, timeout=timeout, allow_redirects=True, headers=headers, ssl=False) as resp:
-            if resp.status >= 400:
-                ch.is_working = False
-                return ch
-
-            ct = (resp.headers.get("Content-Type", "") or "").lower()
-
-            # Повторная проверка Content-Type
-            if any(bad in ct for bad in ["text/html", "text/xml", "application/json", "application/xml"]):
-                ch.is_working = False
-                return ch
-
-            # Читаем первые 4096 байт
-            data = await resp.content.read(4096)
-
-            if not data or len(data) < 10:
-                ch.is_working = False
-                return ch
-
-            # Проверяем, не HTML ли это
-            for marker in HTML_MARKERS:
-                if data.startswith(marker):
-                    ch.is_working = False
-                    return ch
-
-            # Проверяем, нет ли ошибок в теле
-            data_str = data[:512]
-            for marker in ERROR_MARKERS:
-                if marker in data_str:
-                    ch.is_working = False
-                    return ch
-
-            # Если это HLS-плейлист (содержит #EXTM3U) — проверяем глубже
-            if data.startswith(b"#EXTM3U") or b"#EXT-X-" in data:
-                # Для HLS-плейлистов достаточно того, что сервер отдал корректный манифест
-                if b"#EXTINF" in data or b"#EXT-X-STREAM" in data or b"#EXT-X-TARGETDURATION" in data:
-                    ch.is_working = True
-                    return ch
-                # Если манифест пустой или кривой — не работаем
-                ch.is_working = False
-                return ch
-
-            # Если это MPEG-TS поток (бинарные данные) — работаем
-            # MPEG-TS начинается с 0x47 (G)
-            if data[0] == 0x47:
-                ch.is_working = True
-                return ch
-
-            # Проверяем: если тело содержит HLS-маркеры где-то внутри
-            has_hls = any(m in data for m in HLS_MARKERS)
-            has_valid_ct = any(good in ct for good in VALID_CONTENT_TYPES)
-
-            if has_hls or has_valid_ct:
-                ch.is_working = True
-                return ch
-
-            # Если Content-Type — text/plain, но внутри есть HLS-маркеры
-            if "text/plain" in ct and has_hls:
-                ch.is_working = True
-                return ch
-
-            # Для text/plain без HLS-маркеров — пробуем, если данных достаточно
-            if "text/plain" in ct and len(data) > 100 and b"http" in data:
-                # Скорее всего это текстовый плейлист с URL-ами
-                ch.is_working = True
-                return ch
-
-            # Для octet-stream с достаточным объёмом данных
-            if "octet-stream" in ct and len(data) > 50:
-                ch.is_working = True
-                return ch
-
-    except (aiohttp.ClientError, asyncio.TimeoutError):
-        ch.is_working = False
-        return ch
-
-    ch.is_working = False
-    return ch
-
-
-async def check_channel(ch: Channel, session: aiohttp.ClientSession) -> Channel:
-    """Универсальная обёртка проверки."""
-    if CONFIG["CHECK_METHOD"] == "deep" and session:
-        return await check_channel_deep(ch, session)
-    else:
-        return await check_channel_deep(ch, session)  # всегда глубокая
-
-# ============================================================
-# ПАРСИНГ M3U
-# ============================================================
-def parse_m3u(text: str, source_name: str, priority: int, country: str = "", tz_offset: int = 0) -> list[Channel]:
-    channels = []
-    lines = text.splitlines()
-    current = {}
-
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-
-        if line.startswith("#EXTINF:"):
-            current = {}
-            # Извлекаем название (после последней запятой)
-            m = re.search(r',(.+)$', line)
-            if m:
-                current["title"] = m.group(1).strip()
-            # Извлекаем атрибуты
-            for attr in re.finditer(r'(\S+?)="([^"]*)"', line):
-                current[attr.group(1)] = attr.group(2)
-
-        elif line.startswith("#"):
-            # Другие директивы — пропускаем
-            continue
-
-        elif (line.startswith("http://") or line.startswith("https://")) and current.get("title"):
-            name = current.get("title", "")
-            ch = Channel(
-                name=name,
-                url=line,
-                group=current.get("group-title", ""),
-                logo=current.get("tvg-logo", ""),
-                tvg_id=current.get("tvg-id", ""),
-                source_name=source_name,
-                source_priority=priority,
-                country=country,
-                tz_offset=tz_offset,
-                has_name=is_meaningful_name(name),
-            )
-            # Определяем страну по содержимому
-            ch.country = detect_country(ch)
-            # Наследуем tz_offset из источника, если не определён
-            channels.append(ch)
-            current = {}
-
-    return channels
-
-# ============================================================
-# ЗАГРУЗКА ИСТОЧНИКА (каждый в своём потоке)
-# ============================================================
-async def download_source(session: aiohttp.ClientSession, src: dict) -> list[Channel]:
-    """Асинхронно скачивает и парсит один источник."""
-    try:
-        timeout = aiohttp.ClientTimeout(total=30)
-        async with session.get(src["url"], timeout=timeout, ssl=False) as resp:
-            if resp.status != 200:
-                log.warning(f"  {src['name']}: HTTP {resp.status}")
-                return []
-            text = await resp.text()
-            if not text or len(text) < 20:
-                log.warning(f"  {src['name']}: пустой ответ")
-                return []
-            chs = parse_m3u(
-                text,
-                src["name"],
-                src.get("priority", 0),
-                src.get("country", ""),
-                src.get("tz", 0),
-            )
-            log.info(f"  + {src['name']}: {len(chs)} каналов")
-            return chs
-    except Exception as e:
-        log.warning(f"  - {src['name']}: {type(e).__name__}: {str(e)[:80]}")
-        return []
-
-# ============================================================
-# ПАРАЛЛЕЛЬНАЯ ЗАГРУЗКА ВСЕХ ИСТОЧНИКОВ
-# ============================================================
-async def download_all_sources() -> list[Channel]:
-    """Загружает все источники параллельно, каждый в своём потоке."""
-    log.info(f"Загрузка {len(SOURCES)} источников параллельно...")
-
-    connector = aiohttp.TCPConnector(
-        limit=CONFIG["MAX_PARALLEL_DOWNLOADS"],
-        ssl=False,
-        ttl_dns_cache=300,
+  @property
+  def is_broken_logo(self) -> bool:
+    return bool(self.logo) and (
+        "data:image" in self.logo.lower()
+        or "<svg" in self.logo.lower()
+        or len(self.logo) > 300
     )
-    async with aiohttp.ClientSession(connector=connector) as session:
-        tasks = [download_source(session, src) for src in SOURCES]
-        results = await asyncio.gather(*tasks)
 
-    all_channels = []
-    for chs in results:
-        all_channels.extend(chs)
+  @property
+  def is_garbage_name(self) -> bool:
+    n = self.clean_name
+    if len(n) < 2:
+      return True
+    readable = sum(1 for c in n if c.isalnum() or c.isspace() or '\u0400' <= c <= '\u04FF')
+    return (readable / max(len(n), 1)) < 0.4
 
-    log.info(f"Итого загружено: {len(all_channels)} каналов из {len(SOURCES)} источников")
-    return all_channels
+  @property
+  def quality_score(self) -> int:
+    score = self.source_priority * 15
+    n = self.name.upper()
+    if "4K" in n or "UHD" in n:
+      score += 50
+    elif "1080" in n or "FHD" in n:
+      score += 35
+    elif "HD" in n:
+      score += 20
+    if self.timeshift == 2:
+      score += 100
+    elif self.timeshift > 0:
+      score += 50
+    return score
 
-# ============================================================
-# УМНАЯ ПАКЕТНАЯ ПРОВЕРКА
-# ============================================================
-async def smart_check(channels: list[Channel]) -> list[Channel]:
-    """Проверяет каналы параллельно, от лучших к худшим."""
-    # Сортируем по качеству (лучшие проверяем первыми)
-    channels.sort(key=lambda x: -x.quality_score)
+def parse_m3u(text: str, source_name: str, priority: int = 0,
+              country: str = "", timeshift: int = 0) -> List[Channel]:
+  channels = []
+  lines = text.splitlines()
+  current = {}
+  for line in lines:
+    line = line.strip()
+    if not line:
+      continue
+    if line.startswith("#EXTINF:"):
+      current = {}
+      m = re.search(r",(.+)$", line)
+      if m:
+        current["title"] = m.group(1).strip()
+      for attr in re.finditer(r'(\S+?)="([^"]*)"', line):
+        current[attr.group(1)] = attr.group(2)
+    elif line.startswith("#") or not line.startswith("http"):
+      continue
+    elif current.get("title"):
+      raw_name = current.get("title", "")
+      logo = current.get("tvg-logo", "")
+      tvg_id = current.get("tvg-id", "")
+      tvg_name = current.get("tvg-name", "")
+      ts_match = re.search(r'\(\s*\+(\d+)\s*\)', raw_name)
+      detected_ts = timeshift if not ts_match else int(ts_match.group(1))
+      ch = Channel(
+          name=raw_name,
+          url=line,
+          group="my", 
+          logo=logo,
+          tvg_id=tvg_id,
+          tvg_name=tvg_name,
+          source_name=source_name,
+          source_priority=priority,
+          country=country,
+          timeshift=detected_ts,
+      )
+      if ch.clean_name:
+        channels.append(ch)
+      current = {}
+  return channels
 
-    working = []
-    semaphore = asyncio.Semaphore(CONFIG["MAX_PARALLEL_CHECKS"])
-    checked = 0
+RU_KEYWORDS = ["первый","россия","россия1","рctp","ртр","нтв","рен","стс",
+               "тнт","звезда","мир","отр","твц","тв-3","пятница","матч",
+               "спас","домашний","челябинск","екатеринбург","москва","самара",
+               "узбекистан","казахстан","belarus","minsk"]
+UA_KEYWORDS = ["украина","україна","1+1","интер","новий","стб","укр","ua-",
+               "тет","плюс","ictv","канал","пятый","марилет","hromadske"]
 
-    connector = aiohttp.TCPConnector(limit=CONFIG["MAX_PARALLEL_CHECKS"], ssl=False)
-    session = aiohttp.ClientSession(connector=connector)
+def detect_country(ch: Channel) -> str:
+  text = (ch.name + " " + ch.group + " " + ch.source_name).lower()
+  if any(k in text for k in RU_KEYWORDS) or ch.country == "ru":
+    return "ru"
+  if any(k in text for k in UA_KEYWORDS) or ch.country == "ua":
+    return "ua"
+  return "world"
+
+async def discover_m3u_su_codes(session: aiohttp.ClientSession) -> List[str]:
+  all_codes = set(M3U_SU_REGIONAL_CODES)
+  for page_num in M3U_SU_PAGES:
+    try:
+      url = f"https://m3u.su/page/{page_num}"
+      headers = get_bypass_headers(url)
+      async with session.get(url, timeout=15, headers=headers) as resp:
+        if resp.status != 200:
+          continue
+        html = await resp.text()
+        found = re.findall(r'href="/([a-zA-Z0-9][a-zA-Z0-9_-]{0,12})(?:\.m3u[^"]*)?(?:/details)?"', html)
+        skip = {"page", "docs", "status", "locale", "source", "tabbar"}
+        for code in found:
+          code = code.lower().strip()
+          if code and code not in skip and not code.startswith("page"):
+            all_codes.add(code)
+    except Exception as e:
+      log.debug(f"m3u.su page {page_num}: {e}")
+  log.info(f"m3u.su: найдено {len(all_codes)} уникальных кодов")
+  return sorted(all_codes)
+
+async def fetch_m3u_su_playlists(session: aiohttp.ClientSession) -> List[Channel]:
+  codes = await discover_m3u_su_codes(session)
+  log.info(f"m3u.su: загрузка {len(codes)} плейлистов параллельно (лимит {CONFIG['MAX_PARALLEL_DOWNLOADS']})")
+  semaphore = asyncio.Semaphore(CONFIG["MAX_PARALLEL_DOWNLOADS"])
+  all_channels = []
+
+  async def fetch_one(code: str) -> List[Channel]:
+    async with semaphore:
+      for ext in [".m3u8", ".m3u", ""]:
+        try:
+          url = f"https://m3u.su/{code}{ext}"
+          headers = get_bypass_headers(url)
+          async with session.get(url, timeout=20, allow_redirects=True, headers=headers) as resp:
+            if resp.status != 200:
+              continue
+            text = await resp.text()
+            if "#EXTM3U" not in text and "#EXTINF" not in text:
+              continue
+            chs = await asyncio.to_thread(parse_m3u, text, f"m3u.su/{code}", 7, "ru")
+            for ch in chs:
+              ch.country = detect_country(ch)
+            if chs:
+              log.debug(f"  m3u.su/{code}: {len(chs)} каналов")
+            return chs
+        except Exception:
+          continue
+      return []
+
+  tasks = [fetch_one(code) for code in codes]
+  results = await asyncio.gather(*tasks, return_exceptions=True)
+  for r in results:
+    if isinstance(r, list):
+      all_channels.extend(r)
+  log.info(f"m3u.su: загружено {len(all_channels)} каналов из {len(codes)} плейлистов")
+  return all_channels
+
+STREAM_CONTENT_TYPES = {
+    "video/", "audio/",
+    "application/vnd.apple.mpegurl",
+    "application/x-mpegurl",
+    "application/octet-stream",
+}
+GOOD_FIRST_BYTES = (
+    b"#EXTM3U", b"#EXT-X", b"#EXTINF",
+    b"\x00\x00\x00", b"\x47", b"\x1a\x45\xdf\xa3",
+    b"\x00\x00\x00\x1c", b"\x00\x00\x00\x18", b"\x00\x00\x00\x20",
+    b"FLV",
+)
+BAD_FIRST_BYTES = (
+    b"<!DOCTYPE", b"<html", b"<HTML",
+    b"<head", b"<HEAD", b"<!doctype", b"<html>", b"<html ",
+    b"404 ", b"403 ", b"502 ", b"503 ",
+    b"not found", b"forbidden", b"error",
+    b"<title>404", b"<title>Not Found",
+)
+
+async def check_channel_http(ch: Channel, session: aiohttp.ClientSession, timeout: int) -> Channel:
+  url = ch.url
+  headers = get_bypass_headers(url)
+
+  try:
+    if CONFIG.get("HEAD_FIRST", True):
+      try:
+        async with session.head(url, timeout=timeout, allow_redirects=True, headers=headers, ssl=False) as resp:
+          if resp.status >= 400:
+            return ch
+          ct = resp.headers.get("Content-Type", "").lower()
+          if any(ct.startswith(t) for t in ["video/", "audio/"]):
+            ch.is_working = True
+            ch.check_passed = 1
+            return ch
+      except:
+        pass
 
     try:
-        async def bounded_check(ch: Channel) -> Channel:
-            async with semaphore:
-                return await check_channel(ch, session)
+      async with session.get(url, timeout=timeout, allow_redirects=True, headers=headers, ssl=False) as resp:
+        if resp.status >= 400:
+          return ch
 
-        batch_size = CONFIG["MAX_PARALLEL_CHECKS"] * 3
+        ct = resp.headers.get("Content-Type", "").lower()
+        if any(good in ct for good in STREAM_CONTENT_TYPES):
+          ch.is_working = True
+          ch.check_passed = 1
+          return ch
 
-        for i in range(0, len(channels), batch_size):
-            batch = channels[i:i + batch_size]
-            results = await asyncio.gather(*[bounded_check(ch) for ch in batch], return_exceptions=True)
+        chunk = await resp.content.read(8192)
+        if not chunk:
+          return ch
 
-            for r in results:
-                checked += 1
-                if isinstance(r, Exception):
-                    continue
-                if r.is_working:
-                    working.append(r)
+        chunk_lower = chunk[:512].lower()
+        if any(chunk_lower.startswith(bad) for bad in BAD_FIRST_BYTES):
+          return ch
+        if b"<html" in chunk_lower or b"<!doctype" in chunk_lower:
+          return ch
 
-            log.info(
-                f"Проверено: {checked}/{len(channels)} | "
-                f"Рабочих: {len(working)} | "
-                f"Нерабочих: {checked - len(working)}"
-            )
+        if any(chunk.startswith(good) for good in GOOD_FIRST_BYTES):
+          ch.is_working = True
+          ch.check_passed = 1
+          return ch
 
-            # Остановка при достижении максимума
-            if len(working) >= CONFIG["MAX_WORKING_CHANNELS"]:
-                log.info(f"Достигнут максимум ({CONFIG['MAX_WORKING_CHANNELS']}), остановка проверки.")
-                break
-    finally:
-        await session.close()
+        try:
+          chunk_str = chunk.decode('utf-8', errors='ignore')
+        except:
+          chunk_str = ""
+        if "#EXTM3U" in chunk_str or "#EXT-X-" in chunk_str:
+          ch.is_working = True
+          ch.check_passed = 1
+          lines = chunk_str.splitlines()
+          segment_urls = []
+          for line in lines:
+            line = line.strip()
+            if line and not line.startswith('#') and (line.startswith('http') or '/' in line):
+              if not line.startswith('http'):
+                parsed = urlparse(url)
+                base = f"{parsed.scheme}://{parsed.netloc}"
+                path = parsed.path.rsplit('/', 1)[0]
+                line = urljoin(base + '/' + path + '/', line)
+              segment_urls.append(line)
+          for seg_url in segment_urls[:3]:
+            try:
+              seg_headers = get_bypass_headers(seg_url)
+              async with session.get(seg_url, timeout=CONFIG["HLS_PROBE_TIMEOUT"],
+                                    allow_redirects=True, headers=seg_headers, ssl=False) as seg_resp:
+                if seg_resp.status == 200:
+                  seg_chunk = await seg_resp.content.read(1024)
+                  if seg_chunk and not any(seg_chunk.lower().startswith(bad) for bad in BAD_FIRST_BYTES):
+                    ch.is_working = True
+                    ch.check_passed = 2
+                    return ch
+            except:
+              continue
+          ch.is_working = False
+          ch.check_passed = 0
+          return ch
 
-    return working
+        if len(chunk) > 2048 and b"<html" not in chunk_lower:
+          if b"\x47" in chunk[:100] or b"\x00\x00\x01" in chunk[:100]:
+            ch.is_working = True
+            ch.check_passed = 1
+            return ch
+    except:
+      pass
+  except Exception as e:
+    log.debug(f"Ошибка проверки {ch.url[:80]}: {e}")
+  return ch
 
-# ============================================================
-# ДЕДУПЛИКАЦИЯ ПО URL (строго после проверки!)
-# ============================================================
-def deduplicate_by_url(channels: list[Channel]) -> list[Channel]:
-    """
-    Дедупликация строго по URL.
-    Из дубликатов оставляем тот, у которого выше quality_score
-    и у которого есть нормальное название.
-    """
-    seen = {}
+async def smart_check(
+    channels: List[Channel],
+    max_working: int,
+    min_working: int,
+    workers: int,
+) -> List[Channel]:
+  await asyncio.to_thread(channels.sort, key=lambda x: (-x.quality_score, x.clean_name))
+  total = len(channels)
+  working = []
+  semaphore = asyncio.Semaphore(workers)
+
+  connector = aiohttp.TCPConnector(limit=workers, limit_per_host=50, ssl=False, force_close=False)
+  session = aiohttp.ClientSession(
+      connector=connector,
+      timeout=aiohttp.ClientTimeout(total=CONFIG["CHECK_TIMEOUT"] + 3)
+  )
+
+  try:
+    async def bounded(ch: Channel) -> Channel:
+      async with semaphore:
+        return await check_channel_http(ch, session, CONFIG["CHECK_TIMEOUT"])
+
+    batch_size = workers * 2  
+    processed = 0
+    for i in range(0, total, batch_size):
+      batch = channels[i:i + batch_size]
+      tasks = [bounded(ch) for ch in batch]
+      results = await asyncio.gather(*tasks, return_exceptions=True)
+
+      for r in results:
+        if isinstance(r, Channel) and r.is_working:
+          working.append(r)
+      processed = min(i + batch_size, total)
+      log.info(
+          f"  Проверено: {processed}/{total} | Рабочих: {len(working)} | "
+          f"Успех: {len(working)/max(processed,1)*100:.1f}% | Потоков: {workers}"
+      )
+      if len(working) >= max_working:
+        log.info(f"  Достигнут лимит {max_working} каналов, досрочная остановка.")
+        break
+  finally:
+    await session.close()
+
+  if len(working) < min_working:
+    log.warning(f"  Найдено только {len(working)} рабочих (минимум {min_working})")
+  return working
+
+def deduplicate_by_url(channels: List[Channel]) -> List[Channel]:
+  seen: Dict[str, Channel] = {}
+  for ch in channels:
+    if ch.url in seen:
+      if ch.quality_score > seen[ch.url].quality_score:
+        seen[ch.url] = ch
+    else:
+      seen[ch.url] = ch
+  log.info(f"  Дедупликация по URL: {len(channels)} → {len(seen)} (удалено {len(channels)-len(seen)})")
+  return list(seen.values())
+
+_bad_name_counter = 0
+def sanitize_channel_name(ch: Channel) -> Channel:
+  global _bad_name_counter
+  if ch.is_broken_logo:
+    ch.logo = ""
+  if ch.is_garbage_name:
+    _bad_name_counter += 1
+    ch.name = f"Канал {_bad_name_counter}"
+    ch.logo = ""
+  return ch
+
+def sort_channels(channels: List[Channel]) -> List[Channel]:
+  def sort_key(ch: Channel):
+    ts_rank = 0 if ch.timeshift == 2 else (1 if ch.timeshift > 0 else 2)
+    country = detect_country(ch)
+    country_rank = 0 if country == "ru" else (1 if country == "ua" else 2)
+    name_rank = 0 if not ch.is_garbage_name else 1
+    quality = -ch.quality_score
+    alpha = ch.clean_name.lower()
+    return (ts_rank, country_rank, name_rank, quality, alpha)
+  channels.sort(key=sort_key)
+  return channels
+
+def export_m3u(channels: List[Channel], filepath: str):
+  with open(filepath, "w", encoding="utf-8") as f:
+    f.write("#EXTM3U\n")
     for ch in channels:
-        if ch.url not in seen:
-            seen[ch.url] = ch
-        else:
-            existing = seen[ch.url]
-            # Заменяем, если новый лучше
-            if (ch.quality_score > existing.quality_score or
-                (ch.quality_score == existing.quality_score and ch.has_name and not existing.has_name)):
-                seen[ch.url] = ch
+      attrs = []
+      if ch.tvg_id:
+        attrs.append(f'tvg-id="{ch.tvg_id}"')
+      if ch.tvg_name:
+        attrs.append(f'tvg-name="{ch.tvg_name}"')
+      if ch.logo and not ch.is_broken_logo:
+        attrs.append(f'tvg-logo="{ch.logo}"')
+      attrs.append('group-title="my"')
+      attr_str = " ".join(attrs)
+      f.write(f"#EXTINF:-1 {attr_str},{ch.name}\n")
+      f.write(f"{ch.url}\n")
+  log.info(f"Плейлист сохранён: {filepath} ({len(channels)} каналов)")
 
-    log.info(f"Дедупликация по URL: {len(channels)} -> {len(seen)} уникальных")
-    return list(seen.values())
+async def download_source(session: aiohttp.ClientSession, src: dict) -> List[Channel]:
+  try:
+    headers = get_bypass_headers(src["url"])
+    async with session.get(src["url"], timeout=30, allow_redirects=True, headers=headers, ssl=False) as resp:
+      if resp.status != 200:
+        log.warning(f"  ✗ {src['name']}: HTTP {resp.status}")
+        return []
+      text = await resp.text()
+      if "#EXTM3U" not in text and "#EXTINF" not in text:
+        log.warning(f"  ✗ {src['name']}: не M3U-формат ({len(text)} байт)")
+        return []
+      chs = await asyncio.to_thread(parse_m3u, text, src["name"], src.get("priority",0), src.get("country",""), src.get("timeshift",0))
+      log.info(f"  ✓ {src['name']}: {len(chs)} каналов")
+      return chs
+  except Exception as e:
+    log.warning(f"  ✗ {src['name']}: {e}")
+    return []
 
-# ============================================================
-# СОРТИРОВКА ПЛЕЙЛИСТА
-# ============================================================
-def sort_channels(channels: list[Channel]) -> list[Channel]:
-    """
-    Сортировка:
-    1. Каналы с нормальными названиями — ВПЕРЕДИ
-    2. Российские — перед украинскими — перед остальными
-    3. МСК+2 (Урал) — приоритет среди российских
-    4. Высокое качество (4K > HD > SD)
-    5. Приоритет источника
-    """
-    def sort_key(ch: Channel) -> tuple:
-        # 0 = с названием, 1 = без названия (с названием первыми)
-        name_order = 0 if ch.has_name else 1
+async def download_all_static(session: aiohttp.ClientSession) -> List[Channel]:
+  log.info(f"Загрузка {len(STATIC_SOURCES)} статических источников (параллельно, лимит {CONFIG['MAX_PARALLEL_DOWNLOADS']})")
+  sem = asyncio.Semaphore(CONFIG["MAX_PARALLEL_DOWNLOADS"])
+  async def bounded(src):
+    async with sem:
+      return await download_source(session, src)
+  tasks = [bounded(src) for src in STATIC_SOURCES]
+  results = await asyncio.gather(*tasks, return_exceptions=True)
+  all_channels = []
+  for r in results:
+    if isinstance(r, list):
+      all_channels.extend(r)
+    elif isinstance(r, Exception):
+      log.warning(f"  Ошибка при загрузке источника: {r}")
+  log.info(f"Статические источники: {len(all_channels)} каналов")
+  return all_channels
 
-        # Порядок страны: ru=0, ua=1, world/mixed=2
-        country_order = {"ru": 0, "ua": 1}.get(ch.country, 2)
-
-        # МСК+2 = 0, остальные = 1
-        tz_order = 0 if ch.tz_offset == 2 else 1
-
-        # Качество (обратный порядок — лучше первыми)
-        quality = -ch.quality_score
-
-        return (name_order, country_order, tz_order, quality)
-
-    channels.sort(key=sort_key)
-    return channels
-
-# ============================================================
-# ЭКСПОРТ M3U
-# ============================================================
-def export_m3u(channels: list[Channel], filepath: str):
-    """Сохраняет плейлист в M3U-формат."""
-    with open(filepath, "w", encoding="utf-8") as f:
-        f.write("#EXTM3U\n")
-        for ch in channels:
-            attrs = []
-            if ch.tvg_id:
-                attrs.append(f'tvg-id="{ch.tvg_id}"')
-            if ch.logo:
-                attrs.append(f'tvg-logo="{ch.logo}"')
-            if ch.group:
-                attrs.append(f'group-title="{ch.group}"')
-            attr_str = " ".join(attrs)
-            f.write(f'#EXTINF:-1 {attr_str},{ch.name}\n{ch.url}\n')
-
-    # Статистика
-    ru_count = sum(1 for c in channels if c.country == "ru")
-    ua_count = sum(1 for c in channels if c.country == "ua")
-    tz2_count = sum(1 for c in channels if c.tz_offset == 2)
-    named_count = sum(1 for c in channels if c.has_name)
-    log.info(f"Плейлист сохранён: {filepath}")
-    log.info(f"  Всего каналов: {len(channels)}")
-    log.info(f"  С нормальными названиями: {named_count}")
-    log.info(f"  Российских: {ru_count} | Украинских: {ua_count} | МСК+2: {tz2_count}")
-
-# ============================================================
-# MAIN
-# ============================================================
 async def main():
-    parser = argparse.ArgumentParser(description="IPTV Merger v3.0 — сборщик рабочих IPTV-каналов")
-    parser.add_argument("--min-channels", type=int, default=CONFIG["MIN_WORKING_CHANNELS"],
-                        help="Минимум рабочих каналов")
-    parser.add_argument("--max-channels", type=int, default=CONFIG["MAX_WORKING_CHANNELS"],
-                        help="Максимум каналов в плейлисте")
-    parser.add_argument("--workers", type=int, default=CONFIG["MAX_PARALLEL_CHECKS"],
-                        help="Потоков проверки")
-    parser.add_argument("--output", default=CONFIG["OUTPUT_FILE"],
-                        help="Имя выходного файла")
-    parser.add_argument("--method", choices=["deep", "http"], default=CONFIG["CHECK_METHOD"],
-                        help="Метод проверки (deep — глубокий, http — быстрый)")
-    args = parser.parse_args()
+  global log
+  parser = argparse.ArgumentParser(description="IPTV Merger v4.0 — сверхбыстщик рабочих каналов")
+  parser.add_argument("--min-channels", type=int, default=CONFIG["MIN_WORKING"], help="Минимум рабочих каналов")
+  parser.add_argument("--max-channels", type=int, default=CONFIG["MAX_WORKING"], help="Максимум каналов")
+  parser.add_argument("--workers", type=int, default=CONFIG["MAX_PARALLEL_CHECKS"], help="Потоков проверки (рекомендуется 150-300)")
+  parser.add_argument("--downloads", type=int, default=CONFIG["MAX_PARALLEL_DOWNLOADS"], help="Параллельных загрузок плейлистов")
+  parser.add_argument("--output", default=CONFIG["OUTPUT_FILE"], help="Имя выходного файла")
+  parser.add_argument("--no-m3usu", action="store_true", help="Отключить глубокий парсинг m3u.su")
+  parser.add_argument("--verbose", "-v", action="store_true", help="Детальное логирование (каждый канал)")
+  parser.add_argument("--no-head-first", action="store_true", help="Пропустить HEAD-запрос (сразу GET)")
+  args = parser.parse_args()
 
-    # Обновляем конфиг
-    CONFIG["CHECK_METHOD"] = args.method
-    CONFIG["MIN_WORKING_CHANNELS"] = args.min_channels
-    CONFIG["MAX_WORKING_CHANNELS"] = args.max_channels
-    CONFIG["MAX_PARALLEL_CHECKS"] = args.workers
+  log = setup_logging(args.verbose)
+  CONFIG["HEAD_FIRST"] = not args.no_head_first
+  CONFIG["MAX_PARALLEL_CHECKS"] = args.workers
+  CONFIG["MAX_PARALLEL_DOWNLOADS"] = args.downloads
+  CONFIG["MIN_WORKING"] = args.min_channels
+  CONFIG["MAX_WORKING"] = args.max_channels
+  CONFIG["OUTPUT_FILE"] = args.output
 
-    start = time.time()
+  start = time.time()
+  log.info("="*70)
+  log.info(f"IPTV Merger v4.0 | Цель: {args.min_channels}–{args.max_channels} каналов")
+  log.info(f"Параметры: проверка {args.workers} потоков, загрузка {args.downloads} потоков")
+  log.info("="*70)
 
-    log.info("=" * 70)
-    log.info(f"IPTV Merger v3.0 | Метод: {args.method} | Цель: {args.min_channels}-{args.max_channels} каналов")
-    log.info("=" * 70)
+  connector = aiohttp.TCPConnector(limit=args.downloads + 50, ssl=False, force_close=False)
+  async with aiohttp.ClientSession(connector=connector) as session:
+    static_channels = await download_all_static(session)
+    m3usu_channels = []
+    if not args.no_m3usu:
+      m3usu_channels = await fetch_m3u_su_playlists(session)
 
-    # Шаг 1: Параллельная загрузка всех источников
-    all_channels = await download_all_sources()
+  all_channels = static_channels + m3usu_channels
+  log.info(f"Всего загружено: {len(all_channels)} каналов")
 
-    if not all_channels:
-        log.error("Ни один канал не загружен. Проверьте интернет-соединение.")
-        return
+  if not all_channels:
+    log.error("Ни один источник не отдал каналов. Завершение.")
+    return
 
-    # Шаг 2: Проверка работоспособности (только рабочие)
-    log.info("-" * 70)
-    log.info("Начинаем проверку каналов...")
-    working = await smart_check(all_channels)
+  unique = await asyncio.to_thread(deduplicate_by_url, all_channels)
+  log.info(f"После дедупликации: {len(unique)} уникальных URL")
 
-    if not working:
-        log.error("Не найдено ни одного рабочего канала.")
-        return
+  log.info(f"Начинаем проверку (до {args.max_channels} рабочих)...")
+  working = await smart_check(unique, args.max_channels, args.min_channels, args.workers)
 
-    log.info(f"Проверка завершена. Рабочих: {len(working)}")
+  working = await asyncio.to_thread(deduplicate_by_url, working)
 
-    # Шаг 3: Дедупликация по URL (строго после проверки!)
-    log.info("-" * 70)
-    unique = deduplicate_by_url(working)
+  log.info("Очистка имён каналов...")
+  working = [sanitize_channel_name(ch) for ch in working]
 
-    # Шаг 4: Сортировка (RU → UA → мир; с названиями первыми; МСК+2 приоритет)
-    unique = sort_channels(unique)
+  log.info("Сортировка каналов...")
+  working = await asyncio.to_thread(sort_channels, working)
 
-    # Шаг 5: Экспорт
-    export_m3u(unique, args.output)
+  await asyncio.to_thread(export_m3u, working, args.output)
 
-    elapsed = time.time() - start
-    log.info("-" * 70)
-    log.info(f"Готово за {elapsed:.1f} сек | {len(unique)} рабочих уникальных каналов -> {args.output}")
-    log.info("=" * 70)
+  elapsed = time.time() - start
+  ru_count = sum(1 for ch in working if detect_country(ch) == "ru")
+  ua_count = sum(1 for ch in working if detect_country(ch) == "ua")
+  ts2_count = sum(1 for ch in working if ch.timeshift == 2)
 
-    if len(unique) < args.min_channels:
-        log.warning(f"Найдено только {len(unique)} каналов (минимум {args.min_channels})")
-
+  log.info("="*70)
+  log.info(f"ГОТОВО за {elapsed:.1f} сек")
+  log.info(f"  Всего: {len(working)} каналов")
+  log.info(f"  Русских: {ru_count} | Украинских: {ua_count} | MSK+2: {ts2_count}")
+  log.info(f"  Файл: {args.output}")
+  log.info("="*70)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+  asyncio.run(main())
