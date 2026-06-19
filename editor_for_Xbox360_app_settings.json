@@ -288,8 +288,8 @@
             "Y": "KEY_?",
             "LEFT_SHOULDER": "KEY_Q",
             "RIGHT_SHOULDER": "KEY_E",
-            "LEFT_TRIGGER": "KEY_RIGHTSHIFT",
-            "RIGHT_TRIGGER": "KEY_DOWN",
+            "LEFT_TRIGGER": "KEY_DOWN",
+            "RIGHT_TRIGGER": "KEY_KP9",
             "GUIDE": "KEY_INSERT",
             "BACK": "KEY_BACKSPACE",
             "START": "KEY_SPACE",
@@ -307,6 +307,18 @@
             "RIGHT_THUMB_RIGHT": "KEY_KP6",
             "LEFT_THUMB_PRESSED": "KEY_RIGHTCTRL",
             "RIGHT_THUMB_PRESSED": "KEY_KP5"
+        }
+    },
+    "trigger_modes": {
+        "race": {
+            "RIGHT_THUMB_RIGHT": {
+                "key": "KEY_H",
+                "mode": "hold"
+            },
+            "RIGHT_TRIGGER": {
+                "key": "KEY_H",
+                "mode": "hold"
+            }
         }
     },
     "mouse_on": false,

@@ -189,7 +189,19 @@ class GamepadWidget(QWidget):
 
  def update_all_bindings(self, mapping):
   for z in self.zones:
-   z.current_binding = KEY_MAPPER.to_display(mapping.get(z.logical_name, ""))
+   val = mapping.get(z.logical_name)
+   if isinstance(val, dict):
+    # специальный режим: отображаем клавишу и режим
+    key_display = KEY_MAPPER.to_display(val.get("key", ""))
+    mode = val.get("mode", "")
+    if mode == "hold":
+     z.current_binding = f"{key_display}(H)"
+    elif mode == "repeat":
+     z.current_binding = f"{key_display}(R)"
+    else:
+     z.current_binding = key_display
+   else:
+    z.current_binding = KEY_MAPPER.to_display(val)
   self.update()
 
  def set_image(self, path):
@@ -506,6 +518,38 @@ class MainWindow(QWidget):
   self.debug_cb.setStyleSheet("color:#aaa;background:transparent;")
   lay.addWidget(self.debug_cb)  # [скрыто] Двигать зоны (F3)
   self.debug_cb.toggled.connect(lambda v: self.gamepad.set_debug_mode(v))
+
+  # --- ДОБАВЛЕННЫЕ ЭЛЕМЕНТЫ ДЛЯ ТРИГГЕРНЫХ РЕЖИМОВ ---
+  lay.addStretch()
+  lay.addWidget(QLabel("Триггер:"))
+  self.trigger_button_combo = QComboBox()
+  self.trigger_button_combo.setFixedWidth(120)
+  # Заполняем списком всех логических имен из ZONE_DEFINITIONS (уникальные)
+  logical_names = sorted(set(z[1] for z in ZONE_DEFINITIONS))
+  self.trigger_button_combo.addItems(logical_names)
+  self.trigger_button_combo.setStyleSheet("background:#0d0e1a;color:white;border:1px solid #2c2f5a;border-radius:4px;padding:2px;")
+  lay.addWidget(self.trigger_button_combo)
+
+  self.trigger_mode_combo = QComboBox()
+  self.trigger_mode_combo.setFixedWidth(100)
+  self.trigger_mode_combo.addItems(["Удержать", "Повтор"])
+  self.trigger_mode_combo.setStyleSheet("background:#0d0e1a;color:white;border:1px solid #2c2f5a;border-radius:4px;padding:2px;")
+  lay.addWidget(self.trigger_mode_combo)
+
+  self.trigger_key_btn = QPushButton("Клавиатура")
+  self.trigger_key_btn.setFixedSize(100, 30)
+  self.trigger_key_btn.setStyleSheet("background:#6c3483;color:white;border:none;border-radius:4px;")
+  lay.addWidget(self.trigger_key_btn)
+
+  self.trigger_clear_btn = QPushButton("Очистить")
+  self.trigger_clear_btn.setFixedSize(80, 30)
+  self.trigger_clear_btn.setStyleSheet("background:#e74c3c;color:white;border:none;border-radius:4px;")
+  lay.addWidget(self.trigger_clear_btn)
+
+  self.trigger_status_label = QLabel("")
+  self.trigger_status_label.setStyleSheet("color:#aaa;")
+  lay.addWidget(self.trigger_status_label)
+
   return frame
 
  def _build_footer(self):
