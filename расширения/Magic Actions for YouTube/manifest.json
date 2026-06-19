@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Magic Actions for YouTube",
+  "version": "1.0.0",
+  "description": "Custom version — только переключение светлой/тёмной темы на YouTube",
+
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Переключить тему YouTube"
+  },
+
+  "content_scripts": [
+    {
+      "css": ["theme.css", "styles.css"],
+      "js": ["content.js"],
+      "matches": ["https://www.youtube.com/*"],
+      "run_at": "document_start"
+    }
+  ],
+
+  "permissions": ["storage"],
+
+  "icons": {
+    "16":  "gimg30/16.png",
+    "48":  "gimg30/48.png",
+    "128": "gimg30/128.png"
+  }
+}

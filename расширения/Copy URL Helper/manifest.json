@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Copy URL Helper",
+  "version": "1.0",
+  "description": "Автоматически изменяет размер плеера, нажимает 'Magic Skip' и показывает URL текущей вкладки",
+  "icons": {
+    "16": "icons/icon.png",
+    "48": "icons/icon.png",
+    "128": "icons/icon.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon.png",
+      "48": "icons/icon.png",
+      "128": "icons/icon.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": ["activeTab", "scripting","tabs", "windows", "storage", "clipboardWrite"],
+  "content_scripts": [{
+    "matches": ["https://www.youtube.com/watch *"],
+    "js": ["content.js"],
+    "run_at": "document_end"
+  }]
+}

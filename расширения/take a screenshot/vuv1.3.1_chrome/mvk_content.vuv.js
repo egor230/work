@@ -1,0 +1,1 @@
+﻿(()=>{"use strict";(e=>{if(!(document.documentElement instanceof HTMLHtmlElement))return!1;const t=document.createElement("script");t.src=e,t.onload=()=>{t.remove()},(document.body||document.documentElement).appendChild(t)})(chrome.runtime.getURL("mvk_injected.vuv.js"))})();

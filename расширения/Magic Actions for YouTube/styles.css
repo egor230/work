@@ -1,0 +1,69 @@
+/* ============================================
+   Magic Actions for YouTube — Styles
+   Переключатель темы + темы YouTube
+   ============================================ */
+
+/* ------------------------------------------
+   Кнопка переключателя на странице
+   ------------------------------------------ */
+#__magic-theme-switch {
+  display: block !important;
+  outline: 0 !important;
+  position: fixed !important;
+  z-index: 2147483646 !important;
+  top: 7px !important;
+  left: 5px !important;
+  width: 14px !important;
+  height: 34px !important;
+  cursor: pointer !important;
+  background: transparent url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABwAAAAiCAYAAABMfblJAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAAFiUAABYlAUlSJPAAAAAadEVYdFNvZnR3YXJlAFBhaW50Lk5FVCB2My41LjEwMPRyoAAABjtJREFUWEeFV/dTVFcY5S/RZBzHjBPEggoKoihYKAqKigaMaFCkKUqTYkFQVCwgRUIvFpYuIpaQ0Ukcf4jJZIwjmbW3aEbzDyh8OefKXd/b9zb54cx9d/ftPfdr5/vWq9vh+GNocHB0+MaND8DHHwGso3rF89iVgYExvDfWdfHi2Lnm5rGKEyfKasrLR2sqKj5WnTo16oYP2BP8fAyQirIy2ZOeLnGxsSFevZ2dIw+dTvnn/Xt5/+6dBX+/fSu/3b0rDWfPSuXJk3KitFTSkpJq8jIzJWvXLslISflfpCclydroaAkKDAzz6nU4nE+fPJG3b97IX69fy+tXr9Sq8fLFC7lz+7akbN8u61avln25uZIQH9+YtHWrhAQHy5KFCz+tixaZEII9ERwUJNErV8qq8HCZ6+sb5dXT0eF8BAtfvXwpL54/l+fPnqlV4/HDh/LTzZuyZdMmiVixQgqys0nYxD0OkPBly9TtNWLGn7lGRUZKgJ+fhOEdj4SaSBOT8Odbt+S7hARZGRZmIlwYGCiJ+HwX3KqxMzlZCO7hekUWvny5gRAu5aHaQm2lO2EyXGok3AoLQ+HKjNRUyc/K+gx4QO9z9+xRVpoJx13KWBld6k64Ewe7Ey4PCZG9SJ7iffsUSvbvl5IDBz6tQFFBgXK1iRCp7nxw/74wU/8cGbHg/r17ghKRTGQk42CM4YrQUClEEh0/fFjhWEmJ6flIUZFsWLtWIowuvdDa6rw5PCzE8PXrJvxw7ZpcHxqSHodDsjMyLIRMmGJYUo46s8OpY8ckbsMGs4WtDQ3Owf5+RUQC4sbVqwr6ua+rS/IQJ1pYmJPDjFVZyqw9WlwsEAA5e+aMBVWnT8u3cXFmC1vq65088NqVK8oaO/R3d0tRYaFERUQoQl0W3EN1BGfYorG2VmW3yaUkhFzJQG+vDF2+bItL+I7xIYExhmtWrZLvq6qk8/x5WyBcsiMx0UpYV10tSB4Z6OtTuAwX62eu/T09wnishmIYCaOR8mcgdwiLLWgh69RiIfWxtbFRejo7VYIoGJ+xZ5xokZGQB7EOmVCewCw1lUVzXZ2T8amvqfHoGrqstrJSaakxhizLfBT6QdSbJyDeVgtzUbxM6zZY6QnMQndCFvXJo0elurzcBXrCuN+2ZYtEIJtdWsqkyYJLDkEp+LInMFYuQpQFpS0+NlZlqTuhkTQedWiJIVUkd/duKTtyxAUqh/uehMYYkpS15umSlWi+lhjSQhKmQpx5WCHAVcO4pws1YeLmzZKKbmBX8PozhomXNCWNJtwOXzPTqPB2yMSIQEKtNMmorxx4hXVoBJNL70+jlCzirQnZ0RkPusgOLJ2YqCiXhex5B/LzLYRGcoaEtWuNISzbiYbJAqbq2IEzjbYwAUnDeeY41MfdQuO+9NAhCVu61MalIORU1XnhgmA6k+6Ojs8CMC4E51taZP2aNS4L2QeZuVQpT2An4bzDrmIpi2zcmArTB6GmlHE1oqO93US4Py9PiQUttwMvwXeCFywwzzQ6hjmwkkTUUTtQa2mhVppStKVzsJpoRxgIvefKDsKWFhQQYE/IOiSR7hgYfsUIWm90aTMO1N8PXrpkepd7vk+5WzBvnj0hB1seoPsh+6MR7ImxMTGSj/c2bdzYQrGnR3rRSzFMW3CxrU0K0DsD/P2thJQ2JgFvZteAScxDaeFe1OnGdevam+rqVEfphqvd0YXkoybn4N15c+faJ83utDRVDo7xZqpXdgomDHsb65DiAPXo4N4TIS/Q3tSkBi+/2bNtXIp') no-repeat 0 0 !important;
+}
+html.__ytnight #__magic-theme-switch {
+  background-position: -14px 0 !important;
+}
+html:fullscreen #__magic-theme-switch {
+  display: none !important;
+}
+
+/* ------------------------------------------
+   Тёмная тема — как в оригинальном расширении
+   + исправление строки поиска (белые остатки)
+   ------------------------------------------ */
+html.__ytnight {
+  --ma-color: #bbb;
+  --ytd-video-primary-info-renderer-title-color: var(--ma-color) !important;
+  --yt-spec-text-primary: var(--ma-color) !important;
+  --yt-searchbox-background: #121212;
+  --yt-searchbox-text-color: #eee;
+  --ytd-searchbox-legacy-border-color: #333;
+  --ytd-searchbox-legacy-button-color: #333;
+  --ytd-searchbox-legacy-button-border-color: #444;
+  --yt-spec-base-background: #0f0f0f;
+  --yt-spec-general-background-a: #181818;
+  scrollbar-color: #555 #222;
+}
+html.__ytnight h3.ytd-compact-video-renderer {
+  color: var(--ma-color) !important;
+}
+html.__ytnight ytd-button-renderer.style-suggestive[is-paper-button] {
+  color: var(--ma-color) !important;
+}
+html.__ytnight ytd-button-renderer.style-suggestive[is-paper-button] paper-button.ytd-button-renderer {
+  border: none;
+}
+
+/* ------------------------------------------
+   Светлая тема — как в оригинальном расширении
+   + возврат строки поиска к светлому виду
+   ------------------------------------------ */
+html.__ytday {
+  --yt-searchbox-background: #fff;
+  --yt-searchbox-text-color: #111;
+  --ytd-searchbox-legacy-border-color: #ccc;
+  --ytd-searchbox-legacy-button-color: #f8f8f8;
+  --ytd-searchbox-legacy-button-border-color: #ccc;
+  --yt-spec-base-background: #fff;
+  --yt-spec-general-background-a: #fff;
+  --yt-spec-general-background-b: #f9f9f9;
+  scrollbar-color: #aaa #ddd;
+}

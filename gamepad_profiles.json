@@ -1,0 +1,29 @@
+{
+    "Default": {
+        "BTN_A": "KEY_UP",
+        "BTN_B": "KEY_1",
+        "BTN_X": "KEY_0",
+        "BTN_Y": "KEY_Y",
+        "BTN_TL": "KEY_Q",
+        "BTN_TR": "KEY_E",
+        "ABS_LT": "KEY_LEFTSHIFT",
+        "ABS_RT": "KEY_DOWN",
+        "BTN_MODE": "KEY_ESC",
+        "BTN_SELECT": "KEY_BACKSPACE",
+        "BTN_START": "KEY_SPACE",
+        "BTN_DPAD_UP": "KEY_KP8",
+        "BTN_DPAD_DOWN": "KEY_DOWN",
+        "BTN_DPAD_LEFT": "KEY_KP4",
+        "BTN_DPAD_RIGHT": "KEY_RIGHT",
+        "ABS_LEFT_STICK_Y_NEG": "KEY_W",
+        "ABS_LEFT_STICK_Y_POS": "KEY_S",
+        "ABS_LEFT_STICK_X_NEG": "KEY_A",
+        "ABS_LEFT_STICK_X_POS": "KEY_D",
+        "ABS_RIGHT_STICK_Y_NEG": "KEY_G",
+        "ABS_RIGHT_STICK_Y_POS": "KEY_KP2",
+        "ABS_RIGHT_STICK_X_NEG": "KEY_KP4",
+        "ABS_RIGHT_STICK_X_POS": "KEY_KP6",
+        "BTN_THUMBL": "KEY_F",
+        "BTN_THUMBR": "KEY_KP2"
+    }
+}

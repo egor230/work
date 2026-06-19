@@ -1,0 +1,1077 @@
+{
+   "activity": {
+      "message": "Toiminta"
+   },
+   "addModel": {
+      "message": "+ Lisää malli"
+   },
+   "addModelTitle": {
+      "message": "Lisää malli"
+   },
+   "addProperty": {
+      "message": "+ Lisää ominaisuus"
+   },
+   "addProvider": {
+      "message": "+ Lisää palveluntarjoaja"
+   },
+   "addProviderTitle": {
+      "message": "Lisää palveluntarjoaja"
+   },
+   "addToObsidian": {
+      "message": "Lisää Obsidianiin"
+   },
+   "addVaultPlaceholder": {
+      "message": "Paina enter lisätäksesi holvin"
+   },
+   "advanced": {
+      "message": "Lisäasetukset"
+   },
+   "allHighlights": {
+      "message": "Kaikki korostukset"
+   },
+   "allProperties": {
+      "message": "Kaikki ominaisuudet"
+   },
+   "allTime": {
+      "message": "Koko ajalta"
+   },
+   "alwaysShowHighlights": {
+      "message": "Näytä korostukset aina"
+   },
+   "alwaysShowHighlightsDescription": {
+      "message": "Näytä tallennetut korostukset sivun latautuessa. Poista käytöstä näyttääksesi korostukset vain kun korostustila on aktivoitu."
+   },
+   "apiKeyMissing": {
+      "message": "Ei API-avainta"
+   },
+   "apiKeysWarning": {
+      "message": "Käyttämällä ulkoista palveluntarjoajaa hyväksyt heidän käyttöehtonsa ja tietosuojakäytäntönsä. Tulkin pyynnöt lähetetään suoraan valitsemallesi palveluntarjoajalle. Obsidian ei kerää tai tallenna mitään tietoja pyynnöistäsi."
+   },
+   "appendToDaily": {
+      "message": "Lisää päivittäiseen muistiinpanoon, loppuun"
+   },
+   "appendToExisting": {
+      "message": "Lisää olemassa olevaan muistiinpanoon, loppuun"
+   },
+   "autoRunInterpreter": {
+      "message": "Suorita automaattisesti"
+   },
+   "autoRunInterpreterDescription": {
+      "message": "Suorittaa kehotteen muuttujat välittömästi, jos mallissa on niitä. Tämä kuluttaa API-krediittejä mallintarjoajaltasi. Poista käytöstä, jos haluat suorittaa tulkin vain manuaalisesti."
+   },
+   "behavior": {
+      "message": "Käyttäytyminen"
+   },
+   "byDay": {
+      "message": "Päivät"
+   },
+   "byMonth": {
+      "message": "Kuukaudet"
+   },
+   "byWeek": {
+      "message": "Viikot"
+   },
+   "cancel": {
+      "message": "Peruuta"
+   },
+   "cannotDeleteProvider": {
+      "message": "Palveluntarjoajaa \"$1\" ei voi poistaa, koska sitä käyttää $2 malli(a)."
+   },
+   "changelog": {
+      "message": "Muutosloki"
+   },
+   "chooseFile": {
+      "message": "Valitse tiedosto"
+   },
+   "choosePropertiesFile": {
+      "message": "Valitse ominaisuustiedosto"
+   },
+   "chooseSettingsFile": {
+      "message": "Valitse asetustiedosto"
+   },
+   "chooseTemplateFile": {
+      "message": "Valitse mallitiedosto"
+   },
+   "clipBehavior": {
+      "message": "Leikkauksen käyttäytyminen"
+   },
+   "clipBehaviorDescription": {
+      "message": "Valitse, miten valittu sisältö tallennetaan Obsidianiin. Määrittää muuttujan $strong_start${{content}}$strong_end$",
+      "placeholders": {
+         "strong_end": {
+            "content": "\u003C/strong>"
+         },
+         "strong_start": {
+            "content": "\u003Cstrong>"
+         }
+      }
+   },
+   "clipboardError": {
+      "message": "Obsidian ei voi käyttää leikepöytääsi. Kokeile vianmääritysohjeita täällä: $1",
+      "placeholders": {
+         "1": {
+            "content": "$1"
+         }
+      }
+   },
+   "close": {
+      "message": "Sulje"
+   },
+   "commandOpenClipper": {
+      "message": "Avaa Obsidian Clipper"
+   },
+   "commandQuickClip": {
+      "message": "Pikaleikkaus"
+   },
+   "commandToggleHighlighter": {
+      "message": "Vaihda korostustila"
+   },
+   "commandToggleReader": {
+      "message": "Vaihda lukunäkymä"
+   },
+   "confirmDeleteTemplate": {
+      "message": "Haluatko varmasti poistaa mallin \"$1\"?"
+   },
+   "confirmReplaceSettings": {
+      "message": "Tämä korvaa kaikki nykyiset asetuksesi, mukaan lukien mallit ja ominaisuudet. Haluatko varmasti jatkaa?"
+   },
+   "copied": {
+      "message": "Kopioitu!"
+   },
+   "copyAsJson": {
+      "message": "Kopioi JSON:na"
+   },
+   "copyToClipboard": {
+      "message": "Kopioi leikepöydälle"
+   },
+   "createNewNote": {
+      "message": "Luo uusi muistiinpano"
+   },
+   "custom": {
+      "message": "Mukautettu"
+   },
+   "dailyNoteFormat": {
+      "message": "Päivittäisen muistiinpanon muoto (esim. YYYY-MM-DD)"
+   },
+   "defaultInterpreterContext": {
+      "message": "Tulkin oletuskonteksti"
+   },
+   "defaultInterpreterContextDescription": {
+      "message": "Korvaa kehotemuuttujien tulkitsemiseen käytettävä konteksti. Muuttujia voi käyttää tässä."
+   },
+   "defaultTemplateName": {
+      "message": "Oletus"
+   },
+   "delete": {
+      "message": "Poista"
+   },
+   "deleteAllHighlightsConfirm": {
+      "message": "Haluatko varmasti poistaa kaikki korostukset?"
+   },
+   "deleteHighlightsForDomain": {
+      "message": "Poistetaanko kaikki tämän verkkotunnuksen korostukset?"
+   },
+   "deleteHighlightsForPage": {
+      "message": "Poistetaanko kaikki tämän sivun korostukset?"
+   },
+   "deleteModelConfirm": {
+      "message": "Haluatko varmasti poistaa tämän mallin?"
+   },
+   "deleteProviderConfirm": {
+      "message": "Haluatko varmasti poistaa tämän palveluntarjoajan?"
+   },
+   "disableHighlighter": {
+      "message": "Poista korostus käytöstä"
+   },
+   "disableReader": {
+      "message": "Poista lukunäkymä käytöstä"
+   },
+   "done": {
+      "message": "Valmis"
+   },
+   "dragAndDropFile": {
+      "message": "Vedä ja pudota tiedosto tähän"
+   },
+   "duplicate": {
+      "message": "Monista"
+   },
+   "earlyAccessDescription": {
+      "message": "Käytä ominaisuuksia, jotka vaativat uusimman $link_start$early access -version$link_end$ Obsidianista. Vaatii tällä hetkellä Obsidian 1.7.2 tai uudemman.",
+      "placeholders": {
+         "link_end": {
+            "content": "\u003C/a>"
+         },
+         "link_start": {
+            "content": "\u003Ca href=\"https://help.obsidian.md/Obsidian/Early+access+versions\" target=\"_blank\">"
+         }
+      }
+   },
+   "earlyAccessFeatures": {
+      "message": "Early access -ominaisuudet"
+   },
+   "edit": {
+      "message": "Muokkaa"
+   },
+   "editModel": {
+      "message": "Muokkaa mallia"
+   },
+   "editProvider": {
+      "message": "Muokkaa palveluntarjoajaa"
+   },
+   "editTemplate": {
+      "message": "Muokkaa mallia"
+   },
+   "embedded": {
+      "message": "Upotettu"
+   },
+   "enableHighlighterDescription": {
+      "message": "Korosta verkkosivujen sisältöä, jonka voit tallentaa Obsidianiin"
+   },
+   "enableInterpreter": {
+      "message": "Ota tulkki käyttöön"
+   },
+   "enableInterpreterDescription": {
+      "message": "Käytä luonnollista kieltä tietojen poimimiseen sivuilta. Voit esimerkiksi käyttää mallisyntaksia $strong_start${{\"sivun yhteenveto\"}}$strong_end$. Vaatii API-avaimen tai mukautetun mallin määrittämisen alla. $link_start$Lue lisää$link_end$.",
+      "placeholders": {
+         "link_end": {
+            "content": "\u003C/a>"
+         },
+         "link_start": {
+            "content": "\u003Ca href=\"https://help.obsidian.md/web-clipper/interpreter\" target=\"_blank\">"
+         },
+         "strong_end": {
+            "content": "\u003C/strong>"
+         },
+         "strong_start": {
+            "content": "\u003Cstrong>"
+         }
+      }
+   },
+   "enableReader": {
+      "message": "Avaa lukunäkymä"
+   },
+   "error": {
+      "message": "Virhe"
+   },
+   "export": {
+      "message": "Vie"
+   },
+   "exportAllSettings": {
+      "message": "Vie kaikki asetukset"
+   },
+   "exportAllSettingsDescription": {
+      "message": "Vie kaikki asetukset mukaan lukien mallit ja ominaisuudet"
+   },
+   "exportHighlights": {
+      "message": "Vie korostukset"
+   },
+   "exportHighlightsDescription": {
+      "message": "Vie korostuksesi tiedostoon"
+   },
+   "exportProperties": {
+      "message": "Vie ominaisuudet"
+   },
+   "exportPropertiesDescription": {
+      "message": "Tallenna Web Clipperin ominaisuudet $strong_start$types.json$strong_end$ -tiedostoon, jonka voit tuoda Obsidian-holviin tai Web Clipperiin muilla laitteilla",
+      "placeholders": {
+         "strong_end": {
+            "content": "\u003C/strong>"
+         },
+         "strong_start": {
+            "content": "\u003Cstrong>"
+         }
+      }
+   },
+   "extensionDescription": {
+      "message": "Tallenna verkkosisältöä yksityisessä ja kestävässä muodossa, jota voit käyttää offline-tilassa. Obsidianin virallinen selainlaajennus."
+   },
+   "extensionName": {
+      "message": "Obsidian Web Clipper"
+   },
+   "failedToCopyText": {
+      "message": "Tekstin kopiointi epäonnistui"
+   },
+   "failedToDeleteTemplate": {
+      "message": "Mallin poistaminen epäonnistui. Yritä uudelleen."
+   },
+   "failedToDuplicateTemplate": {
+      "message": "Mallin monistaminen epäonnistui. Yritä uudelleen."
+   },
+   "failedToExportHighlights": {
+      "message": "Korostusten vienti epäonnistui. Tarkista konsoli lisätietoja varten."
+   },
+   "failedToExportSettings": {
+      "message": "Asetusten vienti epäonnistui. Tarkista konsoli lisätietoja varten."
+   },
+   "failedToExtractContent": {
+      "message": "Sivun sisällön poiminta epäonnistui."
+   },
+   "failedToImportTemplate": {
+      "message": "Mallin tuonti epäonnistui. Tarkista tiedosto ja yritä uudelleen."
+   },
+   "failedToInitialize": {
+      "message": "Yritä ladata laajennus uudelleen."
+   },
+   "failedToInitializeContent": {
+      "message": "Sivun sisällön alustaminen epäonnistui."
+   },
+   "failedToProcessInterpreter": {
+      "message": "Tulkin käsittely epäonnistui. Yritä uudelleen."
+   },
+   "failedToResetProviders": {
+      "message": "Palveluntarjoajien ja mallien nollaus epäonnistui"
+   },
+   "failedToResetTemplate": {
+      "message": "Oletusmallin nollaus epäonnistui. Yritä uudelleen."
+   },
+   "failedToSave": {
+      "message": "Tiedoston tallennus epäonnistui"
+   },
+   "failedToSaveFile": {
+      "message": "Tiedoston tallennus epäonnistui"
+   },
+   "failedToSaveProvider": {
+      "message": "Palveluntarjoajan tallennus epäonnistui. Yritä uudelleen."
+   },
+   "feedback": {
+      "message": "Palaute"
+   },
+   "feedbackDescription": {
+      "message": "Miten voimme parantaa Web Clipperia? Vieraile ohjesivullamme, jossa voit raportoida virheitä, ehdottaa ominaisuuksia ja saada apua yleisiin ongelmiin."
+   },
+   "feedbackTitle": {
+      "message": "Kiitos palautteestasi"
+   },
+   "folder": {
+      "message": "Kansio"
+   },
+   "general": {
+      "message": "Yleiset"
+   },
+   "generalSettings": {
+      "message": "Yleiset asetukset"
+   },
+   "getApiKeyHere": {
+      "message": "Hanki $1 API-avaimesi täältä"
+   },
+   "help": {
+      "message": "Ohje"
+   },
+   "helpDescription": {
+      "message": "Opi käyttämään Web Clipperia ja saa apua ongelmien ratkaisemiseen"
+   },
+   "highlightInline": {
+      "message": "Korosta sivun sisältö"
+   },
+   "highlightPage": {
+      "message": "Korosta sivu"
+   },
+   "highlightSelection": {
+      "message": "Korosta"
+   },
+   "highlighter": {
+      "message": "Korostustyökalu"
+   },
+   "highlighterOn": {
+      "message": "Korostus"
+   },
+   "highlighterSettings": {
+      "message": "Korostustyökalu"
+   },
+   "highlights": {
+      "message": "Korostukset"
+   },
+   "highlightsNotFound": {
+      "message": "Artikkelista ei löytynyt korostuksia"
+   },
+   "history": {
+      "message": "Historia"
+   },
+   "hotkeys": {
+      "message": "Pikanäppäimet"
+   },
+   "import": {
+      "message": "Tuo"
+   },
+   "importAllSettings": {
+      "message": "Tuo kaikki asetukset"
+   },
+   "importAllSettingsDescription": {
+      "message": "Tuo kaikki asetukset mukaan lukien mallit ja ominaisuudet. Tämä korvaa nykyisen määrityksesi."
+   },
+   "importFailed": {
+      "message": "Tuonti epäonnistui. Tarkista konsoli lisätietoja varten."
+   },
+   "importModalTitle": {
+      "message": "Tuo"
+   },
+   "importProperties": {
+      "message": "Tuo ominaisuudet"
+   },
+   "importPropertiesDescription": {
+      "message": "Tuodaksesi ominaisuudet Obsidianista, etsi $strong_1_start$types.json$strong_1_end$ -tiedosto holvisi $strong_2_start$.obsidian$strong_2_end$ -kansiosta. Huomaa, että tämä kansio on oletuksena piilotettu useimmissa käyttöjärjestelmissä.",
+      "placeholders": {
+         "strong_1_end": {
+            "content": "\u003C/strong>"
+         },
+         "strong_1_start": {
+            "content": "\u003Cstrong>"
+         },
+         "strong_2_end": {
+            "content": "\u003C/strong>"
+         },
+         "strong_2_start": {
+            "content": "\u003Cstrong>"
+         }
+      }
+   },
+   "importSettings": {
+      "message": "Tuo asetukset"
+   },
+   "importTemplate": {
+      "message": "Tuo malli"
+   },
+   "interpret": {
+      "message": "Tulkitse"
+   },
+   "interpreter": {
+      "message": "Tulkki"
+   },
+   "interpreterContext": {
+      "message": "Tulkkauksen konteksti"
+   },
+   "interpreterContextDescription": {
+      "message": "Konteksti, jota käytetään kehotemuuttujien tulkitsemiseen. Korvaa oletuskontekstin, joka on määritetty $link_start$tulkin asetuksissa$link_end$. Muuttujia voi käyttää tässä.",
+      "placeholders": {
+         "link_end": {
+            "content": "\u003C/a>"
+         },
+         "link_start": {
+            "content": "\u003Ca href=\"?section=interpreter\">"
+         }
+      }
+   },
+   "language": {
+      "message": "Kieli"
+   },
+   "languageDescription": {
+      "message": "Valitse laajennuksen käyttöliittymän näyttökieli."
+   },
+   "last30Days": {
+      "message": "Viimeiset 30 päivää"
+   },
+   "lastUsed": {
+      "message": "Viimeksi käytetty"
+   },
+   "legacyMode": {
+      "message": "Yhteensopivuustila"
+   },
+   "legacyModeDescription": {
+      "message": "Käyttää URI-leikkausmenetelmää, joka on yhteensopiva Obsidian 1.6.7:n tai sitä aikaisempien versioiden kanssa. Huomaa, että selaimen ja käyttöjärjestelmän rajoittama leikattavan sisällön pituus. Jotkin sivut saattavat epäonnistua ilman virheitä."
+   },
+   "loadArticle": {
+      "message": "Lue artikkeli"
+   },
+   "loading": {
+      "message": "Ladataan…"
+   },
+   "modelName": {
+      "message": "Mallin nimi"
+   },
+   "modelNameDescription": {
+      "message": "Mallin nimi, jonka haluat näyttää käyttöliittymässä."
+   },
+   "modelProvider": {
+      "message": "Tarjoaja"
+   },
+   "modelProviderDescription": {
+      "message": "Valitse tämän mallin tarjoaja."
+   },
+   "modelProviderPlaceholder": {
+      "message": "Tarjoaja"
+   },
+   "modelRequiredFields": {
+      "message": "Mallin nimi, tarjoaja ja mallin tunnus ovat pakollisia."
+   },
+   "models": {
+      "message": "Mallit"
+   },
+   "modelsListFor": {
+      "message": "Malliluettelo $1"
+   },
+   "more": {
+      "message": "Lisää"
+   },
+   "newTemplate": {
+      "message": "Uusi malli"
+   },
+   "noHighlights": {
+      "message": "Ei korostuksia"
+   },
+   "noResults": {
+      "message": "Tuloksia ei löytynyt"
+   },
+   "noTemplates": {
+      "message": "Malleja ei ole saatavilla. Lisää malli asetuksiin."
+   },
+   "noUnusedProperties": {
+      "message": "Käyttämättömiä ominaisuuksia ei löytynyt."
+   },
+   "noteContent": {
+      "message": "Muistiinpanon sisältö"
+   },
+   "noteContentDescription": {
+      "message": "Mukauta muistiinpanon sisältö. Käytä muuttujia sivulta ennakkotäyttöön."
+   },
+   "noteLocation": {
+      "message": "Muistiinpanon sijainti"
+   },
+   "noteLocationDescription": {
+      "message": "Muistiinpanon kansio tai polku."
+   },
+   "noteName": {
+      "message": "Muistiinpanon nimi"
+   },
+   "noteNameFormat": {
+      "message": "Muistiinpanon nimen muoto"
+   },
+   "noteNameFormatDescription": {
+      "message": "Muistiinpanon tiedostonimen muoto. Voit käyttää muuttujia, kuten {{title}}, {{date}} ja {{published}} sivulta ennakkotäytettyjen tietojen lisäämiseen. $link_start$Opi lisää$link_end$.",
+      "placeholders": {
+         "link_end": {
+            "content": "\u003C/a>"
+         },
+         "link_start": {
+            "content": "\u003Ca href=\"https://help.obsidian.md/web-clipper/variables\" target=\"_blank\">"
+         }
+      }
+   },
+   "notesAboutPage": {
+      "message": "Huomioita tästä sivusta..."
+   },
+   "onlyHttpSupported": {
+      "message": "Tätä sivua ei voi leikata. Vain http- ja https-URL-osoitteita tuetaan."
+   },
+   "open": {
+      "message": "Avaa"
+   },
+   "openBehaviorDescription": {
+      "message": "Valitse, miten Web Clipper avautuu oletuksena."
+   },
+   "openBehaviorTitle": {
+      "message": "Avautumiskäyttäytyminen"
+   },
+   "openEmbedded": {
+      "message": "Avaa sivulla"
+   },
+   "openHighlights": {
+      "message": "Avaa korostukset"
+   },
+   "openReader": {
+      "message": "Avaa lukutila"
+   },
+   "openSidePanel": {
+      "message": "Avaa sivupaneeli"
+   },
+   "optional": {
+      "message": "(valinnainen)"
+   },
+   "orPasteBelow": {
+      "message": "Tai liitä sisältö alle"
+   },
+   "overwriteNote": {
+      "message": "Korvaa muistiinpano"
+   },
+   "pageCannotBeClipped": {
+      "message": "Tätä sivua ei voi leikata."
+   },
+   "pageVariables": {
+      "message": "Sivun muuttujat"
+   },
+   "pagesSaved": {
+      "message": "sivu tallennettu"
+   },
+   "pagesSavedPlural": {
+      "message": "sivut tallennettu"
+   },
+   "pasteJsonHere": {
+      "message": "Liitä JSON tähän"
+   },
+   "pleaseReload": {
+      "message": "Yritä ladata sivu uudelleen."
+   },
+   "popularModels": {
+      "message": "Suositut mallit"
+   },
+   "popularModelsDescription": {
+      "message": "Valitse yleisesti käytettyjä malleja tai syötä mukautetut mallin tiedot."
+   },
+   "popup": {
+      "message": "Ponnahdusikkuna"
+   },
+   "prependToDaily": {
+      "message": "Lisää päivittäiseen muistiinpanoon, yläosaan"
+   },
+   "prependToExisting": {
+      "message": "Lisää olemassa olevaan muistiinpanoon, yläosaan"
+   },
+   "preview": {
+      "message": "Esikatselu"
+   },
+   "processing": {
+      "message": "käsittely"
+   },
+   "properties": {
+      "message": "Ominaisuudet"
+   },
+   "propertiesSettings": {
+      "message": "Ominaisuudet"
+   },
+   "propertyName": {
+      "message": "Ominaisuuden nimi"
+   },
+   "propertyTypeCheckbox": {
+      "message": "Valintaruutu"
+   },
+   "propertyTypeDate": {
+      "message": "Päivämäärä"
+   },
+   "propertyTypeDatetime": {
+      "message": "Päivämäärä & aika"
+   },
+   "propertyTypeMultitext": {
+      "message": "Lista"
+   },
+   "propertyTypeNumber": {
+      "message": "Numero"
+   },
+   "propertyTypeText": {
+      "message": "Teksti"
+   },
+   "propertyValue": {
+      "message": "Ominaisuuden arvo"
+   },
+   "provider": {
+      "message": "Palveluntarjoaja"
+   },
+   "providerApiKey": {
+      "message": "API-avain"
+   },
+   "providerApiKeyDescription": {
+      "message": "API-avaimesi tälle tarjoajalle."
+   },
+   "providerBaseUrl": {
+      "message": "Perus-URL"
+   },
+   "providerBaseUrlDescription": {
+      "message": "API:n perus-URL. Käytä $strong_start${model}$strong_end$ -muuttujaa mallin tunnuksen lisäämiseen.",
+      "placeholders": {
+         "strong_end": {
+            "content": "\u003C/strong>"
+         },
+         "strong_start": {
+            "content": "\u003Cstrong>"
+         }
+      }
+   },
+   "providerModelId": {
+      "message": "Mallin tunnus"
+   },
+   "providerModelIdDescription": {
+      "message": "Mallin tunniste tarjoajaltasi. Tyypillisesti lyhyt nimi ilman välilyöntejä."
+   },
+   "providerModelIdPlaceholder": {
+      "message": "Mallin tunnus"
+   },
+   "providerName": {
+      "message": "Palveluntarjoajan nimi"
+   },
+   "providerNameDescription": {
+      "message": "Näyttönimi tälle palveluntarjoajalle."
+   },
+   "providerPreset": {
+      "message": "Esiasetus"
+   },
+   "providerPresetDescription": {
+      "message": "Valitse palveluntarjoaja tai luo mukautettu palveluntarjoaja."
+   },
+   "providerRequiredFields": {
+      "message": "Palveluntarjoajan nimi ja perus-URL ovat pakollisia."
+   },
+   "providers": {
+      "message": "Palveluntarjoajat"
+   },
+   "rateExtensionDescription": {
+      "message": "Pidätkö Web Clipperista? Auta meitä antamalla sille arvostelu."
+   },
+   "reader": {
+      "message": "Lukija"
+   },
+   "readerAppearance": {
+      "message": "Ulkoasu"
+   },
+   "readerAppearanceAuto": {
+      "message": "Automaattinen"
+   },
+   "readerAppearanceDark": {
+      "message": "Tumma"
+   },
+   "readerAppearanceDescription": {
+      "message": "Valitse vaalea tai tumma ulkoasu."
+   },
+   "readerAppearanceLight": {
+      "message": "Vaalea"
+   },
+   "readerAutoScroll": {
+      "message": "Automaattinen vieritys"
+   },
+   "readerAutoScrollDescription": {
+      "message": "Vieritä litterointia automaattisesti toiston mukana."
+   },
+   "readerBlendImages": {
+      "message": "Sulauta kuvat"
+   },
+   "readerBlendImagesDescription": {
+      "message": "Sulauta kuvat sivun taustaan."
+   },
+   "readerCloseImageViewer": {
+      "message": "Sulje kuvankatselin"
+   },
+   "readerCollapseComment": {
+      "message": "Kutista kommentti"
+   },
+   "readerColorLinks": {
+      "message": "Väritä linkit"
+   },
+   "readerColorSchemeDefault": {
+      "message": "Oletus"
+   },
+   "readerCurrentPosition": {
+      "message": "Nykyinen sijainti"
+   },
+   "readerCustomCss": {
+      "message": "Mukautettu CSS"
+   },
+   "readerCustomCssDescription": {
+      "message": "Lukunäkymässä automaattisesti käytettävä CSS."
+   },
+   "readerDarkTheme": {
+      "message": "Tumman tilan teema"
+   },
+   "readerDarkThemeDescription": {
+      "message": "Käytä eri teemaa tummassa tilassa."
+   },
+   "readerError": {
+      "message": "Sisällön poiminta epäonnistui."
+   },
+   "readerFont": {
+      "message": "Fonttiasetukset"
+   },
+   "readerFontDefault": {
+      "message": "Oletus"
+   },
+   "readerFontDescription": {
+      "message": "Lisää järjestelmääsi asennettuja fontteja. Lisää fontti painamalla Enteriä."
+   },
+   "readerFontNotFound": {
+      "message": "Ei löytynyt"
+   },
+   "readerFontPlaceholder": {
+      "message": "Lisää fontti painamalla Enteriä"
+   },
+   "readerFontSetDefault": {
+      "message": "Aseta oletukseksi"
+   },
+   "readerFontSize": {
+      "message": "Perusfonttikoko"
+   },
+   "readerFontSystem": {
+      "message": "Järjestelmä"
+   },
+   "readerFontSystemSans": {
+      "message": "Sans-serif"
+   },
+   "readerFontSystemSerif": {
+      "message": "Serif"
+   },
+   "readerFonts": {
+      "message": "Fontit"
+   },
+   "readerFootnotes": {
+      "message": "Alaviitteet"
+   },
+   "readerHighlightActiveLine": {
+      "message": "Korosta aktiivinen rivi"
+   },
+   "readerHighlightActiveLineDescription": {
+      "message": "Korosta litteroinnista nykyinen lause toiston aikana."
+   },
+   "readerImages": {
+      "message": "Kuvat"
+   },
+   "readerLineHeight": {
+      "message": "Riviväli"
+   },
+   "readerLineWidth": {
+      "message": "Rivileveys"
+   },
+   "readerLoadFailed": {
+      "message": "Lataaminen epäonnistui. Sivu saattaa olla selaimesi estämä."
+   },
+   "readerLoading": {
+      "message": "Selkeytetään…"
+   },
+   "readerOn": {
+      "message": "Lukutila"
+   },
+   "readerPinPlayer": {
+      "message": "Kiinnitä soitin"
+   },
+   "readerPinPlayerDescription": {
+      "message": "Pidä videosoitin näkyvissä, kun vierität litterointia."
+   },
+   "readerSettings": {
+      "message": "Lukijan asetukset"
+   },
+   "readerTheme": {
+      "message": "Teema"
+   },
+   "readerThemeDescription": {
+      "message": "Valitse lukunäkymässä käytettävät värit."
+   },
+   "readerThemeSection": {
+      "message": "Teema"
+   },
+   "readerTranscripts": {
+      "message": "Litteroinnit"
+   },
+   "readerTypography": {
+      "message": "Typografia"
+   },
+   "readerUrlPlaceholder": {
+      "message": "Liitä luettava URL…"
+   },
+   "readerViewFullSize": {
+      "message": "Näytä täysikokoisena"
+   },
+   "recommended": {
+      "message": "suositeltu"
+   },
+   "refresh": {
+      "message": "Päivitä"
+   },
+   "remove": {
+      "message": "Poista"
+   },
+   "removeProperty": {
+      "message": "Poista ominaisuus"
+   },
+   "removeUnusedProperties": {
+      "message": "Poista käyttämättömät ominaisuudet"
+   },
+   "removeUnusedPropertiesDescription": {
+      "message": "Poista kaikki ominaisuudet, joita ei käytetä missään mallissa."
+   },
+   "removeVault": {
+      "message": "Poista holvi"
+   },
+   "replaceContent": {
+      "message": "Korvaa sivun sisältö"
+   },
+   "reset": {
+      "message": "Nollaa"
+   },
+   "resetDefaultTemplate": {
+      "message": "Palauta oletusmalli"
+   },
+   "resetDefaultTemplateDescription": {
+      "message": "Poista kaikki tekemäsi muutokset oletusmalliin."
+   },
+   "resetProvidersAndModels": {
+      "message": "Nollaa oletusmallit"
+   },
+   "resetProvidersAndModelsDescription": {
+      "message": "Nollaa tarjoajat ja mallit oletusasetuksiin."
+   },
+   "save": {
+      "message": "Tallenna"
+   },
+   "saveBehaviorDescription": {
+      "message": "Valitse oletusvaihtoehto sivujen tallentamiseksi. Vaihtoehtoiset vaihtoehdot näkyvät pääpainikkeen vieressä olevasta pudotusvalikosta."
+   },
+   "saveBehaviorLabel": {
+      "message": "Tallennuskäyttäytyminen"
+   },
+   "saveFile": {
+      "message": "Tallenna tiedosto..."
+   },
+   "searchHighlightsPlaceholder": {
+      "message": "Hae korostuksista…"
+   },
+   "searchVariables": {
+      "message": "Etsi muuttujia..."
+   },
+   "selectProvider": {
+      "message": "Valitse tarjoaja"
+   },
+   "selectTemplateToExport": {
+      "message": "Valitse vietävä malli."
+   },
+   "settings": {
+      "message": "Asetukset"
+   },
+   "settingsHeading": {
+      "message": "Asetukset"
+   },
+   "settingsImportSuccess": {
+      "message": "Kaikki asetukset tuotu onnistuneesti. Päivitä sivu nähdäksesi muutokset."
+   },
+   "share": {
+      "message": "Jaa..."
+   },
+   "shortcutInstructionsBrave": {
+      "message": "Muuttaaksesi pikanäppäimiä, mene osoitteeseen $1"
+   },
+   "shortcutInstructionsChrome": {
+      "message": "Muuttaaksesi pikanäppäimiä, mene osoitteeseen $1"
+   },
+   "shortcutInstructionsDefault": {
+      "message": "Muuttaaksesi pikanäppäimiä, katso selaimesi laajennusasetuksia."
+   },
+   "shortcutInstructionsEdge": {
+      "message": "Muuttaaksesi pikanäppäimiä, mene osoitteeseen $1"
+   },
+   "shortcutInstructionsFirefox": {
+      "message": "Muuttaaksesi pikanäppäimiä, mene osoitteeseen $1, napsauta hammaspyöräkuvaketta ja valitse \"Hallitse laajennuksen pikanäppäimiä\""
+   },
+   "shortcutInstructionsIntro": {
+      "message": "Pikanäppäimet antavat sinun käyttää clipperin toimintoja nopeasti."
+   },
+   "shortcutInstructionsSafari": {
+      "message": "Pikanäppäimiä ei voi mukauttaa Safarissa."
+   },
+   "shortcutNotSet": {
+      "message": "Ei asetettu"
+   },
+   "showActionsButton": {
+      "message": "Näytä toimintopainike"
+   },
+   "showActionsDescription": {
+      "message": "Antaa sinun tarkastella sivun muuttujia clipperin valikosta. Hyödyllinen nähdäksesi malleissa käytettävissä olevat muuttujat."
+   },
+   "showPageVariables": {
+      "message": "Näytä sivun muuttujat"
+   },
+   "silentOpen": {
+      "message": "Tallenna leikatut muistiinpanot avaamatta"
+   },
+   "silentOpenDescription": {
+      "message": "Leikatut muistiinpanot tallennetaan mutta niitä ei avata uudessa välilehdessä. Obsidian tuodaan silti etualalle."
+   },
+   "sort": {
+      "message": "Lajittele"
+   },
+   "sortAZ": {
+      "message": "A–Ö"
+   },
+   "sortNewOld": {
+      "message": "Uusimmat ensin"
+   },
+   "sortOldNew": {
+      "message": "Vanhimmat ensin"
+   },
+   "sortZA": {
+      "message": "Ö–A"
+   },
+   "specificNoteName": {
+      "message": "Tietty muistiinpanon nimi"
+   },
+   "systemDefault": {
+      "message": "Järjestelmän oletus"
+   },
+   "template": {
+      "message": "Malli"
+   },
+   "templateCopied": {
+      "message": "Mallin JSON kopioitu leikepöydälle"
+   },
+   "templateCopyError": {
+      "message": "Mallin JSON:n kopiointi leikepöydälle epäonnistui"
+   },
+   "templateErrorCount": {
+      "message": "Mallissasi on virhe."
+   },
+   "templateErrorsCount": {
+      "message": "Mallissasi on $1 virhettä."
+   },
+   "templateGroupContent": {
+      "message": "Sisältö"
+   },
+   "templateGroupLocation": {
+      "message": "Sijainti"
+   },
+   "templateName": {
+      "message": "Mallin nimi"
+   },
+   "templateProperties": {
+      "message": "Ominaisuudet"
+   },
+   "templatePropertiesDescription": {
+      "message": "Ominaisuudet, jotka lisätään leikatun muistiinpanon alkuun. Käytä muuttujia täyttääksesi tiedot sivulta."
+   },
+   "templateTriggers": {
+      "message": "Mallin laukaisimet"
+   },
+   "templateTriggersDescription": {
+      "message": "Määritä säännöt tämän mallin automaattiselle valinnalle, jos se vastaa URL-kaavaa tai sisältää schema.org-tietoja. Yksi sääntö per rivi."
+   },
+   "templateValid": {
+      "message": "Mallin syntaksi on kelvollinen"
+   },
+   "templatesHeading": {
+      "message": "Mallit"
+   },
+   "thinking": {
+      "message": "ajattelee"
+   },
+   "unknownProvider": {
+      "message": "Tuntematon palveluntarjoaja"
+   },
+   "updateAvailable": {
+      "message": "Päivitys saatavilla"
+   },
+   "usingLatestVersion": {
+      "message": "Käytät uusinta versiota"
+   },
+   "vault": {
+      "message": "Holvi"
+   },
+   "vaultDescription": {
+      "message": "Valitse oletusholvi tälle mallille. Mene $link_start$yleisiin asetuksiin$link_end$ lisätäksesi tai poistaaksesi holveja.",
+      "placeholders": {
+         "link_end": {
+            "content": "\u003C/a>"
+         },
+         "link_start": {
+            "content": "\u003Ca href=\"?section=general\">"
+         }
+      }
+   },
+   "vaults": {
+      "message": "Holvit"
+   },
+   "vaultsDescription": {
+      "message": "Oletuksena leikatut muistiinpanot tallennetaan avoinna olevaan holviin. Voit lisätä holveja täällä, jos haluat mahdollisuuden tallentaa eri holveihin. Holvin nimen täytyy vastata täsmälleen Obsidian-holvin nimeä. Paina $strong_start$enter$strong_end$ lisätäksesi holvin.",
+      "placeholders": {
+         "strong_end": {
+            "content": "\u003C/strong>"
+         },
+         "strong_start": {
+            "content": "\u003Cstrong>"
+         }
+      }
+   },
+   "version": {
+      "message": "Versio"
+   }
+}

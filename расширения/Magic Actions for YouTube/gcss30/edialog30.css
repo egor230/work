@@ -1,0 +1,3 @@
+/* // Browser Extension - Magic Actions - CHROMEACTIONS.COM - Copyright (c) 2023 Mixesoft - All Rights Reserved */
+:host,html,body,main,svg,div,h4,a{margin:0;padding:0}:host,body{display:flex;align-items:center;height:100vh;background:#f5f5f5;color:#000;font-size:100%}main{max-width:640px;margin:0 auto;padding:8px 13px;text-align:center;user-select:none;font-family:'Segoe UI',Helvetica,Arial,sans-serif;font-size:18px}div{display:flex}h4{margin-left:13px;text-align:left}svg{max-height:75px;min-width:55px}a{display:inline-block;margin:13px auto 0;padding:13px 21px;background:#d32f2f;color:#fff;font-weight:bold;border-radius:5px;outline-color:#ffa500;text-decoration:none}
+@media(prefers-color-scheme:dark){:host,body{background:#333;color:#eee}}

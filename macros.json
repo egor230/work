@@ -1,0 +1,11 @@
+{
+    "current_app": "global",
+    "keyboard_script": {
+        "global": {
+            "keys": {
+                "H": "#!/bin/bash\nxte \"keydown Insert\"",
+                "Y": "#!/bin/bash\n\nxte \"keydown Down\""
+            }
+        }
+    }
+}

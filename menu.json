@@ -1,0 +1,719 @@
+{
+    "layout": {
+        "type": "layout",
+        "pages": [
+            "layout",
+            "behaviour",
+            "search",
+            "appearance",
+            "tips"
+        ],
+        "layout": {
+            "type": "page",
+            "title": "Layout",
+            "sections": [
+                "menu-layout",
+                "menu-content"
+            ]
+        },
+        "behaviour": {
+            "type": "page",
+            "title": "Behavior",
+            "sections": [
+                "panel-behave",
+                "menu-behave"
+            ]
+        },
+        "search": {
+            "type": "page",
+            "title": "Search",
+            "sections": [
+                "search-search"
+            ]
+        },
+        "appearance": {
+            "type": "page",
+            "title": "Appearance",
+            "sections": [
+                "panel-appear",
+                "menu-icons"
+            ]
+        },
+        "tips": {
+            "type": "page",
+            "title": "Tips",
+            "sections": [
+                "tips-section"
+            ]
+        },
+        "menu-layout": {
+            "type": "section",
+            "title": "Layout",
+            "keys": [
+                "applications-view-mode",
+                "show-sidebar",
+                "sidebar-placement",
+                "sidebar-favorites",
+                "description-placement"
+            ]
+        },
+        "menu-content": {
+            "type": "section",
+            "title": "Content",
+            "keys": [
+                "show-categories",
+                "show-places-category",
+                "show-recents-category",
+                "show-favorite-apps-category",
+                "show-home-folder-category",
+                "show-emoji-category",
+                "menu-editor-button"
+            ]
+        },
+        "panel-behave": {
+            "type": "section",
+            "title": "Panel",
+            "keys": [
+                "overlay-key",
+                "activate-on-hover",
+                "hover-delay",
+                "enable-animation"
+            ]
+        },
+        "menu-behave": {
+            "type": "section",
+            "title": "Menu",
+            "keys": [
+                "category-click",
+                "open-on-category",
+                "enable-autoscroll",
+                "show-hidden-files"
+            ]
+        },
+        "search-search": {
+            "type": "section",
+            "title": "Search",
+            "keys": [
+                "enable-emoji-search",
+                "web-search-option",
+                "web-search-custom-url",
+                "web-suggestions",
+                "enable-home-folder-search",
+                "enable-web-history-search",
+                "enable-web-bookmarks-search",
+                "enable-wikipedia-search",
+                "wikipedia-language",
+                "search-help"
+            ]
+        },
+        "panel-appear": {
+            "type": "section",
+            "title": "Panel",
+            "keys": [
+                "menu-icon-custom",
+                "menu-icon",
+                "menu-icon-size-custom",
+                "menu-icon-size",
+                "menu-label"
+            ]
+        },
+        "menu-icons": {
+            "type": "section",
+            "title": "Menu",
+            "keys": [
+                "category-icon-size",
+                "apps-list-icon-size",
+                "apps-grid-icon-size",
+                "sidebar-icon-size",
+                "use-box-style",
+                "use-tile-style"
+            ]
+        },
+        "tips-section": {
+            "type": "section",
+            "title": "Tips",
+            "keys": [
+                "info1",
+                "info2",
+                "info3",
+                "info4"
+            ]
+        }
+    },
+    "categories": {
+        "type": "generic",
+        "default": [],
+        "value": [
+            "all",
+            "Multimedia",
+            "Graphics",
+            "Games",
+            "Office",
+            "Internet",
+            "Accessories",
+            "Administration",
+            "favorite_files",
+            "Preferences",
+            "recents",
+            "places",
+            "/home/egor"
+        ]
+    },
+    "custom-menu-width": {
+        "type": "generic",
+        "default": 800,
+        "value": 1396.4087982177734
+    },
+    "custom-menu-height": {
+        "type": "generic",
+        "default": 530,
+        "value": 865.38232421875
+    },
+    "recent-apps": {
+        "type": "generic",
+        "default": [],
+        "value": [
+            "yandex-browser.desktop",
+            "alacarte-made-892e7095-0894-11f1-8ed9-10ffe0293379.desktop",
+            "virtualbox.desktop",
+            "mintwelcome.desktop",
+            "mintupdate.desktop",
+            "Deus Ex Human.desktop",
+            "Gta Sa.desktop",
+            "Resident Evil 2 Remake.desktop",
+            "alacarte-made-ae28dbfb-08a5-11f1-980c-10ffe0293379.desktop",
+            "Quantum Break.desktop",
+            "timeshift-gtk.desktop",
+            "org.gnome.DiskUtility.desktop",
+            null,
+            "google-chrome.desktop",
+            null,
+            "Assassins Creed IV Black Flag.desktop",
+            "alacarte-made-15a3f15a-fd4a-11f0-822d-10ffe0293379.desktop",
+            null,
+            "AI.desktop",
+            "alacarte-made-67ebfe5b-089b-11f1-8267-10ffe0293379.desktop"
+        ]
+    },
+    "search-start-folder": {
+        "type": "generic",
+        "default": "",
+        "value": "/home/egor"
+    },
+    "folder-categories": {
+        "type": "generic",
+        "default": [],
+        "value": [
+            "/home/egor"
+        ]
+    },
+    "all-apps-old-style": {
+        "type": "generic",
+        "default": false,
+        "value": false
+    },
+    "applications-view-mode": {
+        "type": "combobox",
+        "default": 1,
+        "description": "Applications view mode",
+        "options": {
+            "List": 0,
+            "Grid": 1
+        },
+        "tooltip": "View applications as list or grid",
+        "value": 1
+    },
+    "show-sidebar": {
+        "type": "switch",
+        "default": true,
+        "description": "Show sidebar",
+        "tooltip": "Show the sidebar in the menu",
+        "value": true
+    },
+    "sidebar-placement": {
+        "dependency": "show-sidebar",
+        "type": "combobox",
+        "default": 1,
+        "description": "Sidebar location",
+        "options": {
+            "Top": 0,
+            "Bottom": 1,
+            "Left": 2,
+            "Right": 3
+        },
+        "tooltip": "Choose where to show the sidebar",
+        "value": 2
+    },
+    "sidebar-favorites": {
+        "dependency": "show-sidebar",
+        "type": "combobox",
+        "default": 3,
+        "description": "Show favorites on sidebar",
+        "options": {
+            "None": 0,
+            "Apps only": 1,
+            "Files only": 2,
+            "Apps and files": 3
+        },
+        "tooltip": "Show your favorite apps and file icons on the sidebar",
+        "value": 1
+    },
+    "description-placement": {
+        "type": "combobox",
+        "default": 0,
+        "description": "Application description placement",
+        "options": {
+            "Tooltips": 0,
+            "Under titles": 1,
+            "None": 2
+        },
+        "tooltip": "Choose where to show application descriptions",
+        "value": 0
+    },
+    "show-categories": {
+        "type": "switch",
+        "default": true,
+        "description": "Show categories",
+        "tooltip": "Show list of application categories",
+        "value": true
+    },
+    "show-places-category": {
+        "dependency": "show-categories",
+        "type": "switch",
+        "default": true,
+        "description": "Show bookmarks and places",
+        "tooltip": "Show bookmarks and places category in the menu",
+        "value": true
+    },
+    "show-recents-category": {
+        "dependency": "show-categories",
+        "type": "switch",
+        "default": true,
+        "description": "Show recent items",
+        "tooltip": "Show recent items category in the menu",
+        "value": true
+    },
+    "show-favorite-apps-category": {
+        "dependency": "show-categories",
+        "type": "switch",
+        "default": false,
+        "description": "Show favorite apps category",
+        "tooltip": "Show your favorite apps category in the menu",
+        "value": false
+    },
+    "show-home-folder-category": {
+        "dependency": "show-categories",
+        "type": "checkbox",
+        "default": true,
+        "description": "Show home folder",
+        "tooltip": "Show home folder category in the menu",
+        "value": true
+    },
+    "show-emoji-category": {
+        "dependency": "show-categories",
+        "type": "checkbox",
+        "default": true,
+        "description": "Show emoji category",
+        "tooltip": "Show emoji category in the menu",
+        "value": false
+    },
+    "menu-editor-button": {
+        "type": "button",
+        "description": "Open the menu editor",
+        "callback": "launchEditor"
+    },
+    "overlay-key": {
+        "type": "keybinding",
+        "description": "Keyboard shortcut to open and close the menu",
+        "default": "Super_L::Super_R",
+        "value": "Super_L::Super_R"
+    },
+    "activate-on-hover": {
+        "type": "checkbox",
+        "default": false,
+        "description": "Open menu on hover",
+        "tooltip": "Open the menu when I move my mouse over the panel icon",
+        "value": false
+    },
+    "hover-delay": {
+        "dependency": "activate-on-hover",
+        "type": "spinbutton",
+        "default": 50,
+        "min": 0,
+        "max": 1000,
+        "step": 50,
+        "units": "milliseconds",
+        "description": "Menu hover delay",
+        "value": 50
+    },
+    "enable-animation": {
+        "type": "checkbox",
+        "default": false,
+        "description": "Use menu animations",
+        "tooltip": "Animate the menu on open and close",
+        "value": false
+    },
+    "category-click": {
+        "dependency": "show-categories",
+        "type": "checkbox",
+        "default": true,
+        "description": "Activate categories on click",
+        "tooltip": "Activate categories on click instead of on hover",
+        "value": false
+    },
+    "open-on-category": {
+        "dependency": "show-categories",
+        "type": "combobox",
+        "default": 0,
+        "description": "Open menu on category:",
+        "tooltip": "Always open the menu with this category selected",
+        "options": {
+            "Last used category": 0,
+            "Favorite apps": 1,
+            "Recent": 2,
+            "Places": 3,
+            "All applications": 4
+        },
+        "value": 0
+    },
+    "enable-autoscroll": {
+        "type": "checkbox",
+        "default": true,
+        "description": "Enable autoscrolling",
+        "tooltip": "Autoscroll the application list on mouse hover",
+        "value": true
+    },
+    "show-hidden-files": {
+        "dependency": "show-categories",
+        "type": "checkbox",
+        "default": false,
+        "description": "Show hidden files",
+        "tooltip": "Show hidden files in folder view",
+        "value": false
+    },
+    "enable-emoji-search": {
+        "type": "checkbox",
+        "default": true,
+        "description": "Emoji search",
+        "tooltip": "Show emojis in search results",
+        "value": true
+    },
+    "web-search-option": {
+        "type": "combobox",
+        "default": 1,
+        "description": "Web search option",
+        "options": {
+            "None": 0,
+            "Google": 1,
+            "Bing": 2,
+            "Baidu": 3,
+            "Yahoo": 4,
+            "Yandex": 5,
+            "DuckDuckGo": 6,
+            "Ask": 7,
+            "Ecosia": 8,
+            "AOL": 9,
+            "Startpage": 10,
+            "Brave": 11,
+            "Qwant": 12,
+            "Custom": 13
+        },
+        "tooltip": "Show an internet search option in search results",
+        "value": 1
+    },
+    "web-search-custom-url": {
+        "dependency": "web-search-option=13",
+        "type": "entry",
+        "default": "https://my-custom-search?q=",
+        "description": "URL for custom search",
+        "tooltip": "Enter the URL that is prepended to the search query.",
+        "value": "https://my-custom-search?q="
+    },
+    "web-suggestions": {
+        "type": "checkbox",
+        "default": false,
+        "description": "Web search suggestions",
+        "tooltip": "With web search option, also show search suggestions. (Note: Search suggestions are provided by DuckDuckGo)",
+        "value": false
+    },
+    "enable-home-folder-search": {
+        "type": "checkbox",
+        "default": true,
+        "description": "Search home folder",
+        "tooltip": "When searching, also search my home folder for files",
+        "value": true
+    },
+    "enable-web-history-search": {
+        "type": "checkbox",
+        "default": false,
+        "description": "Web history search",
+        "tooltip": "When searching, also search my browser's history (Google Chrome, Chromium, Opera, Vivaldi, Brave)\nNote: Firefox history is not currently supported.",
+        "value": false
+    },
+    "enable-web-bookmarks-search": {
+        "type": "checkbox",
+        "default": false,
+        "description": "Web bookmarks search",
+        "tooltip": "When searching, also search my browser's web bookmarks (Google Chrome, Firefox, Chromium, Opera, Vivaldi, Brave)\nNote: To search Firefox bookmarks you will need to install package gir1.2-gda-5.0 (Debian based distributions inc. Ubuntu & Linux Mint) or package libgda (Arch based distributions) and restart your computer.",
+        "value": false
+    },
+    "enable-wikipedia-search": {
+        "type": "checkbox",
+        "default": false,
+        "description": "Wikipedia search",
+        "tooltip": "Show some Wikipedia results",
+        "value": false
+    },
+    "wikipedia-language": {
+        "type": "combobox",
+        "default": "en",
+        "description": "Wikipedia language",
+        "dependency": "enable-wikipedia-search",
+        "options": {
+            "English": "en",
+            "Sinugboanong Binisaya": "ceb",
+            "Svenska": "sv",
+            "Deutsch": "de",
+            "Fran\u00e7ais": "fr",
+            "Nederlands": "nl",
+            "\u0420\u0443\u0441\u0441\u043a\u0438\u0439": "ru",
+            "Italiano": "it",
+            "Espa\u00f1ol": "es",
+            "Polski": "pl",
+            "\u0645\u0635\u0631\u0649 (Ma\u1e63ri)": "arz",
+            "\u65e5\u672c\u8a9e": "ja",
+            "Ti\u1ebfng Vi\u1ec7t": "vi",
+            "Winaray": "war",
+            "\u4e2d\u6587": "zh",
+            "\u0627\u0644\u0639\u0631\u0628\u064a\u0629": "ar",
+            "\u0423\u043a\u0440\u0430\u0457\u043d\u0441\u044c\u043a\u0430": "uk",
+            "Portugu\u00eas": "pt",
+            "\u0641\u0627\u0631\u0633\u06cc": "fa",
+            "Catal\u00e0": "ca",
+            "\u0421\u0440\u043f\u0441\u043a\u0438 / Srpski": "sr",
+            "Bahasa Indonesia": "id",
+            "Norsk (Bokm\u00e5l)": "no",
+            "\ud55c\uad6d\uc5b4": "ko",
+            "Suomi": "fi",
+            "Magyar": "hu",
+            "\u010ce\u0161tina": "cs",
+            "Srpskohrvatski / \u0421\u0440\u043f\u0441\u043a\u043e\u0445\u0440\u0432\u0430\u0442\u0441\u043a\u0438": "sh",
+            "B\u00e2n-l\u00e2m-g\u00fa": "zh-min-nan",
+            "T\u00fcrk\u00e7e": "tr",
+            "Rom\u00e2n\u0103": "ro",
+            "\u041d\u043e\u0445\u0447\u0438\u0439\u043d": "ce",
+            "Euskara": "eu",
+            "Bahasa Melayu": "ms",
+            "Tatar\u00e7a / \u0422\u0430\u0442\u0430\u0440\u0447\u0430": "tt",
+            "Esperanto": "eo",
+            "\u05e2\u05d1\u05e8\u05d9\u05ea": "he",
+            "\u0540\u0561\u0575\u0565\u0580\u0565\u0576": "hy",
+            "\u0411\u044a\u043b\u0433\u0430\u0440\u0441\u043a\u0438": "bg",
+            "Dansk": "da",
+            "\u062a\u06c6\u0631\u06a9\u062c\u0647": "azb",
+            "Sloven\u010dina": "sk",
+            "\u049a\u0430\u0437\u0430\u049b\u0448\u0430": "kk",
+            "Minangkabau": "min",
+            "Eesti": "et",
+            "Hrvatski": "hr",
+            "\u0411\u0435\u043b\u0430\u0440\u0443\u0441\u043a\u0430\u044f": "be",
+            "Lietuvi\u0173": "lt",
+            "\u0395\u03bb\u03bb\u03b7\u03bd\u03b9\u03ba\u03ac": "el",
+            "Simple English": "simple",
+            "Az\u0259rbaycanca": "az",
+            "Galego": "gl",
+            "Sloven\u0161\u010dina": "sl",
+            "\u0627\u0631\u062f\u0648": "ur",
+            "Nynorsk": "nn",
+            "\u10e5\u10d0\u10e0\u10d7\u10e3\u10da\u10d8": "ka",
+            "\u0939\u093f\u0928\u094d\u0926\u0940": "hi",
+            "\u0ba4\u0bae\u0bbf\u0bb4\u0bcd": "ta",
+            "\u0e44\u0e17\u0e22": "th",
+            "O\u2018zbek": "uz",
+            "Latina": "la",
+            "Cymraeg": "cy",
+            "Asturianu": "ast",
+            "Volap\u00fck": "vo",
+            "\u7cb5\u8a9e": "zh-yue",
+            "\u041c\u0430\u043a\u0435\u0434\u043e\u043d\u0441\u043a\u0438": "mk",
+            "\u09ac\u09be\u0982\u09b2\u09be": "bn",
+            "Latvie\u0161u": "lv",
+            "\u0422\u043e\u04b7\u0438\u043a\u04e3": "tg",
+            "\u1019\u103c\u1014\u103a\u1019\u102c\u1018\u102c\u101e\u102c": "my"
+        },
+        "tooltip": "Wikipedia language",
+        "value": "en"
+    },
+    "search-help": {
+        "type": "label",
+        "description": "\nNote: Some search options can still be used even if you have not enabled them here by prefixing your search term.\nFor example: to search for an emoji, type 'e heart' to find heart emojis. Likewise, use prefixes 'f ' for file search, 'h ' for web history and 'b ' for web bookmarks search.\n"
+    },
+    "menu-icon-custom": {
+        "type": "checkbox",
+        "default": false,
+        "description": "Use a custom icon",
+        "tooltip": "Use a custom icon in the panel",
+        "value": true
+    },
+    "menu-icon": {
+        "type": "iconfilechooser",
+        "default": "cinnamon-symbolic",
+        "description": "Panel icon",
+        "dependency": "menu-icon-custom",
+        "icon_categories": [
+            {
+                "name": "Linux",
+                "icons": [
+                    "application-menu",
+                    "application-menu-symbolic",
+                    "cinnamon",
+                    "cinnamon-symbolic",
+                    "cinnamon-all-applications-symbolic",
+                    "distributor-logo",
+                    "distributor-logo-garuda",
+                    "distributor-logo-garudalinux",
+                    "emblem-favorite",
+                    "emblem-favorite-symbolic",
+                    "gnome-main-menu",
+                    "linuxmint-logo",
+                    "linuxmint-logo-badge",
+                    "linuxmint-logo-badge-symbolic",
+                    "linuxmint-logo-filled-badge",
+                    "linuxmint-logo-filled-leaf-badge",
+                    "linuxmint-logo-filled-leaf",
+                    "linuxmint-logo-filled-ring",
+                    "linuxmint-logo-leaf-badge",
+                    "linuxmint-logo-leaf-badge-symbolic",
+                    "linuxmint-logo-leaf",
+                    "linuxmint-logo-leaf-symbolic",
+                    "linuxmint-logo-neon",
+                    "linuxmint-logo-ring",
+                    "linuxmint-logo-ring-symbolic",
+                    "linuxmint-logo-simple",
+                    "linuxmint-logo-simple-symbolic",
+                    "manjaro",
+                    "manjarolinux",
+                    "open-menu",
+                    "open-menu-symbolic",
+                    "opensuse_menu_icon",
+                    "start-here",
+                    "start-here-symbolic",
+                    "start-here-archlinux",
+                    "start-here-debian",
+                    "start-here-fedora",
+                    "start-here-linux-mint",
+                    "start-here-opensuse",
+                    "start-here-ubuntu"
+                ]
+            }
+        ],
+        "default_category": "Linux",
+        "default_icon": "cinnamon-symbolic",
+        "tooltip": "Panel icon",
+        "value": "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/menu.png"
+    },
+    "menu-icon-size-custom": {
+        "type": "checkbox",
+        "default": false,
+        "description": "Use a custom icon size",
+        "tooltip": "Use a custom size for the panel icon",
+        "value": true
+    },
+    "menu-icon-size": {
+        "type": "spinbutton",
+        "default": 24,
+        "min": 0,
+        "max": 60,
+        "step": 1,
+        "units": "",
+        "description": "Panel icon size (pixels)",
+        "dependency": "menu-icon-size-custom",
+        "tooltip": "Choose a custom size for the panel icon",
+        "value": 38
+    },
+    "menu-label": {
+        "type": "entry",
+        "default": "Menu",
+        "description": "Panel text",
+        "tooltip": "Text to show beside the panel icon",
+        "value": ""
+    },
+    "category-icon-size": {
+        "dependency": "show-categories",
+        "type": "spinbutton",
+        "default": 24,
+        "min": 0,
+        "max": 256,
+        "step": 1,
+        "units": "",
+        "description": "Category icon size (pixels)",
+        "tooltip": "Category icon size (pixels)",
+        "value": 28
+    },
+    "apps-list-icon-size": {
+        "type": "spinbutton",
+        "default": 24,
+        "min": 0,
+        "max": 256,
+        "step": 1,
+        "units": "",
+        "description": "Applications list icon size (pixels)",
+        "tooltip": "Applications list icon size (pixels)",
+        "value": 28
+    },
+    "apps-grid-icon-size": {
+        "type": "spinbutton",
+        "default": 64,
+        "min": 0,
+        "max": 256,
+        "step": 1,
+        "units": "",
+        "description": "Applications grid icon size (pixels)",
+        "tooltip": "Applications grid icon size (pixels)",
+        "value": 28
+    },
+    "sidebar-icon-size": {
+        "dependency": "show-sidebar",
+        "type": "spinbutton",
+        "default": 32,
+        "min": 6,
+        "max": 64,
+        "step": 1,
+        "units": "",
+        "description": "Sidebar icon size (pixels)",
+        "tooltip": "Sidebar icon size (pixels)",
+        "value": 28
+    },
+    "use-box-style": {
+        "dependency": "show-sidebar",
+        "type": "checkbox",
+        "default": false,
+        "description": "Use sidebar box style",
+        "tooltip": "Use a sidebar box style",
+        "value": false
+    },
+    "use-tile-style": {
+        "type": "checkbox",
+        "default": false,
+        "description": "Use tile style",
+        "tooltip": "Use a tile style for the application buttons (Note: may not work on some themes)",
+        "value": false
+    },
+    "info1": {
+        "type": "label",
+        "description": "\n\u2022 Drag on the menu edge to change the menu size."
+    },
+    "info2": {
+        "type": "label",
+        "description": "\n\u2022 Drag and drop menu categories to change their order."
+    },
+    "info3": {
+        "type": "label",
+        "description": "\n\u2022 Folders can be set up and removed as menu categories by right-clicking on them."
+    },
+    "info4": {
+        "type": "label",
+        "description": "\n\u2022 Additional key options:\nctrl-p \u2014 Open launcher properties dialogue of currently highlighted application.\nctrl-d \u2014 Open .desktop file of currently highlighted app in default text editor.\n"
+    },
+    "__md5__": "61df6c575553cd652c4e71b734bcc85b"
+}

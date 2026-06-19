@@ -1,0 +1,39 @@
+/* ============================================
+   Magic Actions for YouTube — Popup Styles
+   ============================================ */
+
+/* Тело popup-окна */
+body {
+  margin: 0;
+  padding: 6px;
+  background: #333;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Кнопка-переключатель темы */
+#theme-toggle {
+  width: 14px;
+  height: 34px;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  outline: none;
+  /*
+   * Оригинальный спрайт: 28x34 пикселя.
+   * Левая половина (0,0) — иконка солнца (светлая тема).
+   * Правая половина (-14px,0) — иконка луны (тёмная тема).
+   */
+  background: transparent url('data:image/png;base64,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') 0 0 no-repeat;
+}
+
+/* Тёмная тема — показываем правую половину спрайта (луну) */
+#theme-toggle.dark {
+  background-position: -14px 0;
+}
+
+/* Лёгкое затемнение при наведении */
+#theme-toggle:hover {
+  opacity: 0.85;
+}

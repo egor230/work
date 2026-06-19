@@ -1,0 +1,10 @@
+{
+  "current_profile": "default",
+  "profiles": [
+    {
+      "name": "default",
+      "macros": {},
+      "app_specific": {}
+    }
+  ]
+}
