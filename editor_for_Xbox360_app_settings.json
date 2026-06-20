@@ -307,6 +307,33 @@
             "RIGHT_THUMB_RIGHT": "KEY_KP6",
             "LEFT_THUMB_PRESSED": "KEY_RIGHTCTRL",
             "RIGHT_THUMB_PRESSED": "KEY_KP5"
+        },
+        "gta": {
+            "A": "KEY_UP",
+            "B": "KEY_KP3",
+            "X": "KEY_RIGHTSHIFT",
+            "Y": "KEY_KP1",
+            "LEFT_SHOULDER": "KEY_Q",
+            "RIGHT_SHOULDER": "KEY_E",
+            "LEFT_TRIGGER": "KEY_KP7",
+            "RIGHT_TRIGGER": "KEY_KP9",
+            "GUIDE": "KEY_INSERT",
+            "BACK": "KEY_BACKSPACE",
+            "START": "KEY_SPACE",
+            "DPAD_UP": "KEY_UP",
+            "DPAD_DOWN": "KEY_DOWN",
+            "DPAD_LEFT": "KEY_LEFT",
+            "DPAD_RIGHT": "KEY_RIGHT",
+            "LEFT_THUMB_UP": "KEY_W",
+            "LEFT_THUMB_DOWN": "KEY_S",
+            "LEFT_THUMB_LEFT": "KEY_A",
+            "LEFT_THUMB_RIGHT": "KEY_D",
+            "RIGHT_THUMB_UP": "KEY_KP8",
+            "RIGHT_THUMB_DOWN": "KEY_KP2",
+            "RIGHT_THUMB_LEFT": "KEY_KP4",
+            "RIGHT_THUMB_RIGHT": "KEY_KP6",
+            "LEFT_THUMB_PRESSED": "KEY_RIGHTCTRL",
+            "RIGHT_THUMB_PRESSED": "KEY_KP5"
         }
     },
     "trigger_modes": {
@@ -319,7 +346,8 @@
                 "key": "KEY_H",
                 "mode": "hold"
             }
-        }
+        },
+        "gta": {}
     },
     "mouse_on": false,
     "sens": 5,

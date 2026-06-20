@@ -66,51 +66,50 @@ def get_nemo_search_regions(image_path, image_path1):
       return None
 
 def search_image():
-  loc, loc1=False, False
-  try:
-    region = (1400, 100, 1500, 900)
-    region1 = (268, 44, 182, 108)
+  # loc, loc1=False, False
+  region = (1400, 100, 1500, 900)
+  region1 = (268, 44, 182, 108)
 
-    image_path = '/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/Search button.png'
-    Search_text = '/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/Search text.png'
+  image_path = '/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/Search button.png'
+  Search_text = '/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/Search text.png'
 
     # --- фикс: если region меньше картинки, расширяем ---
     # img_w, img_h = pyautogui.size()  # запасной вариант
-
-    with Image.open(image_path) as im:
+  if find_nemo():
+   try:
+     with Image.open(image_path) as im:
       img_w, img_h = im.size
       if region[2] < img_w or region[3] < img_h:
        region = (0, 0, pyautogui.size().width, pyautogui.size().height)
 
-    with Image.open(Search_text) as im:
-            img1_w, img1_h = im.size
+     with Image.open(Search_text) as im:
+      img1_w, img1_h = im.size
     
-    if region1[2] < img1_w or region1[3] < img1_h:
+     if region1[2] < img1_w or region1[3] < img1_h:
         region1 = (0, 0, pyautogui.size().width, pyautogui.size().height)
 
-    search_regions = get_nemo_search_regions(image_path, Search_text)
+     search_regions = get_nemo_search_regions(image_path, Search_text)
 
-    if search_regions:
+     if search_regions:
         region, region1 = search_regions
 
-    loc = pyautogui.locateOnScreen(  image_path, confidence=0.20,
-        region=region,  grayscale=True
-    )
+     loc = pyautogui.locateOnScreen(  image_path, confidence=0.20,
+        region=region,  grayscale=True   )
 
-    loc1 = pyautogui.locateOnScreen( Search_text,  confidence=0.25,
-        region=region1,  grayscale=True
-    )
-  except Exception as e:
+     loc1 = pyautogui.locateOnScreen( Search_text,  confidence=0.25,
+        region=region1,  grayscale=True   )
+     
+     s = f'''#!/bin/bash
+       xte 'keydown Return' 'keyup Return'
+     '''
+     if loc and loc1:  # and find_nemo()
+      # print("22")
+      subprocess.call(['bash', '-c', s, '_'])
+     
+   except Exception as e:
     print(e)
     pass
-  # print("search_image")
-  s = f'''#!/bin/bash
-      xte 'keydown Return' 'keyup Return'
-  '''
-  if loc and loc1 and find_nemo(): #
-   # print("22")
-   subprocess.call(['bash', '-c', s, '_'])
-
+   # print("search_image")
 class ToolTip: # Класс для отображения подсказок
  def __init__(self, widget, text):
   self.widget = widget

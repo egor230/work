@@ -29,28 +29,6 @@ class MyThread(QThread):
     self.stream = "AliceChat-StreamingPlaceholder"
     self.ready = "AliceChat-Thinking"
 
-  def is_text_stable(self, timeout=4):
-    try:
-      print("is_text_stable")
-      while 1:
-        time.sleep(timeout)
-        user_m = self._find_user_messages()
-        last_user_container = user_m[-1]
-        message = self._extract_message_text(last_user_container)
-        if initial_text and "Message:" in initial_text:
-          break
-        print(initial_text)
-        time.sleep(timeout)
-        final_text = self._get_last_user_message_text()
-        print(final_text)
-        if initial_text != final_text:
-          continue
-        else:
-          break
-      return True
-    except:
-      time.sleep(0.5)
-      return False
 
   def update_mic_state(self, mic):
     self.mic = mic
@@ -64,95 +42,6 @@ class MyThread(QThread):
       self.text_signal.emit(text, mic)
     else:
       self.text_signal.emit(None, mic)
-
-  def del_all_chats(self):
-    try:
-      print("del_all_chats start")
-      self.driver.execute_script("""
-              const sidebar = document.querySelector('.ChatSidebar');
-              if (sidebar) {
-                  const expandBtn = document.querySelector('.ChatSidebar-ExpandButton');
-                  if (expandBtn) {
-                      expandBtn.style.cssText = 'visibility:visible !important; opacity:1 !important; pointer-events:auto !important;';
-                      expandBtn.click();
-                  }
-              }
-          """)
-      time.sleep(3)
-      deleted = 0
-      max_deleted = 50
-
-      while deleted < max_deleted:
-        chat_items = self.driver.find_elements(By.CSS_SELECTOR, '.ChatListItem')
-        if not chat_items:
-          print("no more chats. deleted:", deleted)
-          break
-
-        target = chat_items[0]
-
-        more_ok = self.driver.execute_script("""
-                  const chat = arguments[0];
-                  const moreBtn = chat.querySelector('.ChatListItem-Button_more');
-                  if (!moreBtn) return false;
-                  moreBtn.style.cssText = 'opacity:1 !important; visibility:visible !important; pointer-events:auto !important;';
-                  ['mouseenter','mousedown','mouseup','click'].forEach(ev =>
-                      moreBtn.dispatchEvent(new MouseEvent(ev, {bubbles: true}))
-                  );
-                  return true;
-              """, target)
-
-        if not more_ok:
-          print("more button not found, try next")
-          time.sleep(1)
-          continue
-
-        try:
-          WebDriverWait(self.driver, 13).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, '[role="menu"], .Popup2'))
-          )
-          time.sleep(3.5)
-
-          self.driver.execute_script("""
-                      const items = document.querySelectorAll('.Popup2 [role="menuitem"], .Popup2 button, .Popup2 [role="button"]');
-                      for (let item of items) {
-                          if (item.textContent.includes('Удалить')) {
-                              item.click();
-                              return true;
-                          }
-                      }
-                  """)
-        except:
-          print("menu interaction failed")
-          self.driver.execute_script("document.body.click();")
-          time.sleep(1)
-          continue
-        time.sleep(3.8)
-        print("delete confirm")
-        self.driver.execute_script("""
-                  const modalButtons = document.querySelectorAll('.Modal button, .Dialog button, button[class*="confirm"]');
-                  for (let btn of modalButtons) {
-                      const txt = btn.textContent.toLowerCase();
-                      if (txt.includes('удалить') || txt === 'да' || txt.includes('confirm')) {
-                          btn.click();
-                      }
-                  }
-              """)
-
-        try:
-          WebDriverWait(self.driver, 25).until(EC.staleness_of(target))
-          print(f"chat deleted (total {deleted + 1})")
-          deleted += 1
-        except:
-          print("element stuck in DOM, waiting...")
-          time.sleep(3.5)
-
-        time.sleep(3.5)
-
-      print(f"done. deleted chats: {deleted}")
-      return True
-    except Exception as e:
-      print(f"del_all_chats error: {e}")
-      return False
 
   def _collapse_sidebar(self):
     try:
@@ -272,13 +161,9 @@ class MyThread(QThread):
       if not user_messages:
         return "", len_c
 
-      text_selectors = [
-        ".MessageBubble-Text",
-        ".AliceTextBubble",
-        ".MessageBubble",
-        ".FuturisTextBubble",
-        ".MarkdownText",
-      ]
+      text_selectors = [ ".MessageBubble-Text",
+        ".AliceTextBubble", ".MessageBubble",
+        ".FuturisTextBubble",  ".MarkdownText",     ]
 
       last_user_container = user_messages[-1]
       message = ""
@@ -331,8 +216,7 @@ class MyThread(QThread):
 
   def run(self):
    self.start_selenium()
-   time.sleep(3)
-   # self.button.click()   # self._collapse_sidebar()
+   time.sleep(3)   # self.button.click()   # self._collapse_sidebar()
    while self._running:
      try:
       time.sleep(1.5)
@@ -341,8 +225,7 @@ class MyThread(QThread):
       filter_elem = oknyx_core.get_attribute("data-testid") or ""
       classes = oknyx_core.get_attribute("class") or ""
       self.message, counts1 = self.get_user_message(self.counts)
-      if counts1 > self.counts:
-       # print(classes)   # print(filter_elem)
+      if counts1 > self.counts:       # print(classes)   # print(filter_elem)
        if "out" in classes or "col" in classes or "th" in filter_elem:# in" in classes:# and  "th" in classes:# and:      # time.sleep(1)
         self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
         self.button.click()
@@ -465,3 +348,123 @@ if __name__ == "__main__":
   window = MyWindow()
   window.show()
   sys.exit(app.exec())
+  
+  
+  
+  
+  
+'''
+
+  def is_text_stable(self, timeout=4):
+    try:
+      print("is_text_stable")
+      while 1:
+        time.sleep(timeout)
+        user_m = self._find_user_messages()
+        last_user_container = user_m[-1]
+        message = self._extract_message_text(last_user_container)
+        if message and "Message:" in initial_text:
+          break
+        print(message)
+        time.sleep(timeout)
+        final_text = self._get_last_user_message_text()
+        print(final_text)
+        if initial_text != final_text:
+          continue
+        else:
+          break
+      return True
+    except:
+      time.sleep(0.5)
+      return False
+  def del_all_chats(self):
+    try:
+      print("del_all_chats start")
+      self.driver.execute_script("""
+              const sidebar = document.querySelector('.ChatSidebar');
+              if (sidebar) {
+                  const expandBtn = document.querySelector('.ChatSidebar-ExpandButton');
+                  if (expandBtn) {
+                      expandBtn.style.cssText = 'visibility:visible !important; opacity:1 !important; pointer-events:auto !important;';
+                      expandBtn.click();
+                  }
+              }
+          """)
+      time.sleep(3)
+      deleted = 0
+      max_deleted = 50
+
+      while deleted < max_deleted:
+        chat_items = self.driver.find_elements(By.CSS_SELECTOR, '.ChatListItem')
+        if not chat_items:
+          print("no more chats. deleted:", deleted)
+          break
+
+        target = chat_items[0]
+
+        more_ok = self.driver.execute_script("""
+                  const chat = arguments[0];
+                  const moreBtn = chat.querySelector('.ChatListItem-Button_more');
+                  if (!moreBtn) return false;
+                  moreBtn.style.cssText = 'opacity:1 !important; visibility:visible !important; pointer-events:auto !important;';
+                  ['mouseenter','mousedown','mouseup','click'].forEach(ev =>
+                      moreBtn.dispatchEvent(new MouseEvent(ev, {bubbles: true}))
+                  );
+                  return true;
+              """, target)
+
+        if not more_ok:
+          print("more button not found, try next")
+          time.sleep(1)
+          continue
+
+        try:
+          WebDriverWait(self.driver, 13).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, '[role="menu"], .Popup2'))
+          )
+          time.sleep(3.5)
+
+          self.driver.execute_script("""
+                      const items = document.querySelectorAll('.Popup2 [role="menuitem"], .Popup2 button, .Popup2 [role="button"]');
+                      for (let item of items) {
+                          if (item.textContent.includes('Удалить')) {
+                              item.click();
+                              return true;
+                          }
+                      }
+                  """)
+        except:
+          print("menu interaction failed")
+          self.driver.execute_script("document.body.click();")
+          time.sleep(1)
+          continue
+        time.sleep(3.8)
+        print("delete confirm")
+        self.driver.execute_script("""
+                  const modalButtons = document.querySelectorAll('.Modal button, .Dialog button, button[class*="confirm"]');
+                  for (let btn of modalButtons) {
+                      const txt = btn.textContent.toLowerCase();
+                      if (txt.includes('удалить') || txt === 'да' || txt.includes('confirm')) {
+                          btn.click();
+                      }
+                  }
+              """)
+
+        try:
+          WebDriverWait(self.driver, 25).until(EC.staleness_of(target))
+          print(f"chat deleted (total {deleted + 1})")
+          deleted += 1
+        except:
+          print("element stuck in DOM, waiting...")
+          time.sleep(3.5)
+
+        time.sleep(3.5)
+
+      print(f"done. deleted chats: {deleted}")
+      return True
+    except Exception as e:
+      print(f"del_all_chats error: {e}")
+      return False
+'''
+
+
