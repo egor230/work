@@ -108,9 +108,7 @@ class MyThread(QThread):
       start_listener()
 
       self.button = None
-      aria_variants = [
-        'button#oknyx-button',
-        'button.StandaloneOknyx[data-testid="oknyx"]',
+      aria_variants = [  'button#oknyx-button',  'button.StandaloneOknyx[data-testid="oknyx"]',
         'button.StandaloneOknyx[aria-label="Алиса, начни слушать"]',
         'button.StandaloneOknyx[aria-label*="слушать"]',
         'button.StandaloneOknyx[aria-label*="Алиса"]',
