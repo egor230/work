@@ -259,12 +259,13 @@ class VoiceThread(QThread):
      if counts1 > self.counts:
       if "out" in classes or "col" in classes or "th" in filter_elem:
        self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-       self.button.click()
        self.message, counts1 = self.get_user_message(self.counts)
        print(counts1)
        self.counts = counts1
        thread = threading.Thread(target=process_text, args=(self.message,))
        thread.start()
+       self.button.click()
+       time.sleep(3)
        self.mic = True
        self.button.click()
      
