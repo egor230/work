@@ -1,5 +1,5 @@
 #!/bin/bash
-gnome-terminal -- bash -c 'cd "/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/work";
+gnome-terminal -- bash -c 'cd "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project";
 source myenv/bin/activate;
 pip install --upgrade pip;
 pip install pyaudio
@@ -25,7 +25,8 @@ pip install selenium_web_browser;
 pip install sentencepiece;
 pip install setproctitle;
 pip install setuptools;
-pip install sounddevice;
+pip install toch;
+pip install webdriver;
 pip install webdriver-manager;
 pip install webencodings;
 pip install websocket-client;
@@ -36,4 +37,7 @@ pip install wrapt;
 pip install wsproto;
 pip install xdg;
 pip install xerox;
+pip install xkit;
+pip install xlrd;
+pip install yarl;
 bash'

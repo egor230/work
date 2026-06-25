@@ -1,12 +1,34 @@
 #!/bin/bash
-#gnome-terminal -- bash -c '
+gnome-terminal -- bash -c '
 SCRIPT_DIR="/home/egor/Загрузки/zapret-discord-youtube-linux"
 SERVICE_SCRIPT="$SCRIPT_DIR/service.sh"
 CONF_INI="$SCRIPT_DIR/conf.ini"
-CURL_TIMEOUT=5  # добавлено значение по умолчанию
+TELEGRAM_IPSET="telegram"
+TELEGRAM_IP_LIST="/tmp/telegram_ips.txt"
 
-# Создание симлинков для пользовательских стратегий
-CUSTOM_DIR="/home/egor/Загрузки/zapret-discord-youtube-linux/custom-strategies"
+update_telegram_ips() {
+  echo "[Telegram] Обновляю IP..."  
+  if ! curl -s --max-time "$CURL_TIMEOUT" https://core.telegram.org/resources/cidr.txt -o "$TELEGRAM_IP_LIST"; then
+    echo "[Telegram] Ошибка загрузки списка IP!"
+    return 1
+  fi
+  # Создаём ipset, если его нет
+  sudo ipset create "$TELEGRAM_IPSET" hash:net -exist 2>/dev/null || true
+  
+  # Очищаем старый список
+  sudo ipset flush "$TELEGRAM_IPSET" 2>/dev/null || true
+
+  # Добавляем IP-адреса
+  while read -r ip; do
+    [[ -n "$ip" ]] && sudo ipset add "$TELEGRAM_IPSET" "$ip" -exist 2>/dev/null || true
+  done < "$TELEGRAM_IP_LIST"
+
+  echo "[Telegram] IP обновлены ($(wc -l < "$TELEGRAM_IP_LIST") записей)"
+}
+WAIT_TIME=2
+CURL_TIMEOUT=3
+
+CUSTOM_DIR="$SCRIPT_DIR/custom-strategies"
 if [[ -d "$CUSTOM_DIR" ]]; then
   for bat in "$SCRIPT_DIR"/zapret-latest/*.bat; do
     if [[ -f "$bat" ]]; then
@@ -15,39 +37,6 @@ if [[ -d "$CUSTOM_DIR" ]]; then
   done
 fi
 
-# Функции для управления zapret
-stop_zapret() {
-  "$SERVICE_SCRIPT" kill >/dev/null 2>&1
-  sleep 1
-}
-
-start_strategy() {
-  local strategy="$1"
-  "$SERVICE_SCRIPT" run -s "$strategy" -i any >/dev/null 2>&1 &
-  sleep 1
-}
-
-# Первое действие: остановить zapret (если запущен)
-stop_zapret
-sleep 4
-#exit 0
-# Проверка сохранённой стратегии (по имени)
-if [[ -f "$CONF_INI" ]]; then
-  saved_strategy=$(cat "$CONF_INI" 2>/dev/null | tr -d '\n')
-  if [[ -n "$saved_strategy" ]]; then
-    echo "Запускаю сохранённую стратегию: $saved_strategy"
-    start_strategy "$saved_strategy"
-    echo "YouTube работает? (y/n)"
-    sleep 4
-#    read -r answer
-#    if [[ "$answer" =~ ^[Yy]$ ]]; then
-#      echo "Выход..."
-    exit 0
-#    fi
-  fi
-fi
-
-# Получение списка стратегий
 STRATEGY_FILES=($("$SERVICE_SCRIPT" strategy list | grep -E "\.bat$"))
 
 if [[ "${#STRATEGY_FILES[@]}" -eq 0 ]]; then
@@ -58,47 +47,51 @@ if [[ "${#STRATEGY_FILES[@]}" -eq 0 ]]; then
   exit 1
 fi
 
-WORKING=()
-index=1
 check_youtube_main() {
   local tmp=$(mktemp)
-  local code=$(curl -s --tlsv1.3 \
-    --connect-timeout "$CURL_TIMEOUT" \
-    --max-time "$CURL_TIMEOUT" \
-    -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36" \
-    -o "$tmp" \
-    -w "%{http_code}" \
-    "https://www.youtube.com" 2>/dev/null)
-  
+  local code=$(curl -s --tlsv1.3 --connect-timeout "$CURL_TIMEOUT" --max-time "$CURL_TIMEOUT" -o "$tmp" -w "%{http_code}" "https://www.youtube.com" 2>/dev/null)
+  grep -qi "youtube" "$tmp" && local has=1 || local has=0
   rm -f "$tmp"
-  
-  # Проверяем только успешный HTTP-статус (200 или 30x)
-  [[ "$code" =~ ^(200|30[0-7])$ ]]
+  [[ "$code" =~ ^[23] ]] && [[ "$has" -eq 1 ]]
 }
 
 check_youtube_cdn() {
-  local code=$(curl -s --tlsv1.3 \
-    --connect-timeout "$CURL_TIMEOUT" \
-    --max-time "$CURL_TIMEOUT" \
-    -o "/dev/null" \
-    -w "%{http_code}" \
-    "https://redirector.googlevideo.com" 2>/dev/null)
-  
+  local code=$(curl -s --tlsv1.3 --connect-timeout "$CURL_TIMEOUT" --max-time "$CURL_TIMEOUT" -o /dev/null -w "%{http_code}" "https://redirector.googlevideo.com" 2>/dev/null)
   [[ "$code" != "000" ]]
 }
 
-
 echo "Тестирование ${#STRATEGY_FILES[@]} стратегий..."
+
+# Первое действие: остановить zapret (если запущен)
+"$SERVICE_SCRIPT" kill >/dev/null 2>&1
+sleep 1
+
+WORKING=()
+index=1
+
 for strategy_path in "${STRATEGY_FILES[@]}"; do
   strategy_name=$(basename "$strategy_path")
   echo -n "Тестируем $strategy_name ... "
-  start_strategy "$strategy_name"
-  # Проверки отключены, поэтому просто считаем стратегию рабочей
-  yt_ok=1
-  cdn_ok=0
-  WORKING+=("$index:$strategy_name:$yt_ok:$cdn_ok")
-  echo "РАБОТАЕТ (CDN: $cdn_ok)"
-  stop_zapret
+
+  # Запускаем стратегию в фоне
+  "$SERVICE_SCRIPT" run -s "$strategy_name" -i any >/dev/null 2>&1 &
+  sleep "$WAIT_TIME"
+
+  # Проверяем доступность YouTube и CDN
+  if check_youtube_main; then
+    yt_ok=1
+    check_youtube_cdn && cdn_ok=1 || cdn_ok=0
+    echo "РАБОТАЕТ (CDN: $cdn_ok)"
+    WORKING+=("$index:$strategy_name:$yt_ok:$cdn_ok")
+  else
+    yt_ok=0
+    echo "НЕ РАБОТАЕТ"
+  fi
+
+  # Останавливаем стратегию перед следующей
+  "$SERVICE_SCRIPT" kill >/dev/null 2>&1
+  sleep 1
+
   ((index++))
 done
 
@@ -115,17 +108,19 @@ fi
 
 current_strategy=""
 
-# Попытка запустить сохранённую стратегию по имени
 if [[ -f "$CONF_INI" ]]; then
-  saved_strategy=$(cat "$CONF_INI" 2>/dev/null | tr -d '\n')
-  if [[ -n "$saved_strategy" ]]; then
+  saved_num=$(cat "$CONF_INI" 2>/dev/null)
+  if [[ "$saved_num" =~ ^[0-9]+$ ]]; then
     for entry in "${WORKING[@]}"; do
       IFS=":" read -r n name yt cdn <<< "$entry"
-      if [[ "$name" == "$saved_strategy" ]]; then
+      if [[ "$n" == "$saved_num" ]]; then
         echo "Найдена сохранённая стратегия: $name"
-        stop_zapret
-        start_strategy "$name"
+        "$SERVICE_SCRIPT" kill >/dev/null 2>&1
+        sleep 1
+        echo "Запускаю..."
+        "$SERVICE_SCRIPT" run -s "$name" -i any >/dev/null 2>&1 &
         current_strategy="$name"
+        sleep 1
         echo "Стратегия запущена."
         echo ""
         break
@@ -134,7 +129,6 @@ if [[ -f "$CONF_INI" ]]; then
   fi
 fi
 
-# Главный цикл
 while true; do
   echo "========================================================"
   echo "Рабочие стратегии:"
@@ -175,8 +169,14 @@ while true; do
 
   if [[ "$input" =~ ^[sS]$ ]]; then
     if [[ -n "$current_strategy" ]]; then
-      echo "$current_strategy" > "$CONF_INI"
-      echo "Стратегия $current_strategy сохранена в $CONF_INI"
+      for entry in "${WORKING[@]}"; do
+        IFS=":" read -r n name yt cdn <<< "$entry"
+        if [[ "$name" == "$current_strategy" ]]; then
+          echo "$n" > "$CONF_INI"
+          echo "$n" > "$CONF_INI" && echo "Стратегия $current_strategy (номер $n) сохранена в $CONF_INI"
+          break
+        fi
+      done
     else
       echo "Нет запущенной стратегии для сохранения."
     fi
@@ -185,7 +185,7 @@ while true; do
   fi
 
   if [[ "$input" =~ ^[xX]$ ]]; then
-    stop_zapret
+    "$SERVICE_SCRIPT" kill >/dev/null 2>&1
     current_strategy=""
     echo "zapret остановлен."
     echo ""
@@ -200,34 +200,14 @@ while true; do
       if [[ "$n" == "$num" ]]; then
         found=1
         echo "Выбрана стратегия: $name"
-        stop_zapret
-        start_strategy "$name"
+        "$SERVICE_SCRIPT" kill >/dev/null 2>&1
+        sleep 1
+        echo "Запускаю..."
+        "$SERVICE_SCRIPT" run -s "$name" -i any >/dev/null 2>&1 &
         current_strategy="$name"
+        sleep 1
         echo "Стратегия запущена."
         echo ""
-
-        # Интерактивный опрос о работе YouTube
-        while true; do
-          echo "YouTube работает? (y/n)"
-          read -r answer
-          if [[ "$answer" =~ ^[Yy]$ ]]; then
-            echo "Сохранить стратегию? (y/n)"
-            read -r save_ans
-            if [[ "$save_ans" =~ ^[Yy]$ ]]; then
-              echo "$name" > "$CONF_INI"
-              echo "Стратегия сохранена в $CONF_INI"
-            fi
-            echo "Выход..."
-            exit 0
-          elif [[ "$answer" =~ ^[Nn]$ ]]; then
-            echo "Останавливаем стратегию и пробуем другую."
-            stop_zapret
-            current_strategy=""
-            break
-          else
-            echo "Пожалуйста, введите y или n."
-          fi
-        done
         break
       fi
     done
@@ -242,5 +222,6 @@ while true; do
   echo "Неверный ввод."
   echo ""
 done
-
+echo "Нажмите Enter..."
+read -r
 exec bash'

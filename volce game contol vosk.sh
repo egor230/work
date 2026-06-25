@@ -1,6 +1,5 @@
 #!/bin/bash
 #gnome-terminal -- bash -c '
-cd "/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project" && source myenv/bin/activate && python "/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project/volce game contol vosk.py";
+cd "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project" && source myenv/bin/activate && python "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/volce game contol vosk.py";
 exit;
-#exec bash'
- 
+#exec bash' 

@@ -1,10 +1,9 @@
 #!/bin/bash
-sudo fuser -k /dev/loop0
-sudo losetup -d /dev/loop0
-sudo fuser -v /dev/loop0
+gnome-terminal -- bash -c '
+#cd "/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project" && source myenv/bin/activate && python "/mnt/807EB5FA7EB5E954/софт/виртуальная машина/linux must have/python_linux/Project/test.py";
+xte "keydown ISO_Next_Group"
+xte "keyup ISO_Next_Group"
 
-sudo fuser -k /dev/loop1
-sudo losetup -d /dev/loop1
-sudo fuser -v /dev/loop1
-
+sleep 2;
 exit;
+exec bash'
