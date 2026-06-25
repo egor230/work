@@ -1,18 +1,10 @@
-import hashlib
-import logging
-import math
-import os
-import urllib.request
-import warnings
+import hashlib, logging, math, os, urllib.request, warnings, torchaudio, torch
 from pathlib import Path
 from subprocess import CalledProcessError, run
 from typing import List, Optional, Tuple, Union
-
 import numpy as np
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torchaudio
 import torchaudio.functional as taF
 from omegaconf import DictConfig, OmegaConf
 from tqdm import tqdm
@@ -65,7 +57,7 @@ def load_audio(audio_input: Union[str, np.ndarray, torch.Tensor], sample_rate: i
 class SpecScaler(nn.Module):
     """Логарифмическое масштабирование спектрограммы."""
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return torch.log(x.clamp_(1e-9, 1e9))
+        return torch.log(torch.clamp(x, min=1e-9, max=1e9))
 
 
 class FeatureExtractor(nn.Module):
@@ -92,9 +84,9 @@ class FeatureExtractor(nn.Module):
 
     def out_len(self, input_lengths: torch.Tensor) -> torch.Tensor:
         if self.center:
-            return input_lengths.div(self.hop_length, rounding_mode="floor").add(1).long()
+            return torch.floor(input_lengths.float() / self.hop_length).add(1).long()
         else:
-            return (input_lengths - self.win_length).div(self.hop_length, rounding_mode="floor").add(1).long()
+            return torch.floor((input_lengths.float() - self.win_length) / self.hop_length).add(1).long()
 
     def forward(self, input_signal: torch.Tensor, length: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         return self.featurizer(input_signal), self.out_len(length)
@@ -192,8 +184,7 @@ class StridingSubsampling(nn.Module):
         add_pad = 2 * self._padding - self._kernel_size
 
         for _ in range(self._sampling_num):
-            lengths = torch.div(lengths + add_pad, self._stride) + 1.0
-            lengths = torch.floor(lengths)
+            lengths = torch.floor(torch.div(lengths + add_pad, self._stride) + 1.0)
 
         return lengths.to(dtype=torch.int)
 
@@ -299,7 +290,7 @@ class RotaryPositionMultiHeadAttention(MultiHeadAttention):
             value.view(t, b, self.h * self.d_k).transpose(0, 1)
         )
 
-        scores = torch.matmul(q, k.transpose(-2, -1) / math.sqrt(self.d_k))
+        scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(self.d_k)
 
         return self.forward_attention(v, scores, mask)
 
@@ -705,10 +696,14 @@ def load_model(model_name: str, download_root: Optional[str] = None,
                     f"Use force_download=True to re-download."
                 )
 
-    # Загрузка чекпоинта
+    # Загрузка чекпоинта (совместимость с разными версиями)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=FutureWarning)
-        checkpoint = torch.load(model_path, map_location="cpu", weights_only=False)
+        try:
+            checkpoint = torch.load(model_path, map_location="cpu", weights_only=False)
+        except TypeError:
+            # Для старых версий PyTorch без параметра weights_only
+            checkpoint = torch.load(model_path, map_location="cpu")
 
     cfg = checkpoint["cfg"]
 

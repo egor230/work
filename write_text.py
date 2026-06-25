@@ -244,7 +244,7 @@ class SmartTyper:
    
    try:
     subprocess.run(["xte", "key ISO_Next_Group"], check=True, timeout=1)
-    time.sleep(1.8)
+    time.sleep(1.3)
     if self.get_current_layout() == lang:
      return True
    except Exception:
@@ -753,7 +753,11 @@ set_mute("0", source_id)
 def get_mute_status(source_id):  # Получает статус Mute для источника '54' с помощью pactl и grep.
  try:
   r = subprocess.run(["pactl", "get-source-mute", source_id],  capture_output=True, text=True, check=True)
-  return r.stdout.lower()
+  # print(r)
+  if "да" in str(r.stdout.lower()):
+   return False
+  else:
+   return True
  except:
   return False
  

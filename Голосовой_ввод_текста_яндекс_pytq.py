@@ -1,7 +1,6 @@
 from pytq_libs_voice import *
 from write_text import *
 
-
 class VoiceThread(QThread):
  icon_signal = pyqtSignal(str)
  status_signal = pyqtSignal(str)
@@ -91,8 +90,7 @@ class VoiceThread(QThread):
     continue
   return ""
  
- def click_element(self, button):
-  """Безопасный клик по элементу с несколькими способами."""
+ def click_element(self, button):# клик по элементу с несколькими способами.
   if not button:
    return False
   for action in [
@@ -107,8 +105,7 @@ class VoiceThread(QThread):
     continue
   return False
  
- def start_selenium(self):
-  """Запуск браузера и переход на страницу Алисы."""
+ def start_selenium(self):# Запуск браузера и переход на страницу Алисы."""
   options = get_option()
   options.add_argument("--disable-extensions")
   options.add_argument('--user-data-dir=/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/google-chrome')
@@ -174,8 +171,7 @@ class VoiceThread(QThread):
    self.icon_signal.emit(self.icon_record)
    self.find_mic_button()
  
- def toggle(self):
-  # ИСПРАВЛЕНО: корректная логика переключения
+ def toggle(self):  # ИСПРАВЛЕНО: корректная логика переключения
   if self.mode == "record":
    with self._lock:
     if self.recording:
@@ -187,7 +183,6 @@ class VoiceThread(QThread):
  
  def run(self):
   self.start_selenium()
-  set_mute("0", self.source_id)
   if self.mode == "auto":
    self.button = None
    aria_variants = ['button#oknyx-button', 'button.StandaloneOknyx[data-testid="oknyx"]',
@@ -225,7 +220,8 @@ class VoiceThread(QThread):
    self.recording = True  # ИСПРАВЛЕНО: сразу ставим флаг, чтобы цикл запустился
   try:
    while 1:
-    time.sleep(2)
+    time.sleep(1)
+    self.mic= get_mute_status(source_id)# Состояние микрофона
     if self.mode == "record" and self.recording:
      self.show_message(None, False)
      last_speech_time = time.time()
@@ -237,41 +233,45 @@ class VoiceThread(QThread):
        if mean_amp > 4:
         last_speech_time = time.time()
        else:
-        if time.time() - last_speech_time > 3.3:
+        if time.time() - last_speech_time > 2.3:
          self._OFF()
          self.recording = False  # ИСПРАВЛЕНО: сбрасываем флаг после остановки
          print("Тишина дольше 3 секунд, остановка записи")
          break
-    if self.mode == "auto" and self.mic:
-     aria_label = self.button.get_attribute(self.alisa) or ""
-     oknyx_core = self.button.find_element(By.CSS_SELECTOR, f".{self.OKNYX_CORE_CLASS}")
-     filter_elem = oknyx_core.get_attribute("data-testid") or ""
-     classes = oknyx_core.get_attribute("class") or ""
-     self.message, counts1 = self.get_user_message(self.counts)
-     if "lis" in classes and "стоп" in aria_label.lower():
-      time.sleep(1)
-      if self.message:
-       self.show_message(self.message, self.mic)
-      else:
-       self.show_message("Давай поговорите", self.mic)
-     else:
+    if self.mode == "auto":
+     if not self.mic:
       self.show_message(None, False)
-     if counts1 > self.counts:
-      if "out" in classes or "col" in classes or "th" in filter_elem:
-       self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-       self.message, counts1 = self.get_user_message(self.counts)
-       print(counts1)
-       self.counts = counts1
-       thread = threading.Thread(target=process_text, args=(self.message,))
-       thread.start()
+     else:
+      aria_label = self.button.get_attribute(self.alisa) or ""
+      oknyx_core = self.button.find_element(By.CSS_SELECTOR, f".{self.OKNYX_CORE_CLASS}")
+      filter_elem = oknyx_core.get_attribute("data-testid") or ""
+      classes = oknyx_core.get_attribute("class") or ""
+      if self.mode == "record":
+       self.icon_signal.emit(self.icon_record)
+       self.find_mic_button()
+       break
+      self.message, counts1 = self.get_user_message(self.counts)
+      if counts1 > self.counts:
+       if "out" in classes or "col" in classes or "th" in filter_elem:
+        thread = threading.Thread(target=process_text, args=(self.message,))
+        thread.start()
+        print(counts1)
+        self.counts = counts1
+        self.mic = True
+        self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        self.button.click()
+        time.sleep(3)
+        self.button.click()
+      if "su" in filter_elem and "сл" in aria_label.lower():
+       #time.sleep(2)
        self.button.click()
-       time.sleep(3)
-       self.mic = True
-       self.button.click()
-     
-     if "su" in filter_elem and "сл" in aria_label.lower():
-      time.sleep(2)
-      self.button.click()
+      if "lis" in classes and "стоп" in aria_label.lower():
+       # time.sleep(1)
+       if self.message:
+        self.show_message(self.message, self.mic)
+        
+      else:
+       self.show_message(None, False)
   except Exception as e:
    print(f"Ошибка в selenium_worker: {e}")
 
@@ -332,16 +332,14 @@ class MyWindow(QWidget):
   QTimer.singleShot(0, self.hide)
  
  def switch_mode(self, mode):
-  print(mode)
-  # ИСПРАВЛЕНО: корректная синхронизация чекбоксов
+  print(mode)  # ИСПРАВЛЕНО: корректная синхронизация чекбоксов
   self.thread.mode = mode
   set_mute("0", self.thread.source_id)
   if mode == "auto":
    self.action_auto.setChecked(True)
    self.action_record.setChecked(False)
    self.tray.setToolTip("Голосовой ввод — Авто")
-   # При переключении в авто сбрасываем флаг записи
-   self.thread.recording = False
+   self.thread.recording = False   # При переключении в авто сбрасываем флаг записи
   elif mode == "record":
    self.action_auto.setChecked(False)
    self.action_record.setChecked(True)
