@@ -1,0 +1,13 @@
+KeyRelease event, serial 38, synthetic NO, window 0x5000001,
+    root 0x138, subw 0x0, time 3156419, (1058,317), root:(1919,771),
+    state 0x2000, keycode 91 (keysym 0xff9f, KP_Delete), same_screen YES,
+    XLookupString gives 0 bytes: 
+    XFilterEvent returns: False
+
+KeyPress event, serial 38, synthetic NO, window 0x5000001,
+    root 0x138, subw 0x0, time 3162907, (1058,317), root:(1919,771),
+    state 0x2000, keycode 119 (keysym 0xffff, Delete), same_screen YES,
+    XLookupString gives 1 bytes: (7f) ""
+    XmbLookupString gives 1 bytes: (7f) ""
+    XFilterEvent returns: False
+

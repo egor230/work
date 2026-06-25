@@ -107,24 +107,25 @@ var txt=c.textContent.trim();if(txt.length)t.push(txt);}}return t.join('\\n');""
       logger.warning("Время истекло, но субтитры частично загружены.")
       return last_raw
     raise TimeoutException("Субтитры не появились за отведённое время.")
-
+  
   def clean_transcript(self, raw_text, group_sentences=True):  # Очищает текст от служебных слов и группирует предложения в абзацы
-    if not raw_text:
-      return ""
-    text = raw_text
-    for word in self.service_words:
-      text = text.replace(word, "")
-    text = re.sub(r"\d{1,2}:\d{2}(?::\d{2})?", "\n", text)
-    text = re.sub(r"\n{3,}", "\n\n", text).strip()
-    # Удаляем специальные обозначения
-    clean_text = re.sub(r'\[.*?\]', '', text)    # Находим любые квадратные скобки и их содержимое и заменяем на пустую строку
-    text = re.sub(r'\s+', ' ', clean_text).strip()  # Убираем лишние пробелы, которые могли остаться на месте удаленных скобок
-    
-    if group_sentences:
-      sentences = re.findall(r"[^.!?]*[.!?]+", text)
-      if len(sentences) > 1:
-        text = "\n\n".join(" ".join(sentences[i:i+4]) for i in range(0, len(sentences), 4))
-    return text
+   if not raw_text:
+    return ""
+   text = raw_text
+   for word in self.service_words:
+    text = text.replace(word, "")
+   text = re.sub(r"\d{1,2}:\d{2}(?::\d{2})?", "\n", text)
+   text = re.sub(r"\n{3,}", "\n\n", text).strip()
+   # Удаляем специальные обозначения
+   clean_text = re.sub(r'\[.*?\]', '', text)  # Находим любые квадратные скобки и их содержимое и заменяем на пустую строку
+   text = re.sub(r'\s+', ' ', clean_text).strip()  # Убираем лишние пробелы, которые могли остаться на месте удаленных скобок
+   if group_sentences:
+    sentences = re.findall(r"[^.!?]*[.!?]+", text)
+    if len(sentences) > 1:
+     text = "\n\n".join(" ".join(sentences[i:i + 4]) for i in range(0, len(sentences), 4))
+   text = text.replace(">>", "")
+   text = re.sub(r' +', ' ', text)  # Убираем все двойные пробелы
+   return text
 
   def get_video_title(self):  # Возвращает очищенный заголовок видео
     return self.driver.title.replace(" - YouTube", "").strip()

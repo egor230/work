@@ -1,0 +1,35 @@
+{
+  "last_profile": "Default",
+  "profiles": {
+    "Default": {
+      "BTN_A": "KEY_SPACE",
+      "BTN_B": "KEY_B",
+      "BTN_X": "KEY_X",
+      "BTN_Y": "KEY_Y",
+      "BTN_TL": "KEY_E",
+      "BTN_TR": "KEY_R",
+      "BTN_START": "KEY_ENTER",
+      "BTN_SELECT": "KEY_BACKSPACE",
+      "BTN_MODE": "KEY_F12",
+      "BTN_DPAD_UP": "KEY_UP",
+      "BTN_DPAD_DOWN": "KEY_DOWN",
+      "BTN_DPAD_LEFT": "KEY_LEFT",
+      "BTN_DPAD_RIGHT": "KEY_RIGHT",
+      "ABS_LEFT_STICK_X_POS": "KEY_D",
+      "ABS_LEFT_STICK_X_NEG": "KEY_A",
+      "ABS_LEFT_STICK_Y_POS": "KEY_S",
+      "ABS_LEFT_STICK_Y_NEG": "KEY_W",
+      "ABS_RIGHT_STICK_X_POS": "KEY_H",
+      "ABS_RIGHT_STICK_X_NEG": "KEY_J",
+      "ABS_RIGHT_STICK_Y_POS": "KEY_T",
+      "ABS_RIGHT_STICK_Y_NEG": "KEY_G",
+      "BTN_THUMBL": "KEY_Q",
+      "BTN_THUMBR": "KEY_Z",
+      "ABS_LT": "KEY_1",
+      "ABS_RT": "KEY_2"
+    }
+  },
+  "mouse_on": false,
+  "sens": 5,
+  "smooth": true
+}
