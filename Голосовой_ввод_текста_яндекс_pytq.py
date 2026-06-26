@@ -204,7 +204,7 @@ class VoiceThread(QThread):
   listener_thread = threading.Thread(target=start_mouse_listener_with_delay, daemon=True)
   fs = 16 * 1000
   listener_thread.start()
-  
+  self.first_start=True
   try:
    while True:
     time.sleep(0.2)  # уменьшена задержка для более быстрой реакции
@@ -215,6 +215,7 @@ class VoiceThread(QThread):
     self.mic = get_mute_status(self.source_id)  # Состояние микрофона
     
     if current_mode == "record":
+     self.first_start=True
      if self.recording and not self._stop_recording_flag:
       print("record")
       self.show_message(None, False)
@@ -222,11 +223,14 @@ class VoiceThread(QThread):
      elif not self.recording and not self._stop_recording_flag:
       # ждем начала записи
       time.sleep(0.3)
-    # self.button.click()
+      self.button.click()
     elif current_mode == "auto":
      if not self.button:
       continue
-     
+     if self.first_start:
+      self.first_start=False
+      print("0000")
+      self.show_message("Давайте говорите", self.mic)
      if not self.mic:
       self.show_message(None, False)
      else:
@@ -255,7 +259,8 @@ class VoiceThread(QThread):
        if self.message:
         self.show_message(self.message, self.mic)
       else:
-       self.show_message(None, False)
+       if counts1>0:
+        self.show_message(None, False)
   
   except Exception as e:
    print(f"Ошибка в selenium_worker: {e}")
