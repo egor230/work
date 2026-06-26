@@ -1,6 +1,13 @@
 # Игнорируем этот скрипт (чтобы не отправлять токен на GitHub)
 /updata git.sh
 
+# Исключённые папки (чувствительная информация)
+backup_user_data/
+myenv/lib/python3.12/site-packages/tqdm/
+pdf/
+vosk-model-ru-0.10/
+wine-prefix-backup/drive_c/
+
 # Игнорируем всё остальное, кроме нужных расширений
 *
 !*.py
