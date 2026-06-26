@@ -111,22 +111,48 @@ var txt=c.textContent.trim();if(txt.length)t.push(txt);}}return t.join('\\n');""
   def clean_transcript(self, raw_text, group_sentences=True):  # Очищает текст от служебных слов и группирует предложения в абзацы
    if not raw_text:
     return ""
+   
    text = raw_text
+   
+   # Удаляем служебные слова
    for word in self.service_words:
     text = text.replace(word, "")
-   text = re.sub(r"\d{1,2}:\d{2}(?::\d{2})?", "\n", text)
-   text = re.sub(r"\n{3,}", "\n\n", text).strip()
-   # Удаляем специальные обозначения
-   clean_text = re.sub(r'\[.*?\]', '', text)  # Находим любые квадратные скобки и их содержимое и заменяем на пустую строку
-   text = re.sub(r'\s+', ' ', clean_text).strip()  # Убираем лишние пробелы, которые могли остаться на месте удаленных скобок
-   if group_sentences:
-    sentences = re.findall(r"[^.!?]*[.!?]+", text)
-    if len(sentences) > 1:
-     text = "\n\n".join(" ".join(sentences[i:i + 4]) for i in range(0, len(sentences), 4))
+   
+   # Удаляем временные метки (только если они стоят отдельно, не внутри чисел)
+   # Ищем паттерны типа 12:34 или 12:34:56, окруженные пробелами или началом/концом строки
+   text = re.sub(r'(?:^|\s)\d{1,2}:\d{2}(?::\d{2})?(?:\s|$)', ' ', text)
+   
+   # Удаляем специальные обозначения в квадратных скобках
+   text = re.sub(r'\[.*?\]', '', text)
+   
+   # Удаляем символы >>
    text = text.replace(">>", "")
-   text = re.sub(r' +', ' ', text)  # Убираем все двойные пробелы
+   
+   # Нормализуем пробелы (убираем множественные пробелы)
+   text = re.sub(r' +', ' ', text)
+   
+   # Нормализуем переносы строк (не более двух подряд)
+   text = re.sub(r'\n{3,}', '\n\n', text)
+   
+   # Убираем пробелы в начале и конце строк
+   text = '\n'.join(line.strip() for line in text.split('\n'))
+   
+   if group_sentences:
+    # Разбиваем на предложения
+    sentences = re.findall(r'[^.!?]*[.!?]+', text)
+    if len(sentences) > 1:
+     # Группируем по 3-4 предложения в абзац для лучшей читаемости
+     paragraphs = []
+     for i in range(0, len(sentences), 3):
+      paragraph = ' '.join(sentences[i:i + 3]).strip()
+      if paragraph:
+       paragraphs.append(paragraph)
+     text = '\n\n'.join(paragraphs)
+   
+   # Финальная очистка
+   text = text.strip()
+   text=text.replace("  "," ")
    return text
-
   def get_video_title(self):  # Возвращает очищенный заголовок видео
     return self.driver.title.replace(" - YouTube", "").strip()
 
