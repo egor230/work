@@ -207,7 +207,7 @@ class VoiceThread(QThread):
   
   try:
    while True:
-    time.sleep(0.5)  # уменьшена задержка для более быстрой реакции
+    time.sleep(0.2)  # уменьшена задержка для более быстрой реакции
     
     with self._mode_lock:
      current_mode = self.mode
