@@ -64,7 +64,22 @@ class VoiceThread(QThread):
   options.add_argument("--disable-extensions")
   options.add_argument('--user-data-dir=/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/google-chrome')
   self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-  self.driver.get("https://alice.yandex.ru/")
+  # Установить только положительные координаты
+  self.driver.set_window_position(0, 378)
+  self.driver.set_window_size(532, 467)
+  # Получить размер окна
+  # window_size = self.driver.get_window_size()
+  # print(f"Ширина: {window_size['width']}")
+  # print(f"Высота: {window_size['height']}")
+  #
+  # # Получить позицию окна (координаты левого верхнего угла)
+  # window_position = self.driver.get_window_position()
+  # print(f"Позиция X: {window_position['x']}")
+  # print(f"Позиция Y: {window_position['y']}")
+  #
+  # # Или всё вместе в одном словаре
+  # window_rect = self.driver.get_window_rect()
+  # print(f"Размер и позиция: {window_rect}")
   try:
    WebDriverWait(self.driver, 15).until(
     EC.presence_of_element_located((By.CSS_SELECTOR, "button.StandaloneOknyx, button.AliceButton_pin_circle"))
@@ -73,7 +88,7 @@ class VoiceThread(QThread):
    pass
   self.chrome_pid = self.driver.service.process.pid
   self.window_id = subprocess.check_output(['xdotool', 'getactivewindow']).decode().strip()
- 
+  
  def stop_recording(self):
   if self.recording:
    self.toggle()
@@ -114,7 +129,7 @@ class VoiceThread(QThread):
   self.status_signal.emit("Обработка...")
   button = self.find_stop_button()
   if button and self.click_element(button):
-   time.sleep(0.3)  # небольшая задержка для стабилизации
+   time.sleep(0.3)
    text = self.get_recognized_text()
    if text:
     thread = threading.Thread(target=press_keys, args=(text,))
@@ -126,15 +141,15 @@ class VoiceThread(QThread):
   if self.mode == "record":
    self.icon_signal.emit(self.icon_record)
    self.find_mic_button()
-   time.sleep(0.2)  # задержка для стабилизации UI
+   time.sleep(0.2)
+ 
  def talk(self):
-  
+  fs = 16 * 1000
   last_speech_time = time.time()
   
   try:
    with sd.InputStream(samplerate=fs, channels=1, dtype='float32') as stream:
     while self.recording and not self._stop_recording_flag:
-     # проверка смены режима
      with self._mode_lock:
       if self.mode != "record":
        self.recording = False
@@ -149,20 +164,22 @@ class VoiceThread(QThread):
      else:
       if time.time() - last_speech_time > 2.3:
        with self._lock:
-        self._OFF()
+        self._stop_recording_flag = True  # помечаем что надо остановить
         self.recording = False
-       print("Тишина дольше 3 секунд, остановка записи")
+       self._OFF()
+       print("Тишина дольше 2.3 сек, остановка записи")
        break
   except Exception as e:
    print(f"Ошибка записи: {e}")
    self.recording = False
- def toggle(self):  # ИСПРАВЛЕНО: корректная логика переключения
+ 
+ def toggle(self):
   with self._lock:
    if self.mode == "record":
     if self.recording:
      self._stop_recording_flag = True
-     self._OFF()
      self.recording = False
+     self._OFF()
     else:
      self._stop_recording_flag = False
      self._ON()
@@ -172,8 +189,7 @@ class VoiceThread(QThread):
   self.start_selenium()
   if self.mode == "auto":
    self.button = None
-   aria_variants = ['button#oknyx-button', 'button.StandaloneOknyx[data-testid="oknyx"]',
-                    ]
+   aria_variants = ['button#oknyx-button', 'button.StandaloneOknyx[data-testid="oknyx"]']
    for selector in aria_variants:
     try:
      self.button = self.driver.find_element(By.CSS_SELECTOR, selector)
@@ -189,7 +205,7 @@ class VoiceThread(QThread):
                  .replace(" ", "").replace("Key.", ""))
      if key_name == "end":
       self.toggle()
-      time.sleep(0.5)  # уменьшена задержка
+      time.sleep(0.5)
       return True
     except Exception as e:
      print(f"Ошибка при обработке: {e}")
@@ -202,33 +218,36 @@ class VoiceThread(QThread):
    start_listener()
   
   listener_thread = threading.Thread(target=start_mouse_listener_with_delay, daemon=True)
-  fs = 16 * 1000
   listener_thread.start()
-  self.first_start=True
+  self.first_start = True
+  
   try:
    while True:
-    time.sleep(0.2)  # уменьшена задержка для более быстрой реакции
+    time.sleep(0.2)
     
     with self._mode_lock:
      current_mode = self.mode
     
-    self.mic = get_mute_status(self.source_id)  # Состояние микрофона
+    self.mic = get_mute_status(self.source_id)
     
     if current_mode == "record":
-     self.first_start=True
+     self.first_start = True
      if self.recording and not self._stop_recording_flag:
       print("record")
       self.show_message(None, False)
       self.talk()
-     elif not self.recording and not self._stop_recording_flag:
-      # ждем начала записи
+     elif not self.recording:
+      # ждем переключения флага или ручного старта
       time.sleep(0.3)
-      self.button.click()
+      # НЕ кликаем кнопку автоматически — ждем toggle() или ручной старт
+      if not self._stop_recording_flag and self.mode == "record":
+       # только если явно запустили через toggle
+       pass
     elif current_mode == "auto":
      if not self.button:
       continue
      if self.first_start:
-      self.first_start=False
+      self.first_start = False
       print("0000")
       self.show_message("Давайте говорите", self.mic)
      if not self.mic:
@@ -259,13 +278,14 @@ class VoiceThread(QThread):
        if self.message:
         self.show_message(self.message, self.mic)
       else:
-       if counts1>0:
+       if counts1 > 0:
         self.show_message(None, False)
   
   except Exception as e:
    print(f"Ошибка в selenium_worker: {e}")
+   pass
  
- def clear_input_field(self):# Очистка поля ввода."""
+ def clear_input_field(self):  # Очистка поля ввода."""
   try:
    field = WebDriverWait(self.driver, 3).until(
     EC.element_to_be_clickable((By.CSS_SELECTOR, "input[role='textbox'], textarea"))
@@ -310,6 +330,7 @@ class VoiceThread(QThread):
    except Exception:
     continue
   return False
+
 
 class MyWindow(QWidget):
  def __init__(self):
@@ -369,14 +390,17 @@ class MyWindow(QWidget):
  def switch_mode(self, mode):
   print(mode)  # ИСПРАВЛЕНО: корректная синхронизация чекбоксов
   
-  with self.thread._mode_lock:  # если переключаемся из record в auto - останавливаем запись
+  # Блокировка только на время изменения состояния
+  with self.thread._mode_lock:
    if self.thread.mode == "record" and mode == "auto":
     if self.thread.recording:
      self.thread._stop_recording_flag = True
      self.thread.recording = False
-     time.sleep(0.3)  # даем время завершить запись
-   
    self.thread.mode = mode
+  
+  # ИСПРАВЛЕНО: sleep вынесен из блока блокировки во избежание deadlock-ов
+  if mode == "auto" and self.thread._stop_recording_flag:
+   time.sleep(0.3)  # даем время завершить запись
   
   set_mute("0", self.thread.source_id)
   
