@@ -67,6 +67,7 @@ class VoiceThread(QThread):
   # Установить только положительные координаты
   self.driver.set_window_position(0, 378)
   self.driver.set_window_size(532, 467)
+  self.driver.get("https://alice.yandex.ru/")  # открыть сайт
   # Получить размер окна
   # window_size = self.driver.get_window_size()
   # print(f"Ширина: {window_size['width']}")
@@ -223,7 +224,7 @@ class VoiceThread(QThread):
   
   try:
    while True:
-    time.sleep(0.2)
+    time.sleep(0.01)
     
     with self._mode_lock:
      current_mode = self.mode
@@ -257,10 +258,10 @@ class VoiceThread(QThread):
       oknyx_core = self.button.find_element(By.CSS_SELECTOR, f".{self.OKNYX_CORE_CLASS}")
       filter_elem = oknyx_core.get_attribute("data-testid") or ""
       classes = oknyx_core.get_attribute("class") or ""
-      
+      white = oknyx_core.find_element(By.CSS_SELECTOR, ".StandaloneOknyxCore-WhiteCircleWrapper")
       self.message, counts1 = self.get_user_message(self.counts)
       if counts1 > self.counts:
-       if "out" in classes or "col" in classes or "th" in filter_elem:
+       if "out" in classes or "col" in classes or "th" in filter_elem or white.value_of_css_property("display") == "none":
         thread = threading.Thread(target=process_text, args=(self.message,))
         thread.start()
         print(counts1)
@@ -268,13 +269,15 @@ class VoiceThread(QThread):
         self.mic = True
         self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
         self.button.click()
-        time.sleep(3)
+        time.sleep(2)
         self.button.click()
       
       if "su" in filter_elem and "сл" in aria_label.lower():
        self.button.click()
+      circles = oknyx_core.find_elements(By.CSS_SELECTOR, ".StandaloneOknyxCore-ListeningCircle")
+      is_listening_circles = any(c.value_of_css_property("display") != "none" for c in circles)
       
-      if "lis" in classes and "стоп" in aria_label.lower():
+      if is_listening_circles and "lis" in classes and "стоп" in aria_label.lower():
        if self.message:
         self.show_message(self.message, self.mic)
       else:
