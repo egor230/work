@@ -26,7 +26,6 @@ export WINEDLLOVERRIDES="d3dx9_36,d3dx9_42=n,b;mfc120=b,n,d3d8,d3d9,ddraw,dinput
 export VULKAN_USE="6"
 export LC_ALL=ru_RU.UTF-8 # Локализация (опционально)
 export LANG=ru_RU.UTF-8
-export USE_SUPPLIED_DXVK_VKD3D="1"
 export DLL_INSTALL="vcrun2019 corefonts lucida"
 export VKD3D_FEATURE_LEVEL="12_2"
 export LOCALE_SELECT="ru_RU.utf"
@@ -43,15 +42,15 @@ export USE_SHADER_CACHE="1"
 export USE_RUNTIME="1"
 #export AMD_VULKAN_USE="radv"
 export MESA_VK_WSI_PRESENT_MODE="mailbox"
-# export MANGOHUD="1" # Включаем MangoHud
-# export MANGOHUD_USER_CONF="0"
-# export MANGOHUD_CONFIG="fps_metrics,horizontal,horizontal_stretch,hud_compact,font_size=24"
 export WINE_FULLSCREEN_FSR="1"
 export WINE_FULLSCREEN_FSR_STRENGTH="5"
 export SOUND_DRIVER_USE="pulse"
+export MANGOHUD="0" # Включаем MangoHud
+# export MANGOHUD_USER_CONF="0"
+# export MANGOHUD_CONFIG="fps_metrics,horizontal,horizontal_stretch,hud_compact,font_size=24"
 # Параметры gamescope
 GAMESCOPE_ARGS="-f -W 1920 -H 1080 -w 1920 -h 1080 -r 90 -S auto -F fsr --sharpness 20"
-# GAMESCOPE_ARGS="-f --fullscreen -W 1920 -H 1080 -w 1280 -h 720 -r 90 -S auto -F fsr --sharpness 20"
+# GAMESCOPE_ARGS="-f --fullscreen -W 1920 -H 1080 -w 1280 -h 720 -r 90 -S auto -F fsr  --force-grab-cursor --sharpness 20"
 # Назначаем переменные
 
 # Запуск через gamescope
@@ -61,7 +60,10 @@ export VULKAN_USE="6"
 export WINEPREFIX="/home/egor/PortProton/data/prefixes/DEFAULT" winetricks dxvk
 
 cd \"{0}\"
-DXVK_HUD=fps gamescope -f --force-grab-cursor -W 1920 -H 1080 -w 1920 -h 1080 -r 90 -S auto -F fsr --sharpness 20 wine {1}
+# DXVK_HUD=fps gamescope $GAMESCOPE_ARGS wine {1}
+# gamescope $GAMESCOPE_ARGS -- env MANGOHUD=1 wine {1} -dx11 -skipintro 1
+# portproton {1}
+wine {1} -dx11 -skipintro 1
 exit; '''.format(directory, filename)  # показать список устройств в терминале
 # Пути
 # \"/home/egor/PortProton/data/dist/PROTON-SAREK10-29-ASYNC/bin/wine\"
@@ -75,7 +77,16 @@ subprocess.run(['bash', '-c', show_list_id])
 # print(directory)
 # print(filename_without_extension)
 # print(filename)
+show_list_id = '''#!/bin/bash
+cd \"{0}\"
 
+portproton {1}
+exit; '''.format(directory, filename)  # показать список устройств в терминале
+# Пути
+# \"/home/egor/PortProton/data/dist/PROTON-SAREK10-29-ASYNC/bin/wine\"
+file=str(os.path.join(directory, str("script_steam_")+filename_without_extension))+".sh"
+with open(file, 'w') as file:    # Записываем текст в файл
+    file.write(show_list_id)
 command = f'cd "{directory}" || wrestool -x -t 14 "{filename}" > "{filename_without_extension}.ico"'
 subprocess.run(['bash', '-c', command], check=True)
 # show_list_id])
