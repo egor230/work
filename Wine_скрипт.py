@@ -55,15 +55,13 @@ GAMESCOPE_ARGS="-f -W 1920 -H 1080 -w 1920 -h 1080 -r 90 -S auto -F fsr --sharpn
 
 # Запуск через gamescope
 #gamescope $GAMESCOPE_ARGS -- "$WINE_PATH" "$GAME_PATH"
-
-export VULKAN_USE="6"
-export WINEPREFIX="/home/egor/PortProton/data/prefixes/DEFAULT" winetricks dxvk
+#export WINEPREFIX="/home/egor/PortProton/data/prefixes/DEFAULT" winetricks dxvk
 
 cd \"{0}\"
 # DXVK_HUD=fps gamescope $GAMESCOPE_ARGS wine {1}
 # gamescope $GAMESCOPE_ARGS -- env MANGOHUD=1 wine {1} -dx11 -skipintro 1
 # portproton {1}
-wine {1} -dx11 -skipintro 1
+wine \"{1}\" -dx11 -skipintro 1
 exit; '''.format(directory, filename)  # показать список устройств в терминале
 # Пути
 # \"/home/egor/PortProton/data/dist/PROTON-SAREK10-29-ASYNC/bin/wine\"
@@ -79,8 +77,8 @@ subprocess.run(['bash', '-c', show_list_id])
 # print(filename)
 show_list_id = '''#!/bin/bash
 cd \"{0}\"
-
-portproton {1}
+env "/home/egor/PortProton/data/scripts/start.sh" {1}
+#portproton {1}
 exit; '''.format(directory, filename)  # показать список устройств в терминале
 # Пути
 # \"/home/egor/PortProton/data/dist/PROTON-SAREK10-29-ASYNC/bin/wine\"

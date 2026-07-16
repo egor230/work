@@ -151,9 +151,14 @@ class VoiceThread(QThread):
      else:
       if time.time() - last_speech_time > 3.3:
        self._OFF()
-      
        print("Тишина дольше 2.3 сек, остановка записи")
        break
+
+   with self._mode_lock:                 # <-- исправленос
+    self._stop_recording_flag = True  # <-- исправлено
+
+   self.icon_signal.emit(self.icon_mic)
+   time.sleep(0.82)
   except Exception as e:
    print(f"Ошибка записи: {e}")
 
@@ -165,18 +170,14 @@ class VoiceThread(QThread):
    aria_label = self.button.get_attribute(self.alisa) or ""
    oknyx_core = self.button.find_element(By.CSS_SELECTOR, f".{self.OKNYX_CORE_CLASS}")
    classes = oknyx_core.get_attribute("class") or ""
-   if "li" in classes or "сл" in aria_label.lower():
+   print(classes)
+   if "li" or "Out" in classes or "сл" in aria_label.lower():
     self.driver.execute_script("arguments[0].click();", self.button)
    self.show_message(None, False)
   except Exception as e:
    pass
   print("0")
   self.talk()
-  with self._mode_lock:                 # <-- исправленос
-   self._stop_recording_flag = True  # <-- исправлено
-
-  self.icon_signal.emit(self.icon_mic)
-  time.sleep(0.82)
  def run(self):
   self.start_selenium()
   if self.mode == "auto":
@@ -240,11 +241,20 @@ class VoiceThread(QThread):
       oknyx_core = self.button.find_element(By.CSS_SELECTOR, f".{self.OKNYX_CORE_CLASS}")
       filter_elem = oknyx_core.get_attribute("data-testid") or ""
       classes = oknyx_core.get_attribute("class") or ""
-      white = oknyx_core.find_element(By.CSS_SELECTOR, ".StandaloneOknyxCore-WhiteCircleWrapper")
       self.message, counts1 = self.get_user_message(self.counts)
+      if "su" in filter_elem or "ex" in classes and "сл" in aria_label.lower():
+       # print(classes)
+       self.driver.execute_script("arguments[0].click();", self.button)
+       # circles = oknyx_core.find_elements(By.CSS_SELECTOR, ".StandaloneOknyxCore-ListeningCircle")
+       # is_listening_circles = any(c.value_of_css_property("display") != "none" for c in circles)
+       # if "th" in classes and "th" in filter_elem  and "стоп" in aria_label.lower():
+       #  print(circles)  is_listening_circles or
+      if "lis" in classes and "стоп" in aria_label.lower() and self.message:
+       self.show_message(self.message, self.mic)
       if counts1 > self.counts:
+       white = oknyx_core.find_element(By.CSS_SELECTOR, ".StandaloneOknyxCore-WhiteCircleWrapper")
+       thread = threading.Thread(target=process_text, args=(self.message,))
        if "out" in classes or "col" in classes or "th" in filter_elem or white.value_of_css_property("display") == "none":
-        thread = threading.Thread(target=process_text, args=(self.message,))
         thread.start()
         print(counts1)
         self.counts = counts1
@@ -254,33 +264,50 @@ class VoiceThread(QThread):
         self.driver.execute_script("arguments[0].click();", self.button)
         time.sleep(2)
         self.driver.execute_script("arguments[0].click();", self.button)
-      if "su" in filter_elem and "сл" in aria_label.lower():
-       self.driver.execute_script("arguments[0].click();", self.button)
-      circles = oknyx_core.find_elements(By.CSS_SELECTOR, ".StandaloneOknyxCore-ListeningCircle")
-      is_listening_circles = any(c.value_of_css_property("display") != "none" for c in circles)
-      
-      if is_listening_circles or "lis" in classes and "стоп" in aria_label.lower():
-       if self.message:
-        self.show_message(self.message, self.mic)
-      else:
-       if counts1 > 0:
-        self.show_message(None, False)
+    
+   
+      # if counts1 > 0:
+      #   self.show_message(None, False)
   
    except Exception as e:
-    # print(f"Ошибка в selenium_worker: {e}")
+    print(f"Ошибка в selenium_worker: {e}")
     pass
  
  def clear_input_field(self):  # Очистка поля ввода."""
   try:
    field = WebDriverWait(self.driver, 3).until(
-    EC.element_to_be_clickable((By.CSS_SELECTOR, "input[role='textbox'], textarea"))
+    EC.presence_of_element_located((By.CSS_SELECTOR, "input[role='textbox'], textarea"))
    )
-   field.click()
-   self.driver.execute_script("arguments[0].value = '';", field)
-   self.driver.execute_script("arguments[0].dispatchEvent(new Event('input', {bubbles: true}));", field)
-   if field.get_attribute("value"):
-    field.send_keys(Keys.CONTROL + "a")
-    field.send_keys(Keys.DELETE)
+   
+   self.driver.execute_script("""
+       let el = arguments[0];
+
+       // Если это div-редактор (contenteditable)
+       if (el.isContentEditable) {
+           el.innerHTML = '';
+           el.innerText = '';
+           el.dispatchEvent(new Event('input', {bubbles: true}));
+       }
+       // Если это обычный input или textarea
+       else {
+           // Фокусируем и выделяем весь текст внутри элемента
+           el.focus();
+           el.select();
+
+           // Команды на удаление выделенного текста (работает на уровне документа, не ОС)
+           document.execCommand('selectAll', false, null);
+           document.execCommand('delete', false, null);
+
+           // Физически очищаем свойство value на случай, если фреймворк сопротивляется
+           let setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set ||
+                        Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
+           if (setter) setter.call(el, '');
+           else el.value = '';
+
+           el.dispatchEvent(new Event('input', {bubbles: true}));
+           el.dispatchEvent(new Event('change', {bubbles: true}));
+       }
+   """, field)
   except Exception as e:
    logging.warning(f"Очистка поля не удалась: {e}")
  
@@ -315,7 +342,6 @@ class VoiceThread(QThread):
    except Exception:
     continue
   return False
-
 
 class MyWindow(QWidget):
  def __init__(self):
