@@ -1,7 +1,6 @@
 from pytq_libs_voice import *
 from write_text import *
 
-
 class VoiceThread(QThread):
  icon_signal = pyqtSignal(str)
  status_signal = pyqtSignal(str)
