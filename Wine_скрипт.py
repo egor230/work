@@ -23,13 +23,14 @@ launch_script = '''#!/bin/bash
 export LAUNCH_PARAMETERS="-dx11 -skipintro 1"
 export WINDOWS_VER="10"
 export DLL_INSTALL="vcrun2019 corefonts lucida"
-export WINEDLLOVERRIDES="d3dx9_36,d3dx9_42=n,b;mfc120=b,n,d3d8,d3d9,ddraw,dinput8,dsound=n,b"
+export WINEDLLOVERRIDES="d3dx9_36,d3dx9_42=n,b;d3dx9_43=b;mfc120=b,n,d3d8,d3d9,ddraw,dinput8,dsound=n,b"
 export VULKAN_USE="6"
 export LC_ALL="ru_RU.UTF-8"
 export LANG="ru_RU.UTF-8"
 export VKD3D_FEATURE_LEVEL="12_2"
 export LOCALE_SELECT="ru_RU.utf"
 export FPS_LIMIT="90"
+export PW_USE_US_LAYOUT="1"
 export PW_USE_ESYNC="1"
 export PW_USE_FSYNC="1"
 export PW_USE_NTSYNC="1"
@@ -40,27 +41,33 @@ export USE_GSTREAMER="1"
 export FORCE_LARGE_ADDRESS_AWARE="1"
 export USE_SHADER_CACHE="1"
 export USE_RUNTIME="1"
-#export AMD_VULKAN_USE="radv"
+export AMD_VULKAN_USE="radv"
 export MESA_VK_WSI_PRESENT_MODE="mailbox"
 export WINE_FULLSCREEN_FSR="1"
 export WINE_FULLSCREEN_FSR_STRENGTH="5"
 export SOUND_DRIVER_USE="pulse"
-export MANGOHUD="0"
-
+#export MANGOHUD="1" # Включаем MangoHud
+#export MANGOHUD_USER_CONF="1"
+#export MANGOHUD_CONFIG="fps_metrics,horizontal,horizontal_stretch,hud_compact,font_size=24"
 ORIGIN_W=1920
 ORIGIN_H=1080
 SCALE=80
 NEW_W=$(( ORIGIN_W * SCALE / 100 ))
 NEW_H=$(( ORIGIN_H * SCALE / 100 ))
-GAMESCOPE_ARGS="-f -W ${{ORIGIN_W}} -H ${{ORIGIN_H}} -w ${{NEW_W}} -h ${{NEW_H}} -r 90 -S auto -F fsr --sharpness 20 --force-grab-cursor"
+GAMESCOPE_ARGS=" -f --force-windows-fullscreen -W ${{ORIGIN_W}} -H ${{ORIGIN_H}} -w ${{NEW_W}} -h ${{NEW_H}} -r 90 -S auto -F fsr --sharpness 20 --force-grab-cursor"
 
 current_layout=$(xset -q | grep -A 0 'LED mask' | awk '{{print $10}}')
 if [ "$current_layout" == "00000002" ]; then
     xdotool key super+space
 fi
-
 cd "{0}"
+
+#DXVK_HUD=fps gamescope $GAMESCOPE_ARGS wine \"{1}\"-dx11 -skipintro 1
+#DXVK_HUD=fps wine \"{1}\"-dx11 -skipintro 1
+#gamescope $GAMESCOPE_ARGS -- env MANGOHUD=1 wine \"{1}\" -dx11 -skipintro 1
+#gamescope $GAMESCOPE_ARGS wine \"{1}\" -dx11 -skipintro 1
 wine "{1}" -dx11 -skipintro 1
+# portproton \"{1}\"
 exit 0
 '''.format(directory, filename)
 script_path = str(os.path.join(directory, filename_without_extension)) + ".sh"

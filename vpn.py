@@ -717,27 +717,11 @@ def save_and_output(results, no_clipboard=False):
  best_link = results[0][0]
  
  # Вывод в консоль
- for i, (link, lat, spd) in enumerate(results[:NEED]):
-  cc = extract_country_code(link) or "??"
-  remark = link.split("#", 1)[1][:40] if "#" in link else ""
-  speed_str = f" | скорость: {spd:.1f} Мбит/с" if spd > 0 else ""
-  marker = f" {G}← САМЫЙ БЫСТРЫЙ{N}" if i == 0 else ""
-  print(f"{G}{i + 1}. [{cc.upper()}] задержка: {lat:.0f}мс{speed_str} — {remark}{marker}")
-  print(f"   {link[:80]}{'...' if len(link) > 80 else ''}{N}")
+
  
  # Копируем лучший конфиг в буфер обмена (один раз)
  print(f"\n{B}Копирую лучший конфиг в буфер обмена...{N}")
  copy_to_clipboard(best_link, no_clipboard)
- # Обновление конфига Hiddify
- # config_path = os.path.expanduser("~/.local/share/app.hiddify.com/shared_preferences.json")
- # try:
- #  with open(config_path, "r", encoding="utf-8") as f:
- #   config = json.load(f)
- #
- # except Exception as e:
- #  print(f"{R}Ошибка при обновлении конфига Hiddify: {e}{N}")
-
-# ===================== ОБРАБОТЧИК СИГНАЛОВ =====================
 def signal_handler(sig, frame):
     print(f"\n{R}Прерывание...{N}")
     stop_event.set()
@@ -963,3 +947,26 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
+    
+    
+
+ # Обновление конфига Hiddify
+ # config_path = os.path.expanduser("~/.local/share/app.hiddify.com/shared_preferences.json")
+ # try:
+ #  with open(config_path, "r", encoding="utf-8") as f:
+ #   config = json.load(f)
+ #
+ # except Exception as e:
+ #  print(f"{R}Ошибка при обновлении конфига Hiddify: {e}{N}")
+ # for i, (link, lat, spd) in enumerate(results[:NEED]):
+ #  cc = extract_country_code(link) or "??"
+ #  remark = link.split("#", 1)[1][:40] if "#" in link else ""
+ #  speed_str = f" | скорость: {spd:.1f} Мбит/с" if spd > 0 else ""
+ #  marker = f" {G}← САМЫЙ БЫСТРЫЙ{N}" if i == 0 else ""
+ #  print(f"{G}{i + 1}. [{cc.upper()}] задержка: {lat:.0f}мс{speed_str} — {remark}{marker}")
+ #  print(f"   {link[:80]}{'...' if len(link) > 80 else ''}{N}")
+# ===================== ОБРАБОТЧИК СИГНАЛОВ =====================
+
+
+
