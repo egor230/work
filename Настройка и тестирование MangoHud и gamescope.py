@@ -185,13 +185,18 @@ class GameScopeMangoHudApp(QMainWindow):
         self._preview_process = None
         self._preview_mode = None
 
-        # Debounce timer for restarting preview
+        # Debounce timer for restarting preview (увеличил до 300 мс)
         self._restart_timer = QTimer(self)
         self._restart_timer.setSingleShot(True)
-        self._restart_timer.setInterval(200)
+        self._restart_timer.setInterval(300)
         self._restart_timer.timeout.connect(self._do_restart_preview)
 
         self._cube_geom = None  # saved vkcube window {x, y, w, h}
+
+        # Проверка наличия xdotool
+        self._xdotool_available = self._check_xdotool()
+        if not self._xdotool_available:
+            print("WARNING: xdotool not found. Window position will not be restored.")
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -203,6 +208,15 @@ class GameScopeMangoHudApp(QMainWindow):
         self._sync_all_widgets()
         # Restore window geometry (after UI is built)
         self._restore_window()
+
+    # ---------- Проверка xdotool ---------- #
+    def _check_xdotool(self):
+        try:
+            import subprocess
+            subprocess.run(["xdotool", "--version"], capture_output=True, check=True)
+            return True
+        except (subprocess.SubprocessError, FileNotFoundError):
+            return False
 
     # ---------- Tabs ---------- #
 
@@ -659,40 +673,6 @@ class GameScopeMangoHudApp(QMainWindow):
 
         return ",".join(items)
 
-    def _save_cube_geom(self):
-        try:
-            import subprocess
-            wid = subprocess.check_output(
-                ["xdotool", "search", "--name", "vkcube"], timeout=2
-            ).decode().strip().split("\n")[0]
-            geo = subprocess.check_output(
-                ["xdotool", "getwindowgeometry", wid], timeout=2
-            ).decode()
-            xy = [l for l in geo.split("\n") if l.strip().startswith("Position:")][0]
-            wh = [l for l in geo.split("\n") if l.strip().startswith("Geometry:")][0]
-            parts = xy.split(":")[1].strip().split(",")
-            x, y = int(parts[0]), int(parts[1])
-            parts = wh.split(":")[1].strip()
-            w, h = int(parts.split("x")[0]), int(parts.split("x")[1])
-            self._cube_geom = {"x": x, "y": y, "w": w, "h": h}
-        except Exception:
-            pass
-
-    def _restore_cube_geom(self):
-        if not self._cube_geom:
-            return
-        try:
-            import subprocess, time
-            time.sleep(0.3)
-            wid = subprocess.check_output(
-                ["xdotool", "search", "--name", "vkcube"], timeout=3
-            ).decode().strip().split("\n")[0]
-            subprocess.run(["xdotool", "windowmove", wid,
-                           str(self._cube_geom["x"]), str(self._cube_geom["y"])],
-                          timeout=2)
-        except Exception:
-            pass
-
     def _build_mh_env(self):
         d = self._data["mangohud"]
         if not d.get("enabled"):
@@ -784,6 +764,80 @@ class GameScopeMangoHudApp(QMainWindow):
         env_str = " ".join(env)
         return f"{env_str} {cmd}" if env_str else cmd
 
+    # ---------- ИСПРАВЛЕННЫЕ ФУНКЦИИ для сохранения/восстановления позиции ---------- #
+
+    def _save_cube_geom(self):
+        """Сохраняет текущую позицию окна vkcube с помощью xdotool."""
+        if not self._xdotool_available:
+            return
+        try:
+            import subprocess
+            # Ищем окно по имени (обычно "vkcube"), если не найдено, пробуем по классу
+            output = subprocess.check_output(
+                ["xdotool", "search", "--name", "vkcube"],
+                timeout=2, stderr=subprocess.DEVNULL
+            ).decode().strip()
+            if not output:
+                # fallback на класс
+                output = subprocess.check_output(
+                    ["xdotool", "search", "--class", "vkcube"],
+                    timeout=2, stderr=subprocess.DEVNULL
+                ).decode().strip()
+            if not output:
+                print("xdotool: окно vkcube не найдено для сохранения позиции")
+                return
+            wid = output.split("\n")[0]
+            geo = subprocess.check_output(
+                ["xdotool", "getwindowgeometry", wid], timeout=2
+            ).decode()
+            x = y = w = h = None
+            for line in geo.split("\n"):
+                if "Position:" in line:
+                    parts = line.split(":")[1].strip().split(",")
+                    x, y = int(parts[0]), int(parts[1])
+                if "Geometry:" in line:
+                    parts = line.split(":")[1].strip().split("x")
+                    w, h = int(parts[0]), int(parts[1])
+            if None not in (x, y, w, h):
+                self._cube_geom = {"x": x, "y": y, "w": w, "h": h}
+                print(f"Сохранена позиция vkcube: x={x}, y={y}, w={w}, h={h}")
+            else:
+                print("xdotool: не удалось распарсить геометрию окна")
+        except Exception as e:
+            print(f"_save_cube_geom ошибка: {e}")
+
+    def _restore_cube_geom(self):
+        """Восстанавливает сохранённую позицию окна vkcube (с повторными попытками)."""
+        if not self._xdotool_available or self._cube_geom is None:
+            return
+        try:
+            import subprocess, time
+            # Пытаемся найти окно до 15 раз с паузой 0.3 с
+            for attempt in range(15):
+                time.sleep(0.3)
+                # сначала по имени, потом по классу
+                output = subprocess.check_output(
+                    ["xdotool", "search", "--name", "vkcube"],
+                    timeout=1, stderr=subprocess.DEVNULL
+                ).decode().strip()
+                if not output:
+                    output = subprocess.check_output(
+                        ["xdotool", "search", "--class", "vkcube"],
+                        timeout=1, stderr=subprocess.DEVNULL
+                    ).decode().strip()
+                if output:
+                    wid = output.split("\n")[0]
+                    subprocess.run(
+                        ["xdotool", "windowmove", wid,
+                         str(self._cube_geom["x"]), str(self._cube_geom["y"])],
+                        timeout=2, check=True
+                    )
+                    print(f"Восстановлена позиция vkcube: x={self._cube_geom['x']}, y={self._cube_geom['y']}")
+                    return
+            print("xdotool: окно vkcube не появилось в течение ~4.5 секунд, позиция не восстановлена")
+        except Exception as e:
+            print(f"_restore_cube_geom ошибка: {e}")
+
     # ---------- Preview / Run ---------- #
 
     def _update_previews(self):
@@ -821,9 +875,13 @@ class GameScopeMangoHudApp(QMainWindow):
         mode = self._preview_mode
         if mode is None:
             return
+        # Сначала сохраняем текущую позицию окна (если оно существует)
         self._save_cube_geom()
+        # Останавливаем старый процесс
         self._stop_all_previews()
+        # Запускаем новый
         self._start_preview(mode)
+        # Восстанавливаем позицию (с повторными попытками)
         self._restore_cube_geom()
 
     def _stop_preview(self, mode):
