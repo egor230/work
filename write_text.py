@@ -1,36 +1,37 @@
 import sys, os, subprocess, json, wave, io, threading, re, time, warnings, collections, evdev, glob, time, subprocess, sys#, webrtcvad
-from evdev import UInput, ecodes
+from evdev import UInput, ecodes  # виртуальная клавиатура через evdev
 from scipy.io.wavfile import write
-from PyQt6 import QtCore, QtWidgets, QtGui
+from PyQt6 import QtCore, QtWidgets, QtGui  # GUI framework
 from PyQt6.QtCore import QTimer, QObject, pyqtSignal, Qt, QThread
 from PyQt6.QtGui import QIcon, QFont, QAction
 from PyQt6.QtWidgets import ( QApplication, QWidget, QLabel, QVBoxLayout, QSystemTrayIcon, QMenu,
  QSlider, QMainWindow, QPushButton, QDialog)
-from queue import Queue
-import sounddevice as sd
-import tkinter as tk
+from queue import Queue  # очередь для потоков
+import sounddevice as sd  # запись аудио
+import tkinter as tk  # для определения раскладки клавиатуры
 from tkinter import Frame, Label
 from scipy.io import wavfile
 import soundfile as sf
 from scipy import signal
 import numpy as np
 from pathlib import Path
-# from faster_whisper import WhisperModel
-from pynput.keyboard import Controller, Key, Listener
+# from faster_whisper import WhisperModel  # модель распознавания речи (закомментирована)
+from pynput.keyboard import Controller, Key, Listener  # управление клавиатурой
 from pynput import keyboard, mouse
-from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor
+from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor  # нейросеть для транскрипции
 import torch, librosa, math
 import logging
 warnings.filterwarnings("ignore")
 # --- Конфигурация модели ---
 warnings.filterwarnings("ignore", category=DeprecationWarning)
-# Полное отключение мусора
+# Полное отключение мусора вывода библиотек
 os.environ["TRANSFORMERS_VERBOSITY"] = "error"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
 os.environ["BITSANDBYTES_NOWELCOME"] = "1"
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
+# Подавляем логи лишних модулей
 logging.getLogger("librosa").setLevel(logging.ERROR)
 logging.getLogger("audioread").setLevel(logging.ERROR)
 logging.getLogger("paramiko").setLevel(logging.ERROR)
@@ -42,84 +43,69 @@ class SmartTyper:
    subprocess.run(["sudo", "modprobe", "ntsync"], capture_output=True)
   except Exception:
    pass
-  
-  # 1. Общие символы (одинаково печатаются в обеих раскладках)
   self.COMMON_MAP = {
-   ' ': ecodes.KEY_SPACE, '\n': ecodes.KEY_ENTER, '\t': ecodes.KEY_TAB,
-   '1': ecodes.KEY_1, '2': ecodes.KEY_2, '3': ecodes.KEY_3, '4': ecodes.KEY_4,
-   '5': ecodes.KEY_5, '6': ecodes.KEY_6, '7': ecodes.KEY_7, '8': ecodes.KEY_8,
-   '9': ecodes.KEY_9, '0': ecodes.KEY_0, '-': ecodes.KEY_MINUS, '=': ecodes.KEY_EQUAL,
-   '\\': ecodes.KEY_BACKSLASH, '!': ecodes.KEY_1, '%': ecodes.KEY_5, '*': ecodes.KEY_8,
-   '(': ecodes.KEY_9, ')': ecodes.KEY_0, '_': ecodes.KEY_MINUS, '+': ecodes.KEY_EQUAL, '…': ecodes.KEY_DOT
+   ' ': ecodes.KEY_SPACE,
+   '\n': ecodes.KEY_ENTER,
+   '\t': ecodes.KEY_TAB,
+   '1': ecodes.KEY_1,
+   '2': ecodes.KEY_2,
+   '3': ecodes.KEY_3,
+   '4': ecodes.KEY_4,
+   '5': ecodes.KEY_5,
+   '6': ecodes.KEY_6,
+   '7': ecodes.KEY_7,
+   '8': ecodes.KEY_8,
+   '9': ecodes.KEY_9,
+   '0': ecodes.KEY_0,
+   '-': ecodes.KEY_MINUS,
+   '=': ecodes.KEY_EQUAL,
+   '\\': ecodes.KEY_BACKSLASH,
+   '!': ecodes.KEY_1,
+   '%': ecodes.KEY_5,
+   '(': ecodes.KEY_9,
+   ')': ecodes.KEY_0,
+   '_': ecodes.KEY_MINUS,
+   '+': ecodes.KEY_EQUAL,
+   '…': ecodes.KEY_DOT
   }
-  self.COMMON_SHIFT = set(['!', '%', '*', '(', ')', '_', '+'])
-  
-  # 2. Английские буквы
+  self.COMMON_SHIFT = set(['!', '%', '(', ')', '_', '+'])
   self.EN_MAP = {
-   'q': ecodes.KEY_Q, 'w': ecodes.KEY_W, 'e': ecodes.KEY_E, 'r': ecodes.KEY_R, 't': ecodes.KEY_T,
-   'y': ecodes.KEY_Y, 'u': ecodes.KEY_U, 'i': ecodes.KEY_I, 'o': ecodes.KEY_O, 'p': ecodes.KEY_P,
-   'a': ecodes.KEY_A, 's': ecodes.KEY_S, 'd': ecodes.KEY_D, 'f': ecodes.KEY_F, 'g': ecodes.KEY_G,
-   'h': ecodes.KEY_H, 'j': ecodes.KEY_J, 'k': ecodes.KEY_K, 'l': ecodes.KEY_L, 'z': ecodes.KEY_Z,
-   'x': ecodes.KEY_X, 'c': ecodes.KEY_C, 'v': ecodes.KEY_V, 'b': ecodes.KEY_B, 'n': ecodes.KEY_N,
-   'm': ecodes.KEY_M
+   'q': ecodes.KEY_Q, 'w': ecodes.KEY_W, 'e': ecodes.KEY_E, 'r': ecodes.KEY_R, 't': ecodes.KEY_T, 'y': ecodes.KEY_Y, 'u': ecodes.KEY_U, 'i': ecodes.KEY_I, 'o': ecodes.KEY_O, 'p': ecodes.KEY_P,
+   'a': ecodes.KEY_A, 's': ecodes.KEY_S, 'd': ecodes.KEY_D, 'f': ecodes.KEY_F, 'g': ecodes.KEY_G, 'h': ecodes.KEY_H, 'j': ecodes.KEY_J, 'k': ecodes.KEY_K, 'l': ecodes.KEY_L,
+   'z': ecodes.KEY_Z, 'x': ecodes.KEY_X, 'c': ecodes.KEY_C, 'v': ecodes.KEY_V, 'b': ecodes.KEY_B, 'n': ecodes.KEY_N, 'm': ecodes.KEY_M
   }
-  
-  # 3. Русские буквы
   self.RU_MAP = {
-   'й': ecodes.KEY_Q, 'ц': ecodes.KEY_W, 'у': ecodes.KEY_E, 'к': ecodes.KEY_R, 'е': ecodes.KEY_T,
-   'н': ecodes.KEY_Y, 'г': ecodes.KEY_U, 'ш': ecodes.KEY_I, 'щ': ecodes.KEY_O, 'з': ecodes.KEY_P,
-   'х': ecodes.KEY_LEFTBRACE, 'ъ': ecodes.KEY_RIGHTBRACE, 'ф': ecodes.KEY_A, 'ы': ecodes.KEY_S,
-   'в': ecodes.KEY_D, 'а': ecodes.KEY_F, 'п': ecodes.KEY_G, 'р': ecodes.KEY_H, 'о': ecodes.KEY_J,
-   'л': ecodes.KEY_K, 'д': ecodes.KEY_L, 'ж': ecodes.KEY_SEMICOLON, 'э': ecodes.KEY_APOSTROPHE,
-   'я': ecodes.KEY_Z, 'ч': ecodes.KEY_X, 'с': ecodes.KEY_C, 'м': ecodes.KEY_V, 'и': ecodes.KEY_B,
-   'т': ecodes.KEY_N, 'ь': ecodes.KEY_M, 'б': ecodes.KEY_COMMA, 'ю': ecodes.KEY_DOT, 'ё': ecodes.KEY_GRAVE
+   'й': ecodes.KEY_Q, 'ц': ecodes.KEY_W, 'у': ecodes.KEY_E, 'к': ecodes.KEY_R, 'е': ecodes.KEY_T, 'н': ecodes.KEY_Y, 'г': ecodes.KEY_U, 'ш': ecodes.KEY_I, 'щ': ecodes.KEY_O, 'з': ecodes.KEY_P, 'х': ecodes.KEY_LEFTBRACE,
+   'ъ': ecodes.KEY_RIGHTBRACE,
+   'ф': ecodes.KEY_A, 'ы': ecodes.KEY_S, 'в': ecodes.KEY_D, 'а': ecodes.KEY_F, 'п': ecodes.KEY_G, 'р': ecodes.KEY_H, 'о': ecodes.KEY_J, 'л': ecodes.KEY_K, 'д': ecodes.KEY_L, 'ж': ecodes.KEY_SEMICOLON,
+   'э': ecodes.KEY_APOSTROPHE,
+   'я': ecodes.KEY_Z, 'ч': ecodes.KEY_X, 'с': ecodes.KEY_C, 'м': ecodes.KEY_V, 'и': ecodes.KEY_B, 'т': ecodes.KEY_N, 'ь': ecodes.KEY_M, 'б': ecodes.KEY_COMMA, 'ю': ecodes.KEY_DOT, 'ё': ecodes.KEY_GRAVE
   }
-  
-  # 4. Строго английская пунктуация (требует английскую раскладку)
   self.EN_ONLY_PUNCT = {
-   '@': ecodes.KEY_2, '#': ecodes.KEY_3, '$': ecodes.KEY_4, '^': ecodes.KEY_6, '&': ecodes.KEY_7,
-   '{': ecodes.KEY_LEFTBRACE, '}': ecodes.KEY_RIGHTBRACE, '|': ecodes.KEY_BACKSLASH,
-   '<': ecodes.KEY_COMMA, '>': ecodes.KEY_DOT, '~': ecodes.KEY_GRAVE,
-   '`': ecodes.KEY_GRAVE, '[': ecodes.KEY_LEFTBRACE, ']': ecodes.KEY_RIGHTBRACE
+   '@': ecodes.KEY_2, '$': ecodes.KEY_4, '^': ecodes.KEY_6, '&': ecodes.KEY_7, '{': ecodes.KEY_LEFTBRACE, '}': ecodes.KEY_RIGHTBRACE, '|': ecodes.KEY_BACKSLASH, '<': ecodes.KEY_COMMA, '>': ecodes.KEY_DOT,
+   '~': ecodes.KEY_GRAVE, '`': ecodes.KEY_GRAVE, '[': ecodes.KEY_LEFTBRACE, ']': ecodes.KEY_RIGHTBRACE
   }
-  self.EN_ONLY_PUNCT_SHIFT = set(['@', '#', '$', '^', '&', '{', '}', '|', '<', '>', '~'])
-  
-  # 5. Строго русская пунктуация (требует русскую раскладку)
+  self.EN_ONLY_PUNCT_SHIFT = set(['@', '$', '^', '&', '{', '}', '|', '<', '>', '~'])
   self.RU_ONLY_PUNCT = {
-   '№': ecodes.KEY_3
+   '№': ecodes.KEY_3,
+   '«': ecodes.KEY_COMMA,
+   '»': ecodes.KEY_DOT,
+   '—': ecodes.KEY_MINUS,
+   '…': ecodes.KEY_SEMICOLON,
+   '§': ecodes.KEY_GRAVE,
+   '±': ecodes.KEY_GRAVE,
   }
-  self.RU_ONLY_PUNCT_SHIFT = set(['№'])
-  
-  # 6. Универсальная пунктуация (работает в ОБЕИХ раскладках, БЕЗ переключения)
-  # Для английской раскладки
+  self.RU_ONLY_PUNCT_SHIFT = set(['№', '«', '»', '—', '…', '§', '±'])
   self.PUNCT_EN = {
-   ',': ecodes.KEY_COMMA,
-   '.': ecodes.KEY_DOT,
-   '/': ecodes.KEY_SLASH,
-   ';': ecodes.KEY_SEMICOLON,
-   "'": ecodes.KEY_APOSTROPHE,
-   '?': ecodes.KEY_SLASH,
-   ':': ecodes.KEY_SEMICOLON,
-   '"': ecodes.KEY_APOSTROPHE
+   ',': ecodes.KEY_COMMA, '.': ecodes.KEY_DOT, '/': ecodes.KEY_SLASH, ';': ecodes.KEY_SEMICOLON, '\'': ecodes.KEY_APOSTROPHE, '?': ecodes.KEY_SLASH, ':': ecodes.KEY_SEMICOLON, '"': ecodes.KEY_APOSTROPHE
   }
   self.PUNCT_EN_SHIFT = set(['?', ':', '"'])
-  
-  # Для русской раскладки
   self.PUNCT_RU = {
-   ',': ecodes.KEY_SLASH,
-   '.': ecodes.KEY_SLASH,
-   '/': ecodes.KEY_BACKSLASH,
-   ';': ecodes.KEY_4,
-   '?': ecodes.KEY_7,
-   ':': ecodes.KEY_6,
-   '"': ecodes.KEY_2
+   ',': ecodes.KEY_SLASH, '.': ecodes.KEY_SLASH, '/': ecodes.KEY_BACKSLASH, ';': ecodes.KEY_4, '?': ecodes.KEY_7, ':': ecodes.KEY_6, '"': ecodes.KEY_2
   }
   self.PUNCT_RU_SHIFT = set([',', '/', ';', '?', ':', '"'])
-  
   self.physical_keyboard = self.find_keyboard()
   self.ui = self.create_virtual_keyboard()
-  
-  # --- ВКЛЮЧЕНИЕ NUMLOCK С ГАРАНТИЕЙ LED ---
   self.ensure_numlock_on()
  
  def find_keyboard(self):
@@ -130,64 +116,48 @@ class SmartTyper:
      return dev
    except Exception:
     continue
-  print("[ERROR] Клавиатура не найдена. Запустите скрипт с sudo.")
+  print("Клавиатура не найдена. Запустите скрипт с sudo.")
   sys.exit(1)
  
  def create_virtual_keyboard(self):
   capabilities = {
-   ecodes.EV_KEY: [ecodes.KEY_A, ecodes.KEY_B, ecodes.KEY_C, ecodes.KEY_D, ecodes.KEY_E, ecodes.KEY_F,
-                   ecodes.KEY_G, ecodes.KEY_H, ecodes.KEY_I, ecodes.KEY_J, ecodes.KEY_K, ecodes.KEY_L, ecodes.KEY_M,
-                   ecodes.KEY_N, ecodes.KEY_O, ecodes.KEY_P, ecodes.KEY_Q, ecodes.KEY_R, ecodes.KEY_S, ecodes.KEY_T,
-                   ecodes.KEY_U, ecodes.KEY_V, ecodes.KEY_W, ecodes.KEY_X, ecodes.KEY_Y, ecodes.KEY_Z, ecodes.KEY_SPACE,
-                   ecodes.KEY_LEFTSHIFT, ecodes.KEY_RIGHTSHIFT, ecodes.KEY_COMMA, ecodes.KEY_DOT, ecodes.KEY_ENTER, ecodes.KEY_TAB,
-                   ecodes.KEY_1, ecodes.KEY_2, ecodes.KEY_3, ecodes.KEY_4, ecodes.KEY_5, ecodes.KEY_6, ecodes.KEY_7, ecodes.KEY_8,
-                   ecodes.KEY_9, ecodes.KEY_0, ecodes.KEY_SEMICOLON, ecodes.KEY_APOSTROPHE, ecodes.KEY_GRAVE,
-                   ecodes.KEY_LEFTBRACE, ecodes.KEY_RIGHTBRACE, ecodes.KEY_BACKSLASH,
-                   ecodes.KEY_MINUS, ecodes.KEY_EQUAL, ecodes.KEY_SLASH,
-                   ecodes.KEY_NUMLOCK
-                   ],
-   ecodes.EV_LED: [ecodes.LED_NUML]
+   ecodes.EV_KEY: [
+    ecodes.KEY_A, ecodes.KEY_B, ecodes.KEY_C, ecodes.KEY_D, ecodes.KEY_E, ecodes.KEY_F, ecodes.KEY_G, ecodes.KEY_H, ecodes.KEY_I, ecodes.KEY_J, ecodes.KEY_K, ecodes.KEY_L, ecodes.KEY_M, ecodes.KEY_N, ecodes.KEY_O,
+    ecodes.KEY_P, ecodes.KEY_Q, ecodes.KEY_R, ecodes.KEY_S, ecodes.KEY_T, ecodes.KEY_U, ecodes.KEY_V, ecodes.KEY_W, ecodes.KEY_X, ecodes.KEY_Y, ecodes.KEY_Z,
+    ecodes.KEY_SPACE, ecodes.KEY_LEFTSHIFT, ecodes.KEY_RIGHTSHIFT, ecodes.KEY_COMMA, ecodes.KEY_DOT, ecodes.KEY_ENTER, ecodes.KEY_TAB,
+    ecodes.KEY_1, ecodes.KEY_2, ecodes.KEY_3, ecodes.KEY_4, ecodes.KEY_5, ecodes.KEY_6, ecodes.KEY_7, ecodes.KEY_8, ecodes.KEY_9, ecodes.KEY_0,
+    ecodes.KEY_SEMICOLON, ecodes.KEY_APOSTROPHE, ecodes.KEY_GRAVE, ecodes.KEY_LEFTBRACE, ecodes.KEY_RIGHTBRACE, ecodes.KEY_BACKSLASH, ecodes.KEY_MINUS, ecodes.KEY_EQUAL, ecodes.KEY_SLASH, ecodes.KEY_NUMLOCK,
+    ecodes.KEY_CAPSLOCK
+   ],
+   ecodes.EV_LED: [ecodes.LED_NUML, ecodes.LED_CAPSL]
   }
-  
-  ui = UInput(capabilities, vendor=0x1234, product=0x5678,
-              bustype=ecodes.BUS_USB, name="Smart-Virtual-Keyboard"
-              )
-  
+  ui = UInput(capabilities, vendor=0x1234, product=0x5678, bustype=ecodes.BUS_USB, name="Smart-Virtual-Keyboard")
   try:
    self.physical_keyboard.set_led(ecodes.LED_NUML, 1)
   except Exception as e:
-   print(f"[WARN] Не удалось установить LED на физической клавиатуре: {e}")
-  
+   print(f"Не удалось установить LED на физической клавиатуре: {e}")
   ui.write(ecodes.EV_KEY, ecodes.KEY_NUMLOCK, 1)
   ui.syn()
   time.sleep(0.06)
   ui.write(ecodes.EV_KEY, ecodes.KEY_NUMLOCK, 0)
   ui.syn()
   time.sleep(0.1)
-  
   ui.write(ecodes.EV_LED, ecodes.LED_NUML, 1)
   ui.syn()
-  # time.sleep(0.06)
-  
   return ui
  
- def ensure_numlock_on(self):#Надёжно включает NumLock и держит индикатор включённым"""
-  print("[INFO] Принудительное включение NumLock...")
- # for _ in range(3):
+ def ensure_numlock_on(self):
+  print("Принудительное включение NumLock...")
   try:
-    self.physical_keyboard.set_led(ecodes.LED_NUML, 1)
-    self.ui.write(ecodes.EV_LED, ecodes.LED_NUML, 1)
-    self.ui.syn()
-    
-    # Эмуляция нажатия NumLock
-    self.ui.write(ecodes.EV_KEY, ecodes.KEY_NUMLOCK, 1)
-    self.ui.syn()
-    time.sleep(0.5)
-    # self.ui.write(ecodes.EV_KEY, ecodes.KEY_NUMLOCK, 0)
-    # self.ui.syn()
+   self.physical_keyboard.set_led(ecodes.LED_NUML, 1)
+   self.ui.write(ecodes.EV_LED, ecodes.LED_NUML, 1)
+   self.ui.syn()
+   self.ui.write(ecodes.EV_KEY, ecodes.KEY_NUMLOCK, 1)
+   self.ui.syn()
+   time.sleep(0.5)
   except Exception as e:
-   print(f"[WARN] Ошибка при включении NumLock: {e}")
-   time.sleep(0.2)
+   print(f"Ошибка при включении NumLock: {e}")
+  time.sleep(0.2)
  
  def get_current_layout(self):
   try:
@@ -203,120 +173,77 @@ class SmartTyper:
    return 'us'
  
  def is_capslock_on(self):
-  """Улучшенное определение Caps Lock несколькими способами"""
   try:
-   # Способ 1: Через xset LED mask (самый надёжный)
    cmd = "xset -q | grep -A 0 'LED mask' | awk '{print $10}'"
    result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=2)
    mask_str = result.stdout.strip()
-   
    if mask_str:
     mask = int(mask_str, 16)
-    # Caps Lock бит — обычно 3-й байт (0x00000004)
     if mask & 0x00000004:
      return True
-    
-   #  # Альтернативные биты (на некоторых системах)
-   #  if mask & 0x00000001 or mask & 0x00000002:
-   #   return True
-   #
-   # # Способ 2: Через xset q напрямую
-   # cmd2 = "xset q | grep -i 'caps lock'"
-   # result2 = subprocess.run(cmd2, shell=True, capture_output=True, text=True, timeout=2)
-   # if "on" in result2.stdout.lower():
-   #  return True
-   #
-   # # Способ 3: Через evdev (физическая клавиатура)
-   # if hasattr(self.physical_keyboard, 'leds'):
-   #  return ecodes.LED_CAPSL in self.physical_keyboard.leds()
-   #
   except Exception as e:
-   print(f"[WARN] Ошибка определения Caps Lock: {e}")
-  
+   print(f"Ошибка определения Caps Lock: {e}")
   return False
+ def disable_capslock(self):
+  if self.is_capslock_on():
+   try:
+    self.ui.write(ecodes.EV_KEY, ecodes.KEY_CAPSLOCK, 1)
+    self.ui.syn()
+    time.sleep(0.05)
+    self.ui.write(ecodes.EV_KEY, ecodes.KEY_CAPSLOCK, 0)
+    self.ui.syn()
+    time.sleep(0.05)
+   except Exception as e:
+    print(f"Ошибка при сбросе Caps Lock: {e}")
  
  def set_layout(self, lang):
-  """Надёжное переключение раскладки"""
-  for attempt in range(10):
-   current = self.get_current_layout()
-   if current == lang:
-    return True
-   
-   try:
-    subprocess.run(["xte", "key ISO_Next_Group"], check=True, timeout=1)
-    time.sleep(1.3)
-    if self.get_current_layout() == lang:
+   for attempt in range(10):
+    current = self.get_current_layout()
+    if current == lang:
      return True
-   except Exception:
-    pass
-   
-   # try:
-   #  subprocess.run(["xdotool", "key", "ISO_Next_Group"], check=True, timeout=1)
-   #  time.sleep(1.2)
-   #  if self.get_current_layout() == lang:
-   #   return True
-   # except Exception:
-   #  pass
-   #
-   # try:
-   #  if lang == 'us':
-   #   subprocess.run(["setxkbmap", "-layout", "us"], check=True, timeout=1)
-   #  else:
-   #   subprocess.run(["setxkbmap", "-layout", "ru"], check=True, timeout=1)
-   #  time.sleep(1.15)
-   #  if self.get_current_layout() == lang:
-   #   return True
-   except Exception:
-    pass
-   
-   time.sleep(0.1)
-  
-  print(f"[ERROR] Не удалось переключить раскладку на {lang} после 10 попыток!")
-  return False
+    try:
+     subprocess.run(["xte", "key ISO_Next_Group"], check=True, timeout=1)
+     time.sleep(1.3)
+     if self.get_current_layout() == lang:
+      return True
+    except Exception:
+     pass
+    time.sleep(0.1)
+   print(f"Не удалось переключить раскладку на {lang} после 10 попыток!")
+   return False
  
  def type_text(self, text, delay=0.05):
   shift_delay = 0.1
   original_layout = self.get_current_layout()
   current_layout = original_layout
-  
-  # print(f"[INFO] Начало печати. Исходная раскладка: {original_layout}")
-
   caps_on = self.is_capslock_on()
-  # print(f"[INFO] Caps Lock: {'ON' if caps_on else 'OFF'}")
+  self.disable_capslock()
   for ch in text:
    needed_layout = current_layout
    lower_ch = ch.lower()
-   
-   # Учёт Caps Lock
-   if caps_on:# учет регистра.
+   if caps_on:
     effective_upper = not ch.isupper()
    else:
     effective_upper = ch.isupper()
-   
    if ch in self.COMMON_MAP:
     keycode = self.COMMON_MAP[ch]
     need_shift = ch in self.COMMON_SHIFT
-   
    elif lower_ch in self.RU_MAP:
     needed_layout = 'ru'
     keycode = self.RU_MAP[lower_ch]
     need_shift = effective_upper
-   
    elif lower_ch in self.EN_MAP:
     needed_layout = 'us'
     keycode = self.EN_MAP[lower_ch]
     need_shift = effective_upper
-   
    elif ch in self.EN_ONLY_PUNCT:
     needed_layout = 'us'
     keycode = self.EN_ONLY_PUNCT[ch]
     need_shift = ch in self.EN_ONLY_PUNCT_SHIFT
-   
    elif ch in self.RU_ONLY_PUNCT:
     needed_layout = 'ru'
     keycode = self.RU_ONLY_PUNCT[ch]
     need_shift = ch in self.RU_ONLY_PUNCT_SHIFT
-   
    elif ch in self.PUNCT_EN or ch in self.PUNCT_RU:
     needed_layout = current_layout
     if current_layout == 'us':
@@ -327,46 +254,32 @@ class SmartTyper:
      need_shift = ch in self.PUNCT_RU_SHIFT
    else:
     continue
-   
    if current_layout != needed_layout:
-#    print(f"[SWITCH] {current_layout} -> {needed_layout} для символа '{ch}'")
     success = self.set_layout(needed_layout)
     if success:
      current_layout = needed_layout
     else:
-     print(f"[ERROR] НЕ ПЕРЕКЛЮЧИЛОСЬ! Текущая: {self.get_current_layout()}")
+     print(f"НЕ ПЕРЕКЛЮЧИЛОСЬ! Текущая: {self.get_current_layout()}")
      time.sleep(0.3)
      if self.set_layout(needed_layout):
       current_layout = needed_layout
      else:
       continue
-   
    if need_shift:
     self.ui.write(ecodes.EV_KEY, ecodes.KEY_LEFTSHIFT, 1)
     self.ui.syn()
     time.sleep(shift_delay)
-   
-   # self.ui.write(ecodes.EV_LED, ecodes.LED_NUML, 1)
-   # self.ui.syn()
-   
    self.ui.write(ecodes.EV_KEY, keycode, 1)
    self.ui.syn()
    time.sleep(delay / 3.5)
    self.ui.write(ecodes.EV_KEY, keycode, 0)
    self.ui.syn()
-   
    if need_shift:
     self.ui.write(ecodes.EV_KEY, ecodes.KEY_LEFTSHIFT, 0)
     self.ui.syn()
-   
-   # time.sleep(delay)
-  
-  # Восстановление
   final = self.get_current_layout()
-  if final != original_layout: #  print(f"[RESTORE] Восстанавливаю раскладку: {final} -> {original_layout}")
+  if final != original_layout:
    self.set_layout(original_layout)
-  
-  # self.ensure_numlock_on()
 class save_key:
  def __init__(self):
   self.text = ""
@@ -501,6 +414,41 @@ def process_text(previous_message1):
     press_keys(text0)
   else:
     press_keys(text)
+
+# === ТЕСТЫ CapsLock и раскладки ===
+def run_tests():
+ # Тест 1: Русское слово при английской раскладке — должно напечатать английскими буквами
+ print("Тест 1: русское слово 'привет' при английской раскладке → 'hfydjr'")
+ press_keys("привет")
+ time.sleep(0.5)
+ # Тест 2: То же слово + CapsLock ON — должно напечатать ЗАГЛАВНЫМИ английскими буквами
+ print("Тест 2: 'привет' + CapsLock ON → 'HFYDJR'")
+ press_keys("привет")
+ time.sleep(0.5)
+ # Тест 3: Русское слово при русской раскладке — печатает русскими буквами
+ print("Тест 3: 'привет' при русской раскладке → 'привет'")
+ press_keys("привет")
+ time.sleep(0.5)
+ # Тест 4: Русское слово + CapsLock ON при русской раскладке — заглавные русские
+ print("Тест 4: 'привет' + CapsLock ON при русской → 'ПРИВЕТ'")
+ press_keys("привет")
+ time.sleep(0.5)
+ # Тест 5: Английское слово при русской раскладке — должно напечатать латиницей
+ print("Тест 5: английское 'hello' при русской раскладке → 'hello'")
+ press_keys("hello")
+ time.sleep(0.5)
+ # Тест 6: Английское слово + CapsLock ON при русской раскладке — ЗАГЛАВНЫЕ латиницей
+ print("Тест 6: 'hello' + CapsLock ON при русской → 'HELLO'")
+ press_keys("hello")
+ time.sleep(0.5)
+ # Тест 7: Смешанное слово с заглавной буквой без CapsLock — первая буква заглавная, остальные строчные
+ print("Тест 7: 'Привет' без CapsLock — первая заглавная → 'Привет'")
+ press_keys("Привет")
+ time.sleep(0.5)
+ # Тест 8: Английское слово с заглавной буквой без CapsLock
+ print("Тест 8: 'Hello' без CapsLock → 'Hello'")
+ press_keys("Hello")
+ time.sleep(0.5)
 
 def record_audio(filename = "temp.wav", duration=10, fs=48000):  # Запись аудио с микрофона
  print("star...")
@@ -835,3 +783,40 @@ def get_mute_status(source_id):  # Получает статус Mute для и�
  #         response = response.split('[Возможная интерпретация]')[0].strip()
  #
  #     return response
+
+
+    # self.ui.write(ecodes.EV_KEY, ecodes.KEY_NUMLOCK, 0)
+    # self.ui.syn()
+   #  # Альтернативные биты (на некоторых системах)
+   #  if mask & 0x00000001 or mask & 0x00000002:
+   #   return True
+   #
+   # # Способ 2: Через xset q напрямую
+   # cmd2 = "xset q | grep -i 'caps lock'"
+   # result2 = subprocess.run(cmd2, shell=True, capture_output=True, text=True, timeout=2)
+   # if "on" in result2.stdout.lower():
+   #  return True
+   #
+   # # Способ 3: Через evdev (физическая клавиатура)
+   # if hasattr(self.physical_keyboard, 'leds'):
+   #  return ecodes.LED_CAPSL in self.physical_keyboard.leds()
+   #
+   # self.ui.write(ecodes.EV_LED, ecodes.LED_NUML, 1)
+   # self.ui.syn()
+   # try:
+   #  subprocess.run(["xdotool", "key", "ISO_Next_Group"], check=True, timeout=1)
+   #  time.sleep(1.2)
+   #  if self.get_current_layout() == lang:
+   #   return True
+   # except Exception:
+   #  pass
+   #
+   # try:
+   #  if lang == 'us':
+   #   subprocess.run(["setxkbmap", "-layout", "us"], check=True, timeout=1)
+   #  else:
+   #   subprocess.run(["setxkbmap", "-layout", "ru"], check=True, timeout=1)
+   #  time.sleep(1.15)
+   #  if self.get_current_layout() == lang:
+   #   return True
+  # self.ensure_numlock_on()

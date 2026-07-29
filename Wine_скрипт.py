@@ -62,12 +62,12 @@ if [ "$current_layout" == "00000002" ]; then
 fi
 cd "{0}"
 
-export WINEPREFIX="/home/egor/PortProton/data/prefixes/DEFAULT" winetricks dxvk
-#DXVK_HUD=fps gamescope $GAMESCOPE_ARGS wine \"{1}\" # --dx11 -skipintro 1
-#DXVK_HUD=fps wine \"{1}\"# --dx11 -skipintro 1
-#gamescope $GAMESCOPE_ARGS -- env MANGOHUD=1 wine \"{1}\" # --dx11 -skipintro 1
-#gamescope $GAMESCOPE_ARGS wine \"{1}\" #--dx11 -skipintro 1
-wine "{1}" #--dx11 -skipintro 1
+export WINEPREFIX="/home/egor/PortProton/data/prefixes/DEFAULT" # winetricks dxvk
+#DXVK_HUD=fps gamescope $GAMESCOPE_ARGS wine \"{1}\" -skipintro 1 # --dx11 -skipintro 1
+#DXVK_HUD=fps wine \"{1}\" -skipintro 1 # --dx11 -skipintro 1
+#gamescope $GAMESCOPE_ARGS -- env MANGOHUD=1 wine \"{1}\" -skipintro 1 # --dx11 -skipintro 1
+#gamescope $GAMESCOPE_ARGS wine \"{1}\" -skipintro 1 #--dx11 -skipintro 1
+wine "{1}" -skipintro 1 #--dx11 -skipintro 1
 # portproton \"{1}\"
 exit 0
 '''.format(directory, filename)
