@@ -146,10 +146,10 @@
         "value": [
             "all",
             "Multimedia",
-            "Graphics",
             "Games",
-            "Office",
+            "Graphics",
             "Internet",
+            "Office",
             "Accessories",
             "Administration",
             "favorite_files",
@@ -162,7 +162,7 @@
     "custom-menu-width": {
         "type": "generic",
         "default": 800,
-        "value": 1396.4087982177734
+        "value": 1382.05078125
     },
     "custom-menu-height": {
         "type": "generic",
@@ -173,26 +173,26 @@
         "type": "generic",
         "default": [],
         "value": [
-            "yandex-browser.desktop",
-            "alacarte-made-892e7095-0894-11f1-8ed9-10ffe0293379.desktop",
-            "virtualbox.desktop",
-            "mintwelcome.desktop",
-            "mintupdate.desktop",
-            "Deus Ex Human.desktop",
-            "Gta Sa.desktop",
-            "Resident Evil 2 Remake.desktop",
             "alacarte-made-ae28dbfb-08a5-11f1-980c-10ffe0293379.desktop",
-            "Quantum Break.desktop",
-            "timeshift-gtk.desktop",
-            "org.gnome.DiskUtility.desktop",
+            "cinnamon-settings-startup.desktop",
+            "hiddify.desktop",
+            "alacarte-made-892e7095-0894-11f1-8ed9-10ffe0293379.desktop",
+            "alacarte-made-67ebfe5b-089b-11f1-8267-10ffe0293379.desktop",
+            "mintupdate.desktop",
             null,
+            "timeshift-gtk.desktop",
+            "alacarte-made-bdc0156d-81c3-11f1-b772-10ffe0293379.desktop",
             "google-chrome.desktop",
             null,
-            "Assassins Creed IV Black Flag.desktop",
-            "alacarte-made-15a3f15a-fd4a-11f0-822d-10ffe0293379.desktop",
+            "org.gnome.Calculator.desktop",
+            "Gta Sa.desktop",
+            "TES4: Oblivion.desktop",
             null,
-            "AI.desktop",
-            "alacarte-made-67ebfe5b-089b-11f1-8267-10ffe0293379.desktop"
+            "Quantum Break.desktop",
+            "alacarte-made-2a0eb4b9-fcc5-11f0-b631-10ffe0293379.desktop",
+            "alacarte-made-79eaeb47-88b7-11f1-a3aa-10ffe0293379.desktop",
+            null,
+            "io.github.benjamimgois.goverlay.desktop"
         ]
     },
     "search-start-folder": {

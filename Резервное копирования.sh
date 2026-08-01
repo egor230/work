@@ -18,23 +18,18 @@ mkdir -p "reze"
 # Пути
 dest_path="./reze"
 source_path="$HOME"
-backup_dir="/mnt/807EB5FA7EB5E954/python_linux/User data backup"
 
 if [ "$choice" == "1" ]; then
   echo "Запуск резервного копирования настроек из $source_path..."
   # Используем exclude, чтобы не копировать лишнее и mnt
-  sudo rsync -avh --progress --update \
+  sudo rsync -ai --progress --update --modify-window=1 \
     --exclude=".cache" \
     --exclude="Downloads" \
     --exclude="Videos" \
     --exclude="/mnt" \
     "$source_path/" "$dest_path"
 
-  echo "Сохранение копии скрипта и данных в архив..."
-  mkdir -p "$backup_dir"
-  cp "$0" "$backup_dir/backup_script_copy.sh"
-  sudo rsync -avh "$dest_path/" "$backup_dir/reze_folder/"
-  echo "Готово. Данные синхронизированы с $backup_dir"
+  echo "Готово. Бэкап сохранен в $dest_path"
 
 elif [ "$choice" == "2" ]; then
   echo "Запуск восстановления данных в $source_path..."
@@ -44,7 +39,6 @@ elif [ "$choice" == "2" ]; then
 else
   echo "Неверный выбор. Завершение работы."
 fi
-
 echo "Нажмите любую клавишу для выхода"
 read -n 1
 exec bash'

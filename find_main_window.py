@@ -246,7 +246,8 @@ if __name__ == "__main__":
     print("PortProton")
     print(f"PID окна={id_active}")
     print(data_dict[id_active])
-    break
+    print(data_dict)
+    # break
   else:
    has_exe = any('.exe' in p for p in data_dict.values())
    if id_active in data_dict and has_exe:

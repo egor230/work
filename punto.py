@@ -1,115 +1,87 @@
-import json, os, re, subprocess, threading, time, sys, cv2, pyautogui, tkinter as tk
+import json, os, re, subprocess, threading, time, sys, pyautogui, tkinter as tk
 from tkinter import Tk, Toplevel, Label, Frame
 from pynput import mouse, keyboard
-import numpy as np
-from PIL import ImageGrab, Image
+import pyatspi
+from gi.repository import GLib
 
-def find_nemo():
- get_main_id = '''#!/bin/bash
- active_window_id=$(xdotool getactivewindow 2>/dev/null)
- if [ -n "$active_window_id" ]; then
-   process_id_active=$(xdotool getwindowpid "$active_window_id" 2>/dev/null)
-   window_name=$(xdotool getwindowname "$active_window_id" 2>/dev/null)
-   echo "$process_id_active"
-   echo "$window_name"
- else
-   echo "0"
-   echo ""
- fi
- exit'''
+# --- ATSPI Nemo Live Search (из nemo_live_search.py) ---
+ENTRY_NAMES = ("file_search_entry", "content_search_entry")
+DEBOUNCE_MS = 1500
+COOLDOWN_SEC = 1.0
+# Состояние для каждого окна: key = id(frame), value = [timer_id, last_text, cooldown_until]
+states = {}
+
+def on_text_changed(event):
+ # Обработчик ATSPI-события text-changed: ловит ввод в поисковое поле Nemo
+ obj = event.source
+ if not obj:
+  return
+ # Проверяем, что это поле ввода в Nemo
  try:
-  result1 = subprocess.run(['bash'], input=get_main_id, stdout=subprocess.PIPE, text=True).stdout.strip()
-  lines_active = result1.splitlines()
-  process_id_active = int(lines_active[0])
-  window_name_active = lines_active[1] if len(lines_active) > 1 else ""
-  if "Свойства" in window_name_active or "Properties" in window_name_active:
-   return False
-  result = subprocess.run(['ps', 'aux'], stdout=subprocess.PIPE, text=True).stdout
-  for line in result.splitlines():
-   if 'nemo' in line:
-    parts = line.split()
-    pid = int(parts[1])
-    cmd = ' '.join(parts[10:]).replace(" ", "")
-    if 'nemo' in cmd and process_id_active == pid:
-     return True
-  return False
+  app = obj.getApplication()
+  if not app or (app.name or "").lower() != "nemo":
+   return
+  if obj.getRole() != pyatspi.ROLE_TEXT:
+   return
+  name = obj.name or ""
+  if name not in ENTRY_NAMES:
+   # Отсекаем ложные срабатывания внутри списка файлов
+   cur = obj.parent
+   while cur:
+    try:
+     if cur.getRole() in (pyatspi.ROLE_TABLE, pyatspi.ROLE_TREE_TABLE, pyatspi.ROLE_ICON):
+      return
+    except:
+     pass
+    cur = cur.parent
  except:
-  return False
+  return
+ # Находим окно (frame) для per-window состояния
+ frame = None
+ cur = obj
+ while cur:
+  try:
+   if cur.getRole() in (pyatspi.ROLE_FRAME, pyatspi.ROLE_DIALOG, pyatspi.ROLE_WINDOW):
+    frame = cur
+    break
+  except:
+   pass
+  cur = cur.parent
+ if not frame:
+  return
+ key = id(frame)
+ # Отменяем предыдущий таймер для этого окна
+ if key in states and states[key][0]:
+  GLib.source_remove(states[key][0])
+ # Функция, которая выполнится после паузы (debounce)
+ def fire():
+  try:
+   text = obj.queryText().getText(0, -1) or ""
+   if not text.strip():
+    return
+   # Проверяем cooldown и повтор текста
+   now = time.time()
+   if now < states.get(key, [None, "", 0.0])[2]:
+    return
+   last = states.get(key, [None, "", 0.0])[1]
+   if text == last:
+    return
+   # Обновляем состояние
+   states[key] = [None, text, now + COOLDOWN_SEC]
+   # Эмулируем Enter
+   subprocess.run('xte "keydown Return" "keyup Return"', shell=True, check=False)
+  except:
+   pass
+  # Сбрасываем timer_id в состоянии
+  if key in states:
+   states[key][0] = None
+ timer_id = GLib.timeout_add(DEBOUNCE_MS, fire)
+ # Сохраняем состояние: [timer_id, last_text, cooldown_until]
+ if key in states:
+  states[key][0] = timer_id
+ else:
+  states[key] = [timer_id, "", 0.0]
 
-def get_nemo_search_regions(image_path, image_path1):
-
-  CONFIDENCE = 0.2
-
-  screen_w, screen_h = pyautogui.size()
-
-  loc_button = pyautogui.locateOnScreen(image_path, confidence=CONFIDENCE)
-  loc_text = pyautogui.locateOnScreen(image_path1, confidence=CONFIDENCE)
-
-  if loc_button is not None and loc_text is not None:
-
-      region = (
-          max(0, loc_button.left - 50),
-          max(0, loc_button.top - 50),
-          min(screen_w, loc_button.width + 100),
-          min(screen_h, loc_button.height + 100)
-      )
-
-      region1 = (
-          max(0, loc_text.left - 50),
-          max(0, loc_text.top - 50),
-          min(screen_w, loc_text.width + 100),
-          min(screen_h, loc_text.height + 100)
-      )
-
-      return region, region1
-  else:
-      return None
-
-def search_image():
-  # loc, loc1=False, False
-  region = (1400, 100, 1500, 900)
-  region1 = (268, 44, 182, 108)
-
-  image_path = '/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/Search button.png'
-  Search_text = '/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/Search text.png'
-
-    # --- фикс: если region меньше картинки, расширяем ---
-    # img_w, img_h = pyautogui.size()  # запасной вариант
-  if find_nemo():
-   try:
-     with Image.open(image_path) as im:
-      img_w, img_h = im.size
-      if region[2] < img_w or region[3] < img_h:
-       region = (0, 0, pyautogui.size().width, pyautogui.size().height)
-
-     with Image.open(Search_text) as im:
-      img1_w, img1_h = im.size
-    
-     if region1[2] < img1_w or region1[3] < img1_h:
-        region1 = (0, 0, pyautogui.size().width, pyautogui.size().height)
-
-     search_regions = get_nemo_search_regions(image_path, Search_text)
-
-     if search_regions:
-        region, region1 = search_regions
-
-     loc = pyautogui.locateOnScreen(  image_path, confidence=0.20,
-        region=region,  grayscale=True   )
-
-     loc1 = pyautogui.locateOnScreen( Search_text,  confidence=0.25,
-        region=region1,  grayscale=True   )
-     
-     s = f'''#!/bin/bash
-       xte 'keydown Return' 'keyup Return'
-     '''
-     if loc and loc1:  # and find_nemo()
-      # print("22")
-      subprocess.call(['bash', '-c', s, '_'])
-     
-   except Exception as e:
-    print(e)
-    pass
-   # print("search_image")
 class ToolTip: # Класс для отображения подсказок
  def __init__(self, widget, text):
   self.widget = widget
@@ -230,10 +202,12 @@ class SmartTyper: # Основной класс для автозамены и �
   else:
    return self.ru_to_en_layout.get(ch, ch)
  def clean(self):
+  # Сбрасываем состояние сразу (thread-safe) — нужно для логики _on_press
   self.current_word = ""
   self.matched_abbrev_key = ""
-  self._hide_suggestions()
-  self.root.after(0, self._do_hide_all)
+  self.suggestions = []
+  # UI-очистку делегируем в GLib главный поток (исправляет RuntimeError)
+  GLib.idle_add(self._do_hide_all)
  def _type_text_and_finish(self, text): # Печатает текст и сбрасывает флаг replacing
   try:
    for char in text:
@@ -259,7 +233,6 @@ class SmartTyper: # Основной класс для автозамены и �
   self.clean()
   t.join()
   self.replacing = False
-  # self.root.after(0, do_replace)
 
  def _do_replace_abbrev_async(self): # Асинхронно заменяет аббревиатуру
   if self.replacing or not self.abbrev_res:
@@ -374,7 +347,7 @@ class SmartTyper: # Основной класс для автозамены и �
   for key_char in self.current_word:
    trans_key =self._get_translated_key(key_char)
    abbre += trans_key  #
-   print(abbre)
+   # print(abbre)
   for abbrev_key in self.sorted_abbrevs:
    if len(self.current_word) == len(abbrev_key) and abbrev_key == abbre:
     self.matched_abbrev_key = abbrev_key
@@ -408,7 +381,7 @@ class SmartTyper: # Основной класс для автозамены и �
        self.current_word = ""
        self.suggestions = []
        self.abbrev_res = ""
-       self.root.after(0, self._do_hide_all)
+       GLib.idle_add(self._do_hide_all)
        found = True
        # print("game")
        break
@@ -427,12 +400,11 @@ class SmartTyper: # Основной класс для автозамены и �
   if self.disabled:
    return True
   key_str = str(key).replace("'", "").replace(" ", "")#  print(key_str)
-  if any(k in key_str for k in ["enter", "down", "right", "up", "left", "Key.tab",
+  if any(k in key_str for k in [ "down", "right", "up", "left", "Key.tab", #"enter",
                                 "Key.caps_lock", "Key.shift", "<65032>", "<65032>",
                                 "<65512>", "Key.ctrl_r"]):
    self.clean()
    return True
-  threading.Thread(target=search_image, daemon=True).start()
   if key_str =="<65437>":
    key_str="5"
   if time.time() - self.last_key_press_time < 0.05:
@@ -442,9 +414,9 @@ class SmartTyper: # Основной класс для автозамены и �
   if key == keyboard.Key.backspace:
    if self.current_word:
     self.current_word = self.current_word[:-1]
-    self.root.after(0, self._do_update_state)
+    GLib.idle_add(self._do_update_state)
    else:
-    self.root.after(0, self._do_hide_all)
+    GLib.idle_add(self._do_hide_all)
    return True
   if key == keyboard.Key.space:
    if self.abbrev_res:
@@ -460,7 +432,7 @@ class SmartTyper: # Основной класс для автозамены и �
    keyboard.Key.f5, keyboard.Key.f6, keyboard.Key.f7, keyboard.Key.f8, keyboard.Key.f9,
    keyboard.Key.f10, keyboard.Key.f11, keyboard.Key.f12  }
   if key in control_keys or key_str in {'.', ',', '\\', '/', '\\', '\'', '"', '<', '>', '?', '~', ':', ';', '{', '}', '[', ']', '0'}:
-   self.root.after(0, self._do_hide_all)
+   GLib.idle_add(self._do_hide_all)
    self._do_replace_abbrev_async()
    self.abbrev_res = ""
    return True
@@ -476,7 +448,7 @@ class SmartTyper: # Основной класс для автозамены и �
    # print(self.longest_abbreviation_length)
    if len(self.current_word) > self.longest_abbreviation_length:
     self.current_word = self.current_word[1:]
-   self.root.after(0, self._do_update_state)
+   GLib.idle_add(self._do_update_state)
    return True
   return True
 
@@ -486,13 +458,25 @@ class SmartTyper: # Основной класс для автозамены и �
   return True
 
  def start(self): # Запускает основной цикл приложения
+  # --- Регистрируем ATSPI-слушатель для Nemo Live Search ---
+  pyatspi.Registry.registerEventListener(on_text_changed, "object:text-changed")
+  # --- Прокачка tkinter для обновления UI подсказок из GLib mainloop ---
+  def _pump_tkinter():
+   try:
+    self.root.update_idletasks()
+   except tk.TclError:
+    return False
+   return True
+  GLib.timeout_add(50, _pump_tkinter)
+  # --- Фоновые потоки ---
   window_checker_thread = threading.Thread(target=self._check_active_window_loop, daemon=True)
   window_checker_thread.start()
   keyboard_listener = keyboard.Listener(on_press=self._on_press)
   mouse_listener = mouse.Listener(on_click=self._on_click)
   keyboard_listener.start()
   mouse_listener.start()
-  self.root.mainloop()
+  # --- GLib mainloop вместо tkinter mainloop ---
+  pyatspi.Registry.start()
   keyboard_listener.stop()
   mouse_listener.stop()
   keyboard_listener.join()
@@ -509,9 +493,3 @@ if __name__ == "__main__":
   sys.exit(1)
  app = SmartTyper(abbreviations_path=abbreviations_file, words_path=words_file)
  app.start()
-
-
-# self.suggestions = []
-# self.root.withdraw()
-# else:
-#  self.root.withdraw()
