@@ -4,83 +4,9 @@ from pynput import mouse, keyboard
 import pyatspi
 from gi.repository import GLib
 
-# --- ATSPI Nemo Live Search (из nemo_live_search.py) ---
 ENTRY_NAMES = ("file_search_entry", "content_search_entry")
 DEBOUNCE_MS = 1500
 COOLDOWN_SEC = 1.0
-# Состояние для каждого окна: key = id(frame), value = [timer_id, last_text, cooldown_until]
-states = {}
-
-def on_text_changed(event):
- # Обработчик ATSPI-события text-changed: ловит ввод в поисковое поле Nemo
- obj = event.source
- if not obj:
-  return
- # Проверяем, что это поле ввода в Nemo
- try:
-  app = obj.getApplication()
-  if not app or (app.name or "").lower() != "nemo":
-   return
-  if obj.getRole() != pyatspi.ROLE_TEXT:
-   return
-  name = obj.name or ""
-  if name not in ENTRY_NAMES:
-   # Отсекаем ложные срабатывания внутри списка файлов
-   cur = obj.parent
-   while cur:
-    try:
-     if cur.getRole() in (pyatspi.ROLE_TABLE, pyatspi.ROLE_TREE_TABLE, pyatspi.ROLE_ICON):
-      return
-    except:
-     pass
-    cur = cur.parent
- except:
-  return
- # Находим окно (frame) для per-window состояния
- frame = None
- cur = obj
- while cur:
-  try:
-   if cur.getRole() in (pyatspi.ROLE_FRAME, pyatspi.ROLE_DIALOG, pyatspi.ROLE_WINDOW):
-    frame = cur
-    break
-  except:
-   pass
-  cur = cur.parent
- if not frame:
-  return
- key = id(frame)
- # Отменяем предыдущий таймер для этого окна
- if key in states and states[key][0]:
-  GLib.source_remove(states[key][0])
- # Функция, которая выполнится после паузы (debounce)
- def fire():
-  try:
-   text = obj.queryText().getText(0, -1) or ""
-   if not text.strip():
-    return
-   # Проверяем cooldown и повтор текста
-   now = time.time()
-   if now < states.get(key, [None, "", 0.0])[2]:
-    return
-   last = states.get(key, [None, "", 0.0])[1]
-   if text == last:
-    return
-   # Обновляем состояние
-   states[key] = [None, text, now + COOLDOWN_SEC]
-   # Эмулируем Enter
-   subprocess.run('xte "keydown Return" "keyup Return"', shell=True, check=False)
-  except:
-   pass
-  # Сбрасываем timer_id в состоянии
-  if key in states:
-   states[key][0] = None
- timer_id = GLib.timeout_add(DEBOUNCE_MS, fire)
- # Сохраняем состояние: [timer_id, last_text, cooldown_until]
- if key in states:
-  states[key][0] = timer_id
- else:
-  states[key] = [timer_id, "", 0.0]
 
 class ToolTip: # Класс для отображения подсказок
  def __init__(self, widget, text):
@@ -138,6 +64,8 @@ class SmartTyper: # Основной класс для автозамены и �
    ',': 'б', '.': 'ю', '`': 'ё', 'Q': 'Й', 'W': 'Ц', 'E': 'У', 'R': 'К', 'T': 'Е', 'Y': 'Н', 'U': 'Г',
    'I': 'Ш', 'O': 'Щ', 'P': 'З', 'A': 'Ф', 'S': 'Ы', 'D': 'В', 'F': 'А', 'G': 'П', 'H': 'Р', 'J': 'О',
    'K': 'Л', 'L': 'Д', 'Z': 'Я', 'X': 'Ч', 'C': 'С', 'V': 'М', 'B': 'И', 'N': 'Т', 'M': 'Ь'  }
+  # Состояние ATSPI для каждого окна Nemo: key = id(frame), value = [timer_id, last_text, cooldown_until]
+  self.nemo_states = {}
   self._load_data() # Загружаем данные из файлов
   self.current_word = ""
   self.matched_abbrev_key = ""
@@ -181,18 +109,16 @@ class SmartTyper: # Основной класс для автозамены и �
    label.pack(side=tk.LEFT, padx=3, fill=tk.X, expand=False)
 
  def _get_current_keyboard_layout(self):
-   try:
-     # Получаем LED mask из вывода xset -q
-     result = subprocess.run("xset -q | grep 'LED mask' | awk '{print $10}'",
-       shell=True, capture_output=True, text=True )
-     led_mask = result.stdout.strip()
-     # Если LED mask соответствует анг раскладке
-     if led_mask == "00001002":
-       return "us"
-     else:
-       return "ru"
-   except Exception:
-     return "ru"
+  try:
+   result = subprocess.run("xset -q | grep 'LED mask' | awk '{print $10}'",
+     shell=True, capture_output=True, text=True )
+   led_mask = result.stdout.strip()
+   if led_mask == "00001002":
+    return "us"
+   else:
+    return "ru"
+  except Exception:
+   return "ru"
 
  def _get_translated_key(self, key_char): # Возвращает транслитерированный символ
   ch = key_char.lower()
@@ -201,13 +127,15 @@ class SmartTyper: # Основной класс для автозамены и �
    return ch
   else:
    return self.ru_to_en_layout.get(ch, ch)
+
  def clean(self):
-  # Сбрасываем состояние сразу (thread-safe) — нужно для логики _on_press
+  # Сбрасываем состояние сразу (thread-safe)
   self.current_word = ""
   self.matched_abbrev_key = ""
   self.suggestions = []
   # UI-очистку делегируем в GLib главный поток (исправляет RuntimeError)
   GLib.idle_add(self._do_hide_all)
+
  def _type_text_and_finish(self, text): # Печатает текст и сбрасывает флаг replacing
   try:
    for char in text:
@@ -216,7 +144,6 @@ class SmartTyper: # Основной класс для автозамены и �
      pyautogui.press('space')
     else:
      subprocess.call(['xdotool', 'type', '--delay', '9', char])
-
   finally:
    self.replacing = False
 
@@ -248,25 +175,92 @@ class SmartTyper: # Основной класс для автозамены и �
   t.join()
   self.replacing = False
 
+ # --- ATSPI Nemo Live Search ---
+ def on_text_changed(self, event): # Обработчик ATSPI-события text-changed: ловит ввод в поисковое поле Nemo
+  obj = event.source
+  if not obj:
+   return
+  # Проверяем, что это поле ввода в Nemo
+  try:
+   app = obj.getApplication()
+   if not app or (app.name or "").lower() != "nemo":
+    return
+   if obj.getRole() != pyatspi.ROLE_TEXT:
+    return
+   name = obj.name or ""
+   if name not in ENTRY_NAMES:
+    # Отсекаем ложные срабатывания внутри списка файлов
+    cur = obj.parent
+    while cur:
+     try:
+      if cur.getRole() in (pyatspi.ROLE_TABLE, pyatspi.ROLE_TREE_TABLE, pyatspi.ROLE_ICON):
+       return
+     except:
+      pass
+     cur = cur.parent
+  except:
+   return
+  # Находим окно (frame) для per-window состояния
+  frame = None
+  cur = obj
+  while cur:
+   try:
+    if cur.getRole() in (pyatspi.ROLE_FRAME, pyatspi.ROLE_DIALOG, pyatspi.ROLE_WINDOW):
+     frame = cur
+     break
+   except:
+    pass
+   cur = cur.parent
+  if not frame:
+   return
+  key = id(frame)
+  # Отменяем предыдущий таймер для этого окна
+  if key in self.nemo_states and self.nemo_states[key][0]:
+   GLib.source_remove(self.nemo_states[key][0])
+  # Функция, которая выполнится после паузы (debounce)
+  def fire():
+   try:
+    text = obj.queryText().getText(0, -1) or ""
+    if not text.strip():
+     return
+    # Проверяем cooldown и повтор текста
+    now = time.time()
+    if now < self.nemo_states.get(key, [None, "", 0.0])[2]:
+     return
+    last = self.nemo_states.get(key, [None, "", 0.0])[1]
+    if text == last:
+     return
+    # Обновляем состояние
+    self.nemo_states[key] = [None, text, now + COOLDOWN_SEC]
+    self.replacing = True
+    # Эмулируем Enter
+    subprocess.run('xte "keydown Return" "keyup Return"', shell=True, check=False)
+    time.sleep(0.1) # Ждём, чтобы эмулированный Enter успел дойти до _on_press
+    self.replacing = False
+   except:
+    pass
+   # Сбрасываем timer_id в состоянии
+   if key in self.nemo_states:
+    self.nemo_states[key][0] = None
+  timer_id = GLib.timeout_add(DEBOUNCE_MS, fire)
+  # Сохраняем состояние: [timer_id, last_text, cooldown_until]
+  if key in self.nemo_states:
+   self.nemo_states[key][0] = timer_id
+  else:
+   self.nemo_states[key] = [timer_id, "", 0.0]
+
  def _find_word_suggestions(self, prefix): # Ищет подсказки для введенного префикса
   if not prefix:
    return []
   try:
-   # print(prefix)
    pattern_lower = r'\b' + re.escape(prefix.lower()) + r'[а-яё]*\s'
    pattern_cap = r'\b' + re.escape(prefix.capitalize()) + r'[а-яё]*\s'
    matches = re.findall(pattern_lower, self.word_text_data) + re.findall(pattern_cap, self.word_text_data)
    longer_matches = [m.rstrip() for m in matches if len(m.rstrip()) > len(prefix)]
-   if len(longer_matches)>0:
+   if len(longer_matches) > 0:
     return sorted(set(longer_matches), key=len)
    else:
-    if len(prefix) >0:
-     #self.current_word =prefix[-1]
-     self._hide_suggestions()
-     self._find_word_suggestions(prefix[-1])
-    else:
-     self.clean()
-     return []
+    return []
   except Exception:
    return []
 
@@ -345,9 +339,8 @@ class SmartTyper: # Основной класс для автозамены и �
   self.matched_abbrev_key = None
   abbre=""
   for key_char in self.current_word:
-   trans_key =self._get_translated_key(key_char)
-   abbre += trans_key  #
-   # print(abbre)
+   trans_key = self._get_translated_key(key_char)
+   abbre += trans_key
   for abbrev_key in self.sorted_abbrevs:
    if len(self.current_word) == len(abbrev_key) and abbrev_key == abbre:
     self.matched_abbrev_key = abbrev_key
@@ -383,10 +376,8 @@ class SmartTyper: # Основной класс для автозамены и �
        self.abbrev_res = ""
        GLib.idle_add(self._do_hide_all)
        found = True
-       # print("game")
        break
     if not found:
-     # print("work")
      self.disabled = False
    except Exception as e:
     print(e)
@@ -395,12 +386,11 @@ class SmartTyper: # Основной класс для автозамены и �
 
  def _on_press(self, key): # Обрабатывает нажатия клавиш
   if self.replacing:
-   self.clean()
    return True
   if self.disabled:
    return True
-  key_str = str(key).replace("'", "").replace(" ", "")#  print(key_str)
-  if any(k in key_str for k in [ "down", "right", "up", "left", "Key.tab", #"enter",
+  key_str = str(key).replace("'", "").replace(" ", "")
+  if any(k in key_str for k in [ "down", "right", "up", "left", "Key.tab", "enter",
                                 "Key.caps_lock", "Key.shift", "<65032>", "<65032>",
                                 "<65512>", "Key.ctrl_r"]):
    self.clean()
@@ -423,7 +413,7 @@ class SmartTyper: # Основной класс для автозамены и �
     self._do_replace_abbrev_async()
    self.clean()
    return True
-  control_keys = { keyboard.Key.ctrl_l, keyboard.Key.ctrl_r, keyboard.Key.alt_l, keyboard.Key.alt_r,# Набор управляющих клавиш
+  control_keys = { keyboard.Key.ctrl_l, keyboard.Key.ctrl_r, keyboard.Key.alt_l, keyboard.Key.alt_r,
    keyboard.Key.shift, keyboard.Key.shift_r, keyboard.Key.tab, keyboard.Key.caps_lock,
    keyboard.Key.left, keyboard.Key.right, keyboard.Key.up, keyboard.Key.down,
    keyboard.Key.home, keyboard.Key.end, keyboard.Key.delete, keyboard.Key.esc,
@@ -431,12 +421,12 @@ class SmartTyper: # Основной класс для автозамены и �
    keyboard.Key.insert, keyboard.Key.f1, keyboard.Key.f2, keyboard.Key.f3, keyboard.Key.f4,
    keyboard.Key.f5, keyboard.Key.f6, keyboard.Key.f7, keyboard.Key.f8, keyboard.Key.f9,
    keyboard.Key.f10, keyboard.Key.f11, keyboard.Key.f12  }
-  if key in control_keys or key_str in {'.', ',', '\\', '/', '\\', '\'', '"', '<', '>', '?', '~', ':', ';', '{', '}', '[', ']', '0'}:
+  if key in control_keys or key_str in {'.', ',', '\\', '/', '\\', "'", '"', '<', '>', '?', '~', ':', ';', '{', '}', '[', ']', '0'}:
    GLib.idle_add(self._do_hide_all)
    self._do_replace_abbrev_async()
    self.abbrev_res = ""
    return True
-  if self.suggestions and key_str in "123456" :
+  if self.suggestions and key_str in "123456":
    index = int(key_str) - 1
    if index < len(self.suggestions):
     self._replace_word_async(self.suggestions[index], extra_backspace=1)
@@ -444,8 +434,6 @@ class SmartTyper: # Основной класс для автозамены и �
   if hasattr(key, 'char') and key.char and key.char.isprintable() and key_str not in {"+", "-", "*", "/"}:
    key_char = key.char
    self.current_word += key_char
-   # print(len(self.current_word))
-   # print(self.longest_abbreviation_length)
    if len(self.current_word) > self.longest_abbreviation_length:
     self.current_word = self.current_word[1:]
    GLib.idle_add(self._do_update_state)
@@ -459,7 +447,7 @@ class SmartTyper: # Основной класс для автозамены и �
 
  def start(self): # Запускает основной цикл приложения
   # --- Регистрируем ATSPI-слушатель для Nemo Live Search ---
-  pyatspi.Registry.registerEventListener(on_text_changed, "object:text-changed")
+  pyatspi.Registry.registerEventListener(self.on_text_changed, "object:text-changed")
   # --- Прокачка tkinter для обновления UI подсказок из GLib mainloop ---
   def _pump_tkinter():
    try:
