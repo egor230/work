@@ -1,4 +1,5 @@
 import json, os, re, subprocess, threading, time, sys, pyautogui, tkinter as tk
+import bisect
 from tkinter import Tk, Toplevel, Label, Frame
 from pynput import mouse, keyboard
 import pyatspi
@@ -49,6 +50,10 @@ class SmartTyper: # Основной класс для автозамены и �
   self.sorted_abbrevs = []
   self.longest_abbreviation_length = 0
   self.word_text_data = ""
+  self.suggestion_cache = {}
+  self.words_by_first = {}
+  self.words_alpha_by_first = {}
+  self.max_suggestions = 6
   self.ru_to_en_layout = { # Словарь для транслитерации с русской раскладки на английскую
    'й': 'q', 'ц': 'w', 'у': 'e', 'к': 'r', 'е': 't', 'н': 'y', 'г': 'u', 'ш': 'i', 'щ': 'o', 'з': 'p',
    'х': '[', 'ъ': ']', 'ф': 'a', 'ы': 's', 'в': 'd', 'а': 'f', 'п': 'g', 'р': 'h', 'о': 'j', 'л': 'k',
@@ -91,6 +96,30 @@ class SmartTyper: # Основной класс для автозамены и �
   if os.path.exists(self.words_path):
    with open(self.words_path, 'r', encoding="cp1251", errors='ignore') as f:
     self.word_text_data = f.read()
+  self._build_word_index()
+
+ def _build_word_index(self): # Строит индекс слов для быстрого поиска подсказок
+  self.words_by_first = {}
+  self.words_alpha_by_first = {}
+  self.suggestion_cache = {}
+  if not self.word_text_data:
+   return
+  words = re.findall(r'[а-яёА-ЯЁ]+', self.word_text_data)
+  unique_words = {}
+  for w in words:
+   lw = w.lower()
+   if lw and lw not in unique_words:
+    unique_words[lw] = w
+  for lw, w in unique_words.items():
+   first = lw[0]
+   if first not in self.words_by_first:
+    self.words_by_first[first] = []
+    self.words_alpha_by_first[first] = []
+   self.words_by_first[first].append((len(lw), lw, w))
+   self.words_alpha_by_first[first].append((lw, w))
+  for first in self.words_by_first:
+   self.words_by_first[first].sort()
+   self.words_alpha_by_first[first].sort()
 
  def _get_current_user(self): # Получает имя текущего пользователя
   script = '#!/bin/bash\necho $(whoami)\nexit;'
@@ -252,17 +281,55 @@ class SmartTyper: # Основной класс для автозамены и �
  def _find_word_suggestions(self, prefix): # Ищет подсказки для введенного префикса
   if not prefix:
    return []
-  try:
-   pattern_lower = r'\b' + re.escape(prefix.lower()) + r'[а-яё]*\s'
-   pattern_cap = r'\b' + re.escape(prefix.capitalize()) + r'[а-яё]*\s'
-   matches = re.findall(pattern_lower, self.word_text_data) + re.findall(pattern_cap, self.word_text_data)
-   longer_matches = [m.rstrip() for m in matches if len(m.rstrip()) > len(prefix)]
-   if len(longer_matches) > 0:
-    return sorted(set(longer_matches), key=len)
-   else:
-    return []
-  except Exception:
+  prefix_lower = prefix.lower()
+  if not prefix_lower:
    return []
+  if prefix[:1].isupper():
+   cache_key = prefix_lower + "|cap"
+  else:
+   cache_key = prefix_lower + "|low"
+  if cache_key in self.suggestion_cache:
+   return self.suggestion_cache[cache_key]
+  if len(self.suggestion_cache) > 1000:
+   self.suggestion_cache.clear()
+  first = prefix_lower[0]
+  alpha = self.words_alpha_by_first.get(first, [])
+  if not alpha:
+   self.suggestion_cache[cache_key] = []
+   return []
+  lo = bisect.bisect_left(alpha, (prefix_lower,))
+  hi = bisect.bisect_left(alpha, (prefix_lower + chr(0x10ffff),))
+  if lo >= hi:
+   self.suggestion_cache[cache_key] = []
+   return []
+  res = []
+  seen = set()
+  need_cap = prefix[:1].isupper()
+  count = hi - lo
+  if count <= 5000:
+   temp = []
+   for lw, w in alpha[lo:hi]:
+    if len(lw) > len(prefix_lower):
+     temp.append((len(lw), lw, w))
+   temp.sort()
+   for _len, lw, w in temp:
+    out = w.capitalize() if need_cap else w.lower()
+    if out not in seen:
+     seen.add(out)
+     res.append(out)
+     if len(res) >= self.max_suggestions:
+      break
+  else:
+   for _len, lw, w in self.words_by_first.get(first, []):
+    if lw.startswith(prefix_lower) and len(lw) > len(prefix_lower):
+     out = w.capitalize() if need_cap else w.lower()
+     if out not in seen:
+      seen.add(out)
+      res.append(out)
+      if len(res) >= self.max_suggestions:
+       break
+  self.suggestion_cache[cache_key] = res
+  return res
 
  def _update_suggestions_ui(self): # Обновляет интерфейс подсказок
   if self.tooltip and self.abbrev_res:
@@ -273,7 +340,7 @@ class SmartTyper: # Основной класс для автозамены и �
    self.root.withdraw()
    return
   total_width = 60
-  for i, word in enumerate(self.suggestions[:6]):
+  for i, word in enumerate(self.suggestions[:self.max_suggestions]):
    display_text = f"{word}"
    self.suggestion_labels[i].config(text=display_text)
    total_width += len(display_text) * 12
@@ -289,6 +356,9 @@ class SmartTyper: # Основной класс для автозамены и �
    pass
 
  def _show_abbrev_tooltip(self): # Показывает подсказку для аббревиатуры
+  if self.tooltip and self.tooltip_root and self.tooltip.tipwindow:
+   self.tooltip.updatetext(self.abbrev_res)
+   return
   try:
    if self.tooltip_root:
     try:
@@ -323,12 +393,18 @@ class SmartTyper: # Основной класс для автозамены и �
    self.abbrev_res = match
    self._show_abbrev_tooltip()
   else:
-   self.abbrev_res=""
+   self.abbrev_res = ""
    self.hide_abbrev_tooltip()
-   self.suggestions = self._find_word_suggestions(self.current_word)
-   self.matched_abbrev_key = ""
-   if self.suggestions:
-    self._update_suggestions_ui()
+  self.suggestions = self._find_word_suggestions(self.current_word)
+  if self.suggestions:
+   self._update_suggestions_ui()
+  else:
+   for label in self.suggestion_labels:
+    label.config(text="")
+   try:
+    self.root.withdraw()
+   except tk.TclError:
+    pass
 
  def _do_hide_all(self): # Скрывает все подсказки
   self._hide_suggestions()
@@ -337,7 +413,11 @@ class SmartTyper: # Основной класс для автозамены и �
 
  def check_for_abbreviation(self): # Проверяет, совпадает ли ввод с аббревиатурой
   self.matched_abbrev_key = None
-  abbre=""
+  if not self.current_word:
+   return None
+  if self.longest_abbreviation_length and len(self.current_word) > self.longest_abbreviation_length:
+   return None
+  abbre = ""
   for key_char in self.current_word:
    trans_key = self._get_translated_key(key_char)
    abbre += trans_key
@@ -369,7 +449,7 @@ class SmartTyper: # Основной класс для автозамены и �
      dir_process_name = line.split(maxsplit=10)[10].replace('\\', '/')
      if re.search(pattern, dir_process_name) and process_id == int(line.split()[1]):
       file_path_lower = dir_process_name.lower()
-      if ".exe" or '/PortProton/data/scripts/start.sh' in file_path_lower and "winword.exe" not in file_path_lower:
+      if (".exe" in file_path_lower or '/portproton/data/scripts/start.sh' in file_path_lower) and "winword.exe" not in file_path_lower:
        self.disabled = True
        self.current_word = ""
        self.suggestions = []
@@ -390,7 +470,7 @@ class SmartTyper: # Основной класс для автозамены и �
   if self.disabled:
    return True
   key_str = str(key).replace("'", "").replace(" ", "")
-  if any(k in key_str for k in [ "down", "right", "up", "left", "Key.tab", "enter",
+  if any(k in key_str for k in [ "down", "right", "up", "left", "Key.tab",
                                 "Key.caps_lock", "Key.shift", "<65032>", "<65032>",
                                 "<65512>", "Key.ctrl_r"]):
    self.clean()
@@ -413,6 +493,12 @@ class SmartTyper: # Основной класс для автозамены и �
     self._do_replace_abbrev_async()
    self.clean()
    return True
+  if key == keyboard.Key.enter:
+   if self.abbrev_res:
+    self._do_replace_abbrev_async()
+   else:
+    self.clean()
+   return True
   control_keys = { keyboard.Key.ctrl_l, keyboard.Key.ctrl_r, keyboard.Key.alt_l, keyboard.Key.alt_r,
    keyboard.Key.shift, keyboard.Key.shift_r, keyboard.Key.tab, keyboard.Key.caps_lock,
    keyboard.Key.left, keyboard.Key.right, keyboard.Key.up, keyboard.Key.down,
@@ -421,7 +507,7 @@ class SmartTyper: # Основной класс для автозамены и �
    keyboard.Key.insert, keyboard.Key.f1, keyboard.Key.f2, keyboard.Key.f3, keyboard.Key.f4,
    keyboard.Key.f5, keyboard.Key.f6, keyboard.Key.f7, keyboard.Key.f8, keyboard.Key.f9,
    keyboard.Key.f10, keyboard.Key.f11, keyboard.Key.f12  }
-  if key in control_keys or key_str in {'.', ',', '\\', '/', '\\', "'", '"', '<', '>', '?', '~', ':', ';', '{', '}', '[', ']', '0'}:
+  if key in control_keys or key_str in {'.', ',', '\\', '/', "'", '"', '<', '>', '?', '~', ':', ';', '{', '}', '[', ']', '0'}:
    GLib.idle_add(self._do_hide_all)
    self._do_replace_abbrev_async()
    self.abbrev_res = ""
@@ -434,8 +520,6 @@ class SmartTyper: # Основной класс для автозамены и �
   if hasattr(key, 'char') and key.char and key.char.isprintable() and key_str not in {"+", "-", "*", "/"}:
    key_char = key.char
    self.current_word += key_char
-   if len(self.current_word) > self.longest_abbreviation_length:
-    self.current_word = self.current_word[1:]
    GLib.idle_add(self._do_update_state)
    return True
   return True
