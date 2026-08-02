@@ -3,12 +3,45 @@
 (function () {
   var html = document.documentElement;
   var STORAGE_KEY = 'maTheme';
+  var RELOAD_FLAG = 'maThemeReloaded';
   var currentTheme = null;
 
-  function applyTheme(theme) {
+  function getThemeFromCookie() {
+    try {
+      var match = document.cookie.match(/PREF=([^;]*)/);
+      var params = new URLSearchParams(match ? match[1] : '');
+      if (params.get('f6') === '400') return 'dark';
+    } catch (e) {}
+    return 'light';
+  }
+
+  function syncCookie(theme) {
+    try {
+      var match = document.cookie.match(/PREF=([^;]*)/);
+      var params = new URLSearchParams(match ? match[1] : '');
+      params.set('f6', theme === 'dark' ? '400' : '8');
+      document.cookie = 'PREF=' + params.toString() +
+        ';max-age=22592000;path=/;domain=.youtube.com';
+    } catch (e) {}
+  }
+
+  function setLock(theme) {
+    html.setAttribute('data-ma-theme', theme === 'dark' ? 'dark' : 'light');
+  }
+
+  function updateToggleIcon(theme) {
+    var sw = document.getElementById('__magic-theme-switch');
+    if (sw) {
+      sw.classList.toggle('dark', theme === 'dark');
+    }
+  }
+
+  function applyTheme(theme, options) {
+    options = options || {};
     currentTheme = theme;
 
     html.classList.remove('__ytnight', '__ytday');
+    setLock(theme);
 
     if (theme === 'dark') {
       html.classList.add('__ytnight');
@@ -19,57 +52,17 @@
     }
 
     syncCookie(theme);
-  }
+    updateToggleIcon(theme);
 
-  function syncCookie(theme) {
-    try {
-      var match = document.cookie.match(/PREF=([^;]*)/);
-      var params = new URLSearchParams(match ? match[1] : '');
-      params.set('f6', theme === 'dark' ? '400' : '80000');
-      document.cookie = 'PREF=' + params.toString() +
-        ';max-age=22592000;path=/;domain=.youtube.com';
-    } catch (e) {
-      // Игнорируем ошибки cookie
+    if (options.reload) {
+      location.reload();
     }
-  }
-
-  function getTheme(callback) {
-    if (currentTheme) {
-      callback(currentTheme);
-      return;
-    }
-    chrome.storage.local.get([STORAGE_KEY], function (result) {
-      var theme = result[STORAGE_KEY] || 'light';
-      currentTheme = theme;
-      callback(theme);
-    });
-  }
-
-  function setTheme(theme, callback) {
-    chrome.storage.local.set({ maTheme: theme }, callback || function () {});
   }
 
   function toggleTheme() {
-    getTheme(function (current) {
-      var next = current === 'dark' ? 'light' : 'dark';
-      setTheme(next);
-    });
+    var next = currentTheme === 'dark' ? 'light' : 'dark';
+    chrome.storage.local.set({ maTheme: next });
   }
-
-  function updateToggleIcon(theme) {
-    var sw = document.getElementById('__magic-theme-switch');
-    if (sw) {
-      sw.classList.toggle('dark', theme === 'dark');
-    }
-  }
-
-  chrome.storage.onChanged.addListener(function (changes, area) {
-    if (area === 'local' && STORAGE_KEY in changes) {
-      var theme = changes[STORAGE_KEY].newValue;
-      applyTheme(theme);
-      updateToggleIcon(theme);
-    }
-  });
 
   function createToggle() {
     if (document.getElementById('__magic-theme-switch')) return;
@@ -79,10 +72,7 @@
     sw.setAttribute('tabindex', '0');
     sw.setAttribute('role', 'button');
     sw.setAttribute('aria-label', 'Переключить тему YouTube');
-
-    getTheme(function (theme) {
-      if (theme === 'dark') sw.classList.add('dark');
-    });
+    if (currentTheme === 'dark') sw.classList.add('dark');
 
     sw.addEventListener('click', function (e) {
       e.stopPropagation();
@@ -113,17 +103,39 @@
     }
   }
 
-  getTheme(function (theme) {
-    applyTheme(theme);
-    updateToggleIcon(theme);
+  var syncTheme = getThemeFromCookie();
+  applyTheme(syncTheme, { reload: false });
+
+  chrome.storage.local.get([STORAGE_KEY], function (result) {
+    var stored = result[STORAGE_KEY];
+
+    if (stored === undefined || stored === null || stored === '') {
+      chrome.storage.local.set({ maTheme: syncTheme });
+      return;
+    }
+
+    if (stored !== syncTheme) {
+      if (sessionStorage.getItem(RELOAD_FLAG)) {
+        applyTheme(stored, { reload: false });
+      } else {
+        sessionStorage.setItem(RELOAD_FLAG, '1');
+        applyTheme(stored, { reload: true });
+      }
+    }
   });
-  createToggle();
+
+  chrome.storage.onChanged.addListener(function (changes, area) {
+    if (area !== 'local') return;
+    if (!(STORAGE_KEY in changes)) return;
+    var next = changes[STORAGE_KEY].newValue || 'light';
+    applyTheme(next, { reload: true });
+  });
 
   document.addEventListener('yt-navigate-finish', function () {
-    getTheme(function (theme) {
-      applyTheme(theme);
-      updateToggleIcon(theme);
+    chrome.storage.local.get([STORAGE_KEY], function (result) {
+      applyTheme(result[STORAGE_KEY] || getThemeFromCookie(), { reload: false });
     });
-    createToggle();
   });
+
+  createToggle();
 })();

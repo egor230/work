@@ -30,16 +30,35 @@ html:fullscreen #__magic-theme-switch {
    + исправление строки поиска (белые остатки)
    ------------------------------------------ */
 html.__ytnight {
+  color-scheme: dark;
   --ma-color: #bbb;
   --ytd-video-primary-info-renderer-title-color: var(--ma-color) !important;
-  --yt-spec-text-primary: var(--ma-color) !important;
+  --yt-spec-text-primary: #f1f1f1 !important;
+  --yt-spec-text-secondary: #aaa !important;
+  --yt-spec-text-disabled: #717171 !important;
+  --yt-spec-base-background: #0f0f0f !important;
+  --yt-spec-general-background-a: #181818 !important;
+  --yt-spec-general-background-b: #0f0f0f !important;
+  --yt-spec-general-background-c: #030303 !important;
+  --yt-spec-brand-background-primary: #0f0f0f !important;
+  --yt-spec-brand-background-solid: #212121 !important;
+  --yt-spec-menu-background: #282828 !important;
+  --yt-spec-raised-background: #212121 !important;
+  --yt-spec-inverted-background: #f1f1f1 !important;
+  --yt-sys-color-baseline--base-background: #0f0f0f !important;
+  --yt-sys-color-baseline--raised-background: #212121 !important;
+  --yt-sys-color-baseline--menu-background: #282828 !important;
+  --yt-sys-color-baseline--additive-background: rgba(255, 255, 255, 0.1) !important;
+  --yt-sys-color-baseline--tonal-background: rgba(255, 255, 255, 0.1) !important;
+  --yt-sys-color-baseline--outline: rgba(255, 255, 255, 0.2) !important;
+  --yt-sys-color-baseline--text-primary: #fff !important;
+  --yt-sys-color-baseline--text-secondary: #aaa !important;
+  --yt-sys-color-baseline--text-disabled: #717171 !important;
   --yt-searchbox-background: #121212;
   --yt-searchbox-text-color: #eee;
   --ytd-searchbox-legacy-border-color: #333;
   --ytd-searchbox-legacy-button-color: #333;
   --ytd-searchbox-legacy-button-border-color: #444;
-  --yt-spec-base-background: #0f0f0f;
-  --yt-spec-general-background-a: #181818;
   scrollbar-color: #555 #222;
 }
 html.__ytnight h3.ytd-compact-video-renderer {
@@ -57,13 +76,32 @@ html.__ytnight ytd-button-renderer.style-suggestive[is-paper-button] paper-butto
    + возврат строки поиска к светлому виду
    ------------------------------------------ */
 html.__ytday {
+  color-scheme: light;
+  --yt-spec-text-primary: #0f0f0f !important;
+  --yt-spec-text-secondary: #606060 !important;
+  --yt-spec-text-disabled: #909090 !important;
+  --yt-spec-base-background: #fff !important;
+  --yt-spec-general-background-a: #fff !important;
+  --yt-spec-general-background-b: #f9f9f9 !important;
+  --yt-spec-general-background-c: #f1f1f1 !important;
+  --yt-spec-brand-background-primary: #fff !important;
+  --yt-spec-brand-background-solid: #fff !important;
+  --yt-spec-menu-background: #fff !important;
+  --yt-spec-raised-background: #fff !important;
+  --yt-spec-inverted-background: #0f0f0f !important;
+  --yt-sys-color-baseline--base-background: #fff !important;
+  --yt-sys-color-baseline--raised-background: #fff !important;
+  --yt-sys-color-baseline--menu-background: #fff !important;
+  --yt-sys-color-baseline--additive-background: rgba(0, 0, 0, 0.05) !important;
+  --yt-sys-color-baseline--tonal-background: rgba(0, 0, 0, 0.1) !important;
+  --yt-sys-color-baseline--outline: rgba(0, 0, 0, 0.1) !important;
+  --yt-sys-color-baseline--text-primary: #030303 !important;
+  --yt-sys-color-baseline--text-secondary: #606060 !important;
+  --yt-sys-color-baseline--text-disabled: #909090 !important;
   --yt-searchbox-background: #fff;
   --yt-searchbox-text-color: #111;
   --ytd-searchbox-legacy-border-color: #ccc;
   --ytd-searchbox-legacy-button-color: #f8f8f8;
   --ytd-searchbox-legacy-button-border-color: #ccc;
-  --yt-spec-base-background: #fff;
-  --yt-spec-general-background-a: #fff;
-  --yt-spec-general-background-b: #f9f9f9;
   scrollbar-color: #aaa #ddd;
 }

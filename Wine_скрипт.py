@@ -80,13 +80,55 @@ chmod_cmd = 'chmod +x "{}"'.format(script_path)
 subprocess.run(['bash', '-c', chmod_cmd])
 
 # --- Извлекаем иконку (.ico) из exe-файла ---
-ico_path = os.path.join(directory, filename_without_extension + ".ico")
-extract_cmd = 'wrestool -x -t 14 "{0}" > "{1}"'.format(
-    os.path.join(directory, filename),
-    ico_path
-)
-subprocess.run(['bash', '-c', extract_cmd], check=True)
+# Сначала пробуем icoextract (метод PortProton — берёт только первую группу
+# иконок и пишет корректный .ico), если утилиты нет — падаем на wrestool.
+def extract_ico(exe_path, ico_path):
+  try:
+    subprocess.run(["icoextract", exe_path, ico_path],
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+    return True
+  except (subprocess.CalledProcessError, FileNotFoundError):
+    pass
+  try:
+    with open(ico_path, "wb") as f:
+      subprocess.run(["wrestool", "-x", "-t", "14", exe_path],
+                     stdout=f, stderr=subprocess.DEVNULL, check=True)
+    return True
+  except subprocess.CalledProcessError:
+    pass
+  except FileNotFoundError:
+    print("Ошибка: утилита wrestool не установлена. Установите icoutils.")
+  if os.path.exists(ico_path):
+    os.remove(ico_path)
+  return False
 
+ico_path = os.path.join(directory, filename_without_extension + ".ico")
+if extract_ico(os.path.join(directory, filename), ico_path):
+  print(f"Извлечена иконка: {ico_path}")
+else:
+  print(f"Предупреждение: в {os.path.join(directory, filename)} не найдено иконок типа 14")
+output_dir = os.path.join(directory, "icons_for_wine")
+os.makedirs(output_dir, exist_ok=True)
+
+# Обходим все подпапки
+for root, dirs, files in os.walk(directory):
+ # Пропускаем саму папку вывода, чтобы не обрабатывать её как источник
+ if output_dir in root:
+  continue
+ for file in files:
+  if file.lower().endswith(".exe"):
+   exe_path = os.path.join(root, file)
+   # Формируем уникальное имя для иконки на основе относительного пути
+   rel_path = os.path.relpath(exe_path, directory)
+   # Заменяем разделители на подчёркивания, убираем расширение .exe
+   safe_name = rel_path.replace(os.sep, "_").replace(".exe", "") + ".ico"
+   ico_path = os.path.join(output_dir, safe_name)
+   
+   if extract_ico(exe_path, ico_path):
+    print(f"Извлечена иконка: {ico_path}")
+   else:
+    print(f"Предупреждение: в {exe_path} не найдено иконок типа 14")
+     
 # --- Назначаем иконку эмблемой скрипта ---
 ico_uri = 'file://' + os.path.abspath(ico_path)
 subprocess.run(['gio', 'set', script_path, 'metadata::custom-icon', ico_uri])

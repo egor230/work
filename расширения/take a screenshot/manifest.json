@@ -19,6 +19,14 @@
   "background": {
     "service_worker": "background.js"
   },
-  "permissions": ["activeTab", "scripting","tabs", "windows", "storage", "clipboardWrite",
-        "downloads", "sessions"]
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "tabs",
+    "windows",
+    "storage",
+    "clipboardWrite",
+    "downloads",
+    "sessions"
+  ]
 }
