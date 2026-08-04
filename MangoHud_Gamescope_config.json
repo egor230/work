@@ -13,7 +13,7 @@
         "cpu_mhz": false,
         "cpu_power": false,
         "core_load": false,
-        "core_bars": true,
+        "core_bars": false,
         "gpu_temp": false,
         "gpu_junction_temp": false,
         "gpu_core_clock": true,
@@ -30,10 +30,10 @@
         "procmem_virt": false,
         "swap": false,
         "resolution": false,
-        "engine_version": false,
+        "engine_version": true,
         "engine_short_names": false,
         "vulkan_driver": false,
-        "wine": false,
+        "wine": true,
         "winesync": false,
         "gamemode": false,
         "vkbasalt": false,
@@ -53,9 +53,9 @@
         "throttling_status_graph": false,
         "histogram": false,
         "horizontal": false,
-        "horizontal_stretch": false,
-        "hud_compact": false,
-        "hud_no_margin": true,
+        "horizontal_stretch": true,
+        "hud_compact": true,
+        "hud_no_margin": false,
         "no_display": false,
         "no_small_font": false,
         "temp_fahrenheit": false,
@@ -96,5 +96,12 @@
         "hdr_force_output": false,
         "hdr_force_heatmap": false,
         "realtime_scheduling": false
+    },
+    "_window_geometry": {
+        "x": 749,
+        "y": 0,
+        "w": 1028,
+        "h": 873,
+        "maximized": false
     }
 }
