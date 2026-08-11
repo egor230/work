@@ -1,47 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-YouTube Downloader (версия для РФ — с обходом блокировок YouTube).
-
-Что умеет:
-  1. Читает ссылку на YouTube из буфера обмена.
-  2. Сохраняет видео в ТЕКУЩУЮ директорию запуска скрипта.
-  3. Автоматически применяет несколько способов обхода ошибки
-     "Sign in to confirm you're not a bot" / "HTTP Error 403: Forbidden",
-     которые массово появляются в России с 2024-2025:
-
-     • Способ 1 (быстрый): пробует разные client-стратегии yt-dlp
-       (--extractor-args "youtube:player_client=..."). Часто помогает
-       без cookies и без прокси — потому что YouTube блокирует не все клиенты.
-     • Способ 2 (cookies): передаёт cookies из установленного браузера
-       (Chrome / Edge / Firefox / Brave), где вы залогинены в Google.
-       Без PO-token это снимает "Sign in to confirm you're not a bot".
-     • Способ 3 (PO Token): использует плагин bgutil-ytdlp-pot-provider
-       (если установлен) для генерации PO-token и обхода 403.
-     • Способ 4 (прокси): если у вас VPN/proxy — можно указать его
-       через переменную окружения YT_PROXY или флагом --proxy.
-     • Способ 5 (Tor): последняя попытка через SOCKS5 Tor на 127.0.0.1:9050
-       (если Tor запущен).
-     • Fallback: пробует просто обновить yt-dlp до nightly и скачать заново.
-
-ЗАВИСИМОСТИ:
-    pip install --upgrade yt-dlp pyperclip --break-system-packages
-    # по желанию, для PO Token:
-    pip install bgutil-ytdlp-pot-provider --break-system-packages
-    # по желанию, для Tor:
-    sudo apt install tor
-
-БРАУЗЕРНЫЕ COOKIES:
-    Скрипт сам найдёт ваш браузер и возьмёт cookies. Чтобы это работало,
-    вы должны быть залогинены в Google/YouTube в одном из браузеров:
-    Chrome / Edge / Firefox / Brave / Chromium.
-
-ИСПОЛЬЗОВАНИЕ:
-    python3 youtube_downloader.py            # берёт ссылку из буфера
-    python3 youtube_downloader.py <URL>      # URL из аргумента
-    YT_PROXY=socks5://127.0.0.1:9050 python3 youtube_downloader.py
-"""
-
 import os
 import sys
 import re
@@ -96,6 +52,67 @@ BROWSERS = ["chrome", "edge", "firefox", "brave", "chromium", "vivaldi", "opera"
 # Таймаут на одну попытку (секунды). Скачивание длинного видео может быть долгим,
 # поэтому таймаут задаём только на этап Metadata (чтобы быстро отвалиться по 403).
 METADATA_TIMEOUT = 60
+
+# ---------- Ускорение скачивания (без потери качества) ----------
+# Причины медленных загрузок в РФ и как их лечим:
+#   * YouTube часто отдаёт "придушенную" CDN-ссылку (~100-300 КБ/с) и рвёт
+#     соединения. --throttled-rate 2M заставляет yt-dlp разорвать такую
+#     загрузку и запросить свежую (непридушенную) ссылку.
+#   * --concurrent-fragments 8 — фрагменты fMP4/DASH качаются параллельно.
+#   * -f 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/...' — берём только
+#     mp4-совместимые потоки (AV1/H264 + AAC). Тогда слияние в mp4 — это
+#     быстрый ремукс БЕЗ перекодирования (иначе webm/opus-звук приходится
+#     перекодировать, а это минуты + потеря качества).
+#   * --socket-timeout 10 и 2 ретрая — мёртвый CDN-хост отваливается за
+#     ~20-40 сек, а не за 10×20с, и скрипт быстрее переходит на новый клиент
+#     (новая выдача ссылок = новый хост).
+#   * -4 (force IPv4) — если IPv6 не настроен (часто в РФ), yt-dlp может
+#     виснуть на IPv6-адресах googlevideo. Принудительный IPv4 это убирает.
+SPEED_ARGS = [
+    '-4',
+    '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best',
+    '--concurrent-fragments', '8',
+    '--throttled-rate', '2M',
+    '--socket-timeout', '10',
+    '--buffer-size', '16M',
+    '--retries', '2',
+    '--fragment-retries', '2',
+    '--file-access-retries', '3',
+]
+
+# ---------- JS-рантайм для yt-dlp ----------
+# С 2025-2026 YouTube требует выполнения JS-вызовов (n-sig и т.п.) —
+# без этого первые клиенты падают с 403 "unable to download video data".
+# yt-dlp по умолчанию включает только deno; если deno нет, подключаем node.
+if shutil.which('deno'):
+    JS_RUNTIME_ARGS = []
+else:
+    _node = shutil.which('node')
+    JS_RUNTIME_ARGS = ['--js-runtimes', 'node'] if _node else []
+
+# Файл-память: какой player_client сработал в прошлый раз.
+# Позволяет следующему запуску сразу приступать к рабочему способу.
+LAST_CLIENT_STATE = os.path.join(os.path.expanduser('~'), '.cache', 'ytd_last_client')
+
+
+def get_last_client():
+    """Вернуть последний успешный player_client или None."""
+    try:
+        with open(LAST_CLIENT_STATE) as f:
+            client = f.read().strip()
+        return client if client in PLAYER_CLIENT_STRATEGIES else None
+    except OSError:
+        return None
+
+
+def save_last_client(client):
+    """Запомнить player_client, который успешно скачал видео."""
+    try:
+        os.makedirs(os.path.dirname(LAST_CLIENT_STATE), exist_ok=True)
+        with open(LAST_CLIENT_STATE, 'w') as f:
+            f.write(client)
+    except OSError:
+        pass
 
 
 # ---------- Поиск yt-dlp ----------
@@ -307,19 +324,29 @@ def strategy_client_variants(yt_dlp, url, output_dir):
     output_template = os.path.join(output_dir, '%(title).200B [%(id)s].%(ext)s')
     base = [
         '--no-playlist',
-        '-f', 'bestvideo+bestaudio/best',
+        *SPEED_ARGS,
+        *JS_RUNTIME_ARGS,
         '--merge-output-format', 'mp4',
         '-o', output_template,
         '--no-mtime',
         '--newline',
         '--no-cache-dir',
     ]
-    for client in PLAYER_CLIENT_STRATEGIES:
+    # Порядок клиентов: сначала тот, что сработал в прошлый раз (чтобы
+    # сразу приступать к рабочему способу), затем остальные по списку.
+    clients = list(PLAYER_CLIENT_STRATEGIES)
+    last_client = get_last_client()
+    if last_client:
+        clients.remove(last_client)
+        clients.insert(0, last_client)
+        print(f"  (помню рабочий клиент: {last_client})")
+    for client in clients:
         args = base + [
             '--extractor-args', f'youtube:player_client={client}',
         ]
         ok, _ = run_yt_dlp(yt_dlp, args + [url], output_dir, label=f"player_client={client}")
         if ok:
+            save_last_client(client)
             return True
     return False
 
@@ -330,7 +357,8 @@ def strategy_with_cookies(yt_dlp, url, output_dir):
     output_template = os.path.join(output_dir, '%(title).200B [%(id)s].%(ext)s')
     base = [
         '--no-playlist',
-        '-f', 'bestvideo+bestaudio/best',
+        *SPEED_ARGS,
+        *JS_RUNTIME_ARGS,
         '--merge-output-format', 'mp4',
         '-o', output_template,
         '--no-mtime',
@@ -362,7 +390,8 @@ def strategy_with_pot(yt_dlp, url, output_dir):
     output_template = os.path.join(output_dir, '%(title).200B [%(id)s].%(ext)s')
     args = [
         '--no-playlist',
-        '-f', 'bestvideo+bestaudio/best',
+        *SPEED_ARGS,
+        *JS_RUNTIME_ARGS,
         '--merge-output-format', 'mp4',
         '-o', output_template,
         '--no-mtime',
@@ -381,7 +410,8 @@ def strategy_with_proxy(yt_dlp, url, output_dir, proxy):
     args = [
         '--no-playlist',
         '--proxy', proxy,
-        '-f', 'bestvideo+bestaudio/best',
+        *SPEED_ARGS,
+        *JS_RUNTIME_ARGS,
         '--merge-output-format', 'mp4',
         '-o', output_template,
         '--no-mtime',
@@ -445,7 +475,7 @@ def main():
         sys.exit(0)
 
     # Получаем URL
-    url = args.url or get_url_from_clipboard()
+    url = "https://www.youtube.com/watch?v=VopXV3hbsUs&t=496s" # args.url or get_url_from_clipboard()
     if not url:
         print("\nВ буфере обмена нет YouTube-ссылки.")
         print("Скопируйте ссылку на видео, либо передайте её аргументом:")
@@ -457,56 +487,44 @@ def main():
     # Прокси из аргумента или из окружения
     proxy = args.proxy or os.environ.get('YT_PROXY')
 
-    # ---------- Перебор стратегий ----------
-    # Порядок: сначала бесплатные и быстрые (client-variants), потом
-    # cookies (нужен залогиненный браузер), потом PO Token, потом proxy/Tor.
-
-    strategies = [
-        lambda: strategy_client_variants(yt_dlp, url, output_dir),
-        lambda: strategy_with_cookies(yt_dlp, url, output_dir),
-        lambda: strategy_with_pot(yt_dlp, url, output_dir),
-    ]
-    if proxy:
-        strategies.append(lambda: strategy_with_proxy(yt_dlp, url, output_dir, proxy))
-    strategies.append(lambda: strategy_with_tor(yt_dlp, url, output_dir))
-
-    for i, strat in enumerate(strategies, 1):
-        try:
-            if strat():
-                print("\n" + "=" * 64)
-                print(f"  ✓ УСПЕХ! Видео сохранено в: {output_dir}")
-                print("=" * 64)
-                sys.exit(0)
-        except KeyboardInterrupt:
-            print("\nПрервано пользователем.")
-            sys.exit(130)
-        # между попытками — пауза, чтобы YouTube не пометил как бот-флуд
-        time.sleep(2)
+    # ---------- Единственная рабочая стратегия ----------
+    # Проверено на практике: всегда срабатывает способ №1 (перебор
+    # player_client) — если JS-рантайм есть (node/deno) и версия yt-dlp
+    # свежая. Cookies/PO-Token/Tor отключены, чтобы не тратить время.
+    try:
+        ok = strategy_client_variants(yt_dlp, url, output_dir)
+        # если клиенты не прошли, но пользователь явно указал прокси — пробуем его
+        if not ok and proxy:
+            ok = strategy_with_proxy(yt_dlp, url, output_dir, proxy)
+        if ok:
+            print("\n" + "=" * 64)
+            print(f"  ✓ УСПЕХ! Видео сохранено в: {output_dir}")
+            print("=" * 64)
+            sys.exit(0)
+    except KeyboardInterrupt:
+        print("\nПрервано пользователем.")
+        sys.exit(130)
 
     # ---------- Всё провалилось ----------
     print("\n" + "=" * 64)
-    print("  ✗ Все автоматические стратегии не сработали.")
+    print("  ✗ Клиенты не сработали (обычно это временная блокировка CDN).")
     print("=" * 64)
     print("""
 Ручные рекомендации:
 
-1) Откройте youtube.com в Chrome/Edge/Firefox и залогиньтесь в Google.
-   Затем перезапустите скрипт — способ №2 (cookies-from-browser) должен пройти.
+1) Повторите попытку — CDN-хосты googlevideo случайно «виснут»:
+       python3 youtube_downloader.py
 
 2) Обновите yt-dlp до самой свежей nightly:
        yt-dlp -U --update-to nightly
 
-3) Установите плагин PO Token:
-       pip install bgutil-ytdlp-pot-provider --break-system-packages
+3) Убедитесь, что есть JS-рантайм (node или deno) — без него клиенты
+   падают с 403. Скрипт сам подключает node, если он в PATH.
 
 4) Если ваш IP в РФ заблокирован YouTube — поднимите VPN/прокси и:
        YT_PROXY=socks5://127.0.0.1:1080 python3 youtube_downloader.py
    или:
        python3 youtube_downloader.py --proxy http://127.0.0.1:8080
-
-5) Альтернатива — Tor:
-       sudo apt install tor && sudo service tor start
-   затем снова запустите этот скрипт (он сам попробует 127.0.0.1:9050).
 """)
     sys.exit(1)
 

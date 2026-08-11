@@ -7,8 +7,16 @@ import signal
 
 
 def Get_pid():
+ # Кэш winepath и скомпилированная регулярка через атрибуты функции (ускоряет повторные вызовы)
+ if not hasattr(Get_pid, "_winepath_cache"):
+  Get_pid._winepath_cache = {}
+ if not hasattr(Get_pid, "_RE_EXE_SH"):
+  Get_pid._RE_EXE_SH = re.compile(r'.*\.(exe|sh)$', re.IGNORECASE)
  
- # Имя пользователя (один раз)
+ winepath_cache = Get_pid._winepath_cache
+ _RE_EXE_SH = Get_pid._RE_EXE_SH
+ 
+ # 1. Получение пользователя
  user = (
    os.environ.get('USER')
    or os.environ.get('LOGNAME')
@@ -16,87 +24,44 @@ def Get_pid():
  )
  if not user:
   try:
-   user = subprocess.run(
-    ['whoami'], capture_output=True, text=True, timeout=1
-   ).stdout.strip() or None
+   user = subprocess.check_output(['whoami'], text=True, timeout=1).strip() or None
   except Exception:
    user = None
  
- _RE_EXE_SH = re.compile(r'.*\.(exe|sh)$', re.IGNORECASE)
- 
- _BASH_GET_MAIN_ID = '''#!/bin/bash
-active_window_id=$(xdotool getactivewindow 2>/dev/null)
-if [[ -n "$active_window_id" && "$active_window_id" =~ ^[0-9]+$ && "$active_window_id" != "0" ]]; then
-    process_id_active=$(xdotool getwindowpid "$active_window_id" 2>/dev/null)
-    if [[ -n "$process_id_active" && "$process_id_active" != "0" ]]; then
-        parent_pid=$(ps -p "$process_id_active" -o ppid= 2>/dev/null | tr -d '[:space:]')
-        if [[ -n "$parent_pid" && "$parent_pid" != "0" && "$parent_pid" != "1" ]] && ps -p "$parent_pid" >/dev/null 2>&1; then
-            echo "$parent_pid"
-        else
-            echo "$process_id_active"
-        fi
-        exit 0
-    fi
-fi
-echo "0"
-'''
- 
- # Кэш winepath (значительно ускоряет повторяющиеся вызовы)
- _winepath_cache = {}
- 
- def _winepath_u(win_path: str):
-  if win_path in _winepath_cache:
-   return _winepath_cache[win_path]
-  try:
-   r = subprocess.run(
-    ['winepath', '-u', win_path],
-    capture_output=True, text=True, timeout=1.5
-   )
-   result = r.stdout.strip() if r.returncode == 0 else None
-  except (subprocess.SubprocessError, FileNotFoundError, OSError):
-   result = None
-  _winepath_cache[win_path] = result
-  return result
- 
  my_pid = os.getpid()
  data_dict = {}
+ parent_map = {}
+ children_map = {}
  
- # === Один проход по всем процессам ===
- for proc in psutil.process_iter(["pid", "username", "cmdline"]):
+ # === Один быстрый проход по всем процессам ===
+ # Запрашиваем нужные атрибуты сразу (работает на C-уровне psutil, быстрее os.readlink)
+ for proc in psutil.process_iter(["pid", "username", "cmdline", "ppid", "exe", "cwd"]):
   try:
    info = proc.info
    pid = info["pid"]
    if pid == my_pid:
     continue
    
-   # Фильтр по пользователю
+   # Строим дерево процессов в памяти (O(1) доступ вместо чтения /proc)
+   ppid = info.get("ppid")
+   parent_map[pid] = ppid
+   if ppid:
+    children_map.setdefault(ppid, []).append(pid)
+   
    if user is not None and info.get("username") != user:
     continue
    
-   cmdline_parts = info["cmdline"] or []
-   
-   # cwd / exe через /proc
-   try:
-    cwd = os.readlink(f"/proc/{pid}/cwd")
-   except (FileNotFoundError, PermissionError, OSError):
-    cwd = None
-   
-   try:
-    exe_link = os.readlink(f"/proc/{pid}/exe")
-   except (FileNotFoundError, PermissionError, OSError):
-    exe_link = None
+   cmdline_parts = info.get("cmdline") or []
+   cwd = info.get("cwd")
+   exe_link = info.get("exe")
    
    # --- Определяем, Wine ли это ---
    is_wine = False
    if exe_link:
     low_exe = exe_link.lower()
-    if (
-      'wine-preloader' in low_exe
-      or 'wine64-preloader' in low_exe
-      or '/wine' in low_exe
-    ):
+    if 'wine-preloader' in low_exe or 'wine64-preloader' in low_exe or '/wine' in low_exe:
      is_wine = True
-   if not is_wine:
+   if not is_wine and cmdline_parts:
     is_wine = any('.exe' in arg.lower() for arg in cmdline_parts)
    
    resolved = None
@@ -113,15 +78,27 @@ echo "0"
      exe_name = os.path.basename(win_exe.replace('\\', '/'))
      found = False
      
-     # 1. Абсолютный Windows-путь (C:\...)
+     # 1. Абсолютный Windows-путь
      if len(win_exe) >= 2 and win_exe[1] == ':':
-      linux_path = _winepath_u(win_exe)
+      if win_exe in winepath_cache:
+       linux_path = winepath_cache[win_exe]
+      else:
+       try:
+        r = subprocess.run(
+         ['winepath', '-u', win_exe],
+         capture_output=True, text=True, timeout=1.5
+        )
+        linux_path = r.stdout.strip() if r.returncode == 0 else None
+       except Exception:
+        linux_path = None
+       winepath_cache[win_exe] = linux_path
+      
       if linux_path and os.path.isfile(linux_path):
        resolved = linux_path
        found = True
      
      # 2. cwd + basename
-     if not found and cwd:
+     if not found and cwd and exe_name:
       candidate = os.path.join(cwd, exe_name)
       if os.path.isfile(candidate):
        resolved = candidate
@@ -135,29 +112,28 @@ echo "0"
        resolved = candidate
        found = True
      
-     # 4. Ещё раз basename (на случай, если предыдущие не сработали)
-     if not found and cwd:
-      candidate = os.path.join(cwd, exe_name)
-      if os.path.isfile(candidate):
-       resolved = candidate
-       found = True
-     
-     # 5. Fallback: find (уменьшен depth и timeout)
+     # 4. Fallback: быстрый поиск на чистом Python (аналог find -maxdepth 2)
      if not found and cwd and exe_name:
       try:
-       r = subprocess.run(
-        [
-         'find', cwd,
-         '-maxdepth', '2',
-         '-iname', exe_name,
-         '-type', 'f'
-        ],
-        capture_output=True, text=True, timeout=1.5
-       )
-       if r.returncode == 0 and r.stdout.strip():
-        resolved = r.stdout.strip().split('\n', 1)[0]
-        found = True
-      except (subprocess.SubprocessError, FileNotFoundError, OSError):
+       exe_name_lower = exe_name.lower()
+       cwd_clean = cwd if cwd.endswith(os.sep) else cwd + os.sep
+       for root, dirs, files in os.walk(cwd):
+        if root != cwd:
+         if root.startswith(cwd_clean):
+          rel_path = root[len(cwd_clean):]
+          depth = rel_path.count(os.sep) + 1
+         else:
+          depth = 3
+         if depth >= 3:
+          dirs.clear()  # Прерываем спуск (эквивалент -maxdepth 2)
+          continue
+        for f in files:
+         if f.lower() == exe_name_lower:
+          resolved = os.path.join(root, f)
+          break
+        if resolved:
+         break
+      except (PermissionError, FileNotFoundError, OSError):
        pass
    
    # ===== Обычный Linux-процесс =====
@@ -176,9 +152,9 @@ echo "0"
      if full_path and os.path.isfile(full_path):
       resolved = full_path
      else:
-      resolved = exe_link  # fallback
+      resolved = exe_link
    
-   # --- Доп. сканирование cmdline на .exe/.sh ---
+   # --- Доп. сканирование cmdline ---
    if not resolved:
     for arg in cmdline_parts:
      arg_clean = arg.replace('\\', '/').strip('"')
@@ -188,49 +164,66 @@ echo "0"
    
    if resolved:
     data_dict[pid] = resolved
-    # ID потоков — только если путь найден
     try:
      for thread in proc.threads():
       data_dict[thread.id] = resolved
-    except (psutil.NoSuchProcess, psutil.AccessDenied):
+    except Exception:
      pass
   
-  except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-   continue
   except Exception:
    continue
  
  # === Разворачиваем словарь на родителей/потомков ===
+ # BFS по уже построенным словарям (вместо медленных proc.parent() и proc.children())
  expanded = dict(data_dict)
- for game_pid, game_path in list(data_dict.items()):
-  try:
-   proc = psutil.Process(game_pid)
-   # Родители
-   parent = proc.parent()
-   while parent is not None:
-    expanded.setdefault(parent.pid, game_path)
-    parent = parent.parent()
-   # Потомки
-   for child in proc.children(recursive=True):
-    expanded.setdefault(child.pid, game_path)
-  except (psutil.NoSuchProcess, psutil.AccessDenied):
-   continue
+ for game_pid, game_path in data_dict.items():
+  # Родители
+  curr = parent_map.get(game_pid)
+  while curr and curr != 0:
+   if curr not in expanded:
+    expanded[curr] = game_path
+   curr = parent_map.get(curr)
+  
+  # Потомки (BFS через список вместо deque, чтобы не требовать лишних импортов)
+  queue = [game_pid]
+  idx = 0
+  while idx < len(queue):
+   curr = queue[idx]
+   idx += 1
+   for child in children_map.get(curr, []):
+    if child not in expanded:
+     expanded[child] = game_path
+     queue.append(child)
  
- # === PID активного окна ===
+ # === PID активного окна (без Bash, напрямую через xdotool) ===
  id_active = 0
  try:
-  r = subprocess.run(
-   ['bash'],
-   input=_BASH_GET_MAIN_ID,
-   stdout=subprocess.PIPE,
-   stderr=subprocess.DEVNULL,
-   text=True,
-   timeout=3,
-  )
-  out = r.stdout.strip()
-  if out and out.isdigit():
-   id_active = int(out)
- except (subprocess.SubprocessError, ValueError, OSError):
+  win_id = subprocess.check_output(['xdotool', 'getactivewindow'], stderr=subprocess.DEVNULL, timeout=1).decode().strip()
+  if win_id and win_id.isdigit() and win_id != '0':
+   win_pid = subprocess.check_output(['xdotool', 'getwindowpid', win_id], stderr=subprocess.DEVNULL, timeout=1).decode().strip()
+   if win_pid and win_pid.isdigit() and win_pid != '0':
+    win_pid_int = int(win_pid)
+    ppid = parent_map.get(win_pid_int)
+    
+    # Аналог проверки "ps -p ppid >/dev/null" из оригинала
+    if ppid and ppid not in (0, 1) and ppid in parent_map:
+     id_active = ppid
+    else:
+     # Fallback: проверяем через ps, если активное окно не в нашем дереве процессов
+     try:
+      ps_out = subprocess.check_output(
+       ['ps', '-p', str(win_pid_int), '-o', 'ppid='],
+       stderr=subprocess.DEVNULL, timeout=1
+      ).decode().strip()
+      ppid_int = int(ps_out) if ps_out.isdigit() else 0
+      if ppid_int and ppid_int not in (0, 1):
+       subprocess.check_call(['ps', '-p', str(ppid_int)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1)
+       id_active = ppid_int
+      else:
+       id_active = win_pid_int
+     except Exception:
+      id_active = win_pid_int
+ except Exception:
   pass
  
  return expanded, id_active
@@ -239,7 +232,7 @@ echo "0"
 if __name__ == "__main__":
  while True:
   data_dict, id_active = Get_pid()
-  # print(data_dict)
+  print(data_dict)
   has_portproton = any('/PortProton/data' in p and '.exe' in p for p in data_dict.values())
   if has_portproton:
    if id_active in data_dict:

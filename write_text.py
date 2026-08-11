@@ -147,7 +147,7 @@ class SmartTyper:
   return ui
  
  def ensure_numlock_on(self):
-  print("Принудительное включение NumLock...")
+  # print("Принудительное включение NumLock...")
   try:
    self.physical_keyboard.set_led(ecodes.LED_NUML, 1)
    self.ui.write(ecodes.EV_LED, ecodes.LED_NUML, 1)
@@ -162,8 +162,8 @@ class SmartTyper:
  def get_current_layout(self):
   try:
    cmd = "xset -q | grep -A 0 'LED mask' | awk '{print $10}'"
-   time.sleep(0.5)
    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+   time.sleep(0.5)
    mask = result.stdout.strip()
    if mask == "00001002":
     return 'us'
@@ -202,8 +202,8 @@ class SmartTyper:
     if current == lang:
      return True
     try:
-     subprocess.run(["xte", "key ISO_Next_Group"], check=True, timeout=1)
      time.sleep(1.1)
+     subprocess.run(["xte", "key ISO_Next_Group"], check=True, timeout=1)
      if self.get_current_layout() == lang:
       return True
     except Exception:

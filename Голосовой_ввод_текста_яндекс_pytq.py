@@ -1,3 +1,5 @@
+import time
+
 from pytq_libs_voice import *
 from write_text import *
 
@@ -241,8 +243,11 @@ class VoiceThread(QThread):
       filter_elem = oknyx_core.get_attribute("data-testid") or ""
       classes = oknyx_core.get_attribute("class") or ""
       self.message, counts1 = self.get_user_message(self.counts)
+      print(classes)
+      if  "spe" in filter_elem and "стоп" in aria_label and "th" in classes:
+       self.driver.execute_script("arguments[0].click();", self.button)
+       time.sleep(3)
       if "su" in filter_elem or "ex" in classes and "сл" in aria_label.lower():
-       # print(classes)
        self.driver.execute_script("arguments[0].click();", self.button)
        # circles = oknyx_core.find_elements(By.CSS_SELECTOR, ".StandaloneOknyxCore-ListeningCircle")
        # is_listening_circles = any(c.value_of_css_property("display") != "none" for c in circles)
@@ -263,13 +268,12 @@ class VoiceThread(QThread):
         self.driver.execute_script("arguments[0].click();", self.button)
         time.sleep(2)
         self.driver.execute_script("arguments[0].click();", self.button)
-    
    
       # if counts1 > 0:
       #   self.show_message(None, False)
   
    except Exception as e:
-    print(f"Ошибка в selenium_worker: {e}")
+    # print(f"Ошибка в selenium_worker: {e}")
     pass
  
  def clear_input_field(self):  # Очистка поля ввода."""

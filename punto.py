@@ -7,8 +7,8 @@ from gi.repository import GLib
 
 ENTRY_NAMES = ("file_search_entry", "content_search_entry")
 SEARCH_LABEL_KEYWORDS = ("поиск файлов", "содержит", "search files", "contains", "поиск", "search", "find")
-DEBOUNCE_MS = 1500
-COOLDOWN_SEC = 1.0
+DEBOUNCE_MS = 500  # Уменьшили с 1500 мс для более отзывчивого поиска в Nemo
+COOLDOWN_SEC = 0.3  # Уменьшили с 1.0 сек для быстрой реакции
 
 class ToolTip: # Класс для отображения подсказок
     def __init__(self, widget, text):
@@ -85,6 +85,8 @@ class SmartTyper: # Основной класс для автозамены и �
         self.disabled = False
         self.replacing = False
         self._setup_ui() # Настраиваем интерфейс
+        # Блокировка для защиты общих переменных от race conditions при быстром вводе
+        self.state_lock = threading.Lock()
 
     def _load_data(self): # Загружает данные из файлов аббревиатур и словаря
         if os.path.exists(self.abbreviations_path):
@@ -326,9 +328,9 @@ class SmartTyper: # Основной класс для автозамены и �
                     if text == last:
                         return
 
+                    self.replacing = True
                     # Обновляем состояние
                     self.nemo_states[key] = [None, text, now + COOLDOWN_SEC]
-                    self.replacing = True
 
                     # Эмулируем Enter
                     subprocess.run('xte "keydown Return" "keyup Return"', shell=True, check=False)
@@ -416,13 +418,11 @@ class SmartTyper: # Основной класс для автозамены и �
     def _update_suggestions_ui(self): # Обновляет интерфейс подсказок
         if self.tooltip and self.abbrev_res:
             self.tooltip.updatetext(self.abbrev_res)
-
+        if not self.suggestions:
+         self.root.withdraw()
+         return
         for label in self.suggestion_labels:
             label.config(text="")
-
-        if not self.suggestions:
-            self.root.withdraw()
-            return
 
         total_width = 60
         for i, word in enumerate(self.suggestions[:self.max_suggestions]):
@@ -569,7 +569,7 @@ exit'''
         if key_str == "<65437>":
             key_str = "5"
 
-        if time.time() - self.last_key_press_time < 0.05:
+        if time.time() - self.last_key_press_time < 0.005:
             self.last_key_press_time = time.time()
             return True
 

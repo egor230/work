@@ -54,8 +54,7 @@ ORIGIN_H=1080
 SCALE=80
 NEW_W=$(( ORIGIN_W * SCALE / 100 ))
 NEW_H=$(( ORIGIN_H * SCALE / 100 ))
-GAMESCOPE_ARGS=" -f --force-windows-fullscreen -W ${{ORIGIN_W}} -H ${{ORIGIN_H}} -w ${{NEW_W}} -h ${{NEW_H}} -r 90 -S auto -F fsr --sharpness 20 --force-grab-cursor"
-
+GAMESCOPE_ARGS="-f --force-windows-fullscreen -W ${{ORIGIN_W}} -H ${{ORIGIN_H}} -w ${{NEW_W}} -h ${{NEW_H}} -r 90 -S auto -F fsr --sharpness 20 --force-grab-cursor"
 current_layout=$(xset -q | grep -A 0 'LED mask' | awk '{{print $10}}')
 if [ "$current_layout" == "00000002" ]; then
     xdotool key super+space
@@ -66,8 +65,8 @@ export WINEPREFIX="/home/egor/PortProton/data/prefixes/DEFAULT" # winetricks dxv
 #DXVK_HUD=fps gamescope $GAMESCOPE_ARGS wine \"{1}\" -skipintro 1 # --dx11 -skipintro 1
 #DXVK_HUD=fps wine \"{1}\" -skipintro 1 # --dx11 -skipintro 1
 #gamescope $GAMESCOPE_ARGS -- env MANGOHUD=1 wine \"{1}\" -skipintro 1 # --dx11 -skipintro 1
-#gamescope $GAMESCOPE_ARGS wine \"{1}\" -skipintro 1 #--dx11 -skipintro 1
-wine "{1}" -skipintro 1 #--dx11 -skipintro 1
+#gamescope $GAMESCOPE_ARGS -- wine \"{1}\" -skipintro 1 #--dx11 -skipintro 1
+wine "{1}" -skipintro 1
 # portproton \"{1}\"
 exit 0
 '''.format(directory, filename)
