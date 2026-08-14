@@ -249,10 +249,6 @@ class VoiceThread(QThread):
        time.sleep(3)
       if "su" in filter_elem or "ex" in classes and "сл" in aria_label.lower():
        self.driver.execute_script("arguments[0].click();", self.button)
-       # circles = oknyx_core.find_elements(By.CSS_SELECTOR, ".StandaloneOknyxCore-ListeningCircle")
-       # is_listening_circles = any(c.value_of_css_property("display") != "none" for c in circles)
-       # if "th" in classes and "th" in filter_elem  and "стоп" in aria_label.lower():
-       #  print(circles)  is_listening_circles or
       if "lis" in classes and "стоп" in aria_label.lower() and self.message:
        self.show_message(self.message, self.mic)
       if counts1 > self.counts:
@@ -477,12 +473,15 @@ class MyWindow(QWidget):
   self.thread.wait(3000)
   QApplication.quit()
 
-
 if __name__ == "__main__":
  app = QApplication(sys.argv)
  window = MyWindow()
  sys.exit(app.exec())
  
+ # circles = oknyx_core.find_elements(By.CSS_SELECTOR, ".StandaloneOknyxCore-ListeningCircle")
+ # is_listening_circles = any(c.value_of_css_property("display") != "none" for c in circles)
+ # if "th" in classes and "th" in filter_elem  and "стоп" in aria_label.lower():
+ #  print(circles)  is_listening_circles or
  # elif not self.recording: # ждем переключения флага или ручного старта
  #  time.sleep(0.6)
  #  # НЕ кликаем кнопку автоматически — ждем toggle() или ручной старт
