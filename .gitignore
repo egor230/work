@@ -1,7 +1,11 @@
 # Игнорируем всё, кроме нужных расширений
+wine-prefix-backup/drive_c/
 *
+
 !*.py
+# Этот скрипт (чтобы не отправлять токен на GitHub)
 !*.md
+/updata git.sh
 !*.txt
 !*.sh
 !*.json
