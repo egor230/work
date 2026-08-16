@@ -52,8 +52,8 @@ BASE_URL = "https://dzen.ru"
 
 # Ссылка для теста. Чтобы взять ссылку из буфера обмена — закомментируйте эту
 # строку и раскомментируйте следующую (как было в оригинале).
-URL = "https://dzen.ru/a/aQraudPcH22iXHT7"
-# URL = str(pyperclip.paste()).strip() if pyperclip else ""
+#URL = "https://dzen.ru/a/aQraudPcH22iXHT7"
+URL = str(pyperclip.paste()).strip() if pyperclip else ""
 
 # Текст благодарности/рекламы, который Дзен вставляет в конце — вырезаем.
 DONATION_TEXT = (

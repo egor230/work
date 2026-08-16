@@ -40,13 +40,16 @@ class Worker(QThread):
  status_sig = pyqtSignal(str)
  error_sig = pyqtSignal(str)
 
- def __init__(self, keymap, trigger_modes, mouse_on, sens, smooth, grab):
+ def __init__(self, keymap, trigger_modes, mouse_on, sens_x, sens_y, smooth, grab):
   # keymap — словарь обычных маппингов (строки: "RIGHT_TRIGGER" -> "KEY_N")
   # trigger_modes — словарь триггерных режимов ("RIGHT_TRIGGER" -> {"key":"KEY_H","mode":"hold"})
   super().__init__()
   self.km = keymap
   self.tm = trigger_modes
-  self.mouse_on, self.sens, self.smooth, self.grab = mouse_on, sens, smooth, grab
+  self.mouse_on = bool(mouse_on)
+  self.sens_x = max(1, min(15, int(sens_x)))
+  self.sens_y = max(1, min(15, int(sens_y)))
+  self.smooth, self.grab = smooth, grab
   self.running = False
   self.ui = None
   self.kb_dev, self.m_dev = None, None
@@ -132,6 +135,12 @@ class Worker(QThread):
                       if ecodes.EV_REL in evdev.InputDevice(p).capabilities()
                       and ecodes.EV_KEY in evdev.InputDevice(p).capabilities()
                       and ecodes.REL_X in evdev.InputDevice(p).capabilities()[ecodes.EV_REL]), None)
+   if not self.m_dev:
+    # Без устройства мыши режим нельзя включить. Важно освободить уже
+    # захваченную клавиатуру, иначе она могла бы остаться заблокированной.
+    self._clean()
+    self.error_sig.emit("Мышь не найдена!")
+    return
 
   # Создание виртуального геймпада Xbox 360
   try:
@@ -308,23 +317,30 @@ class Worker(QThread):
     self.repeat_start_time.pop(logical, None)
 
  def _mouse_ev(self, ev):
-  """Обработка событий мыши — преобразование в оси правого стика и триггеры"""
+  """Преобразует движение мыши в оси правого стика и её кнопки в действия геймпада."""
   if ev.type == ecodes.EV_REL:
-   dx = ev.value * self.sens if ev.code == ecodes.REL_X else 0
-   dy = ev.value * self.sens if ev.code == ecodes.REL_Y else 0
+   # Игнорируем колесо и прочие относительные события: иначе они добавляли
+   # нулевые значения в сглаживание и временно ухудшали отклик стика.
+   if ev.code not in (ecodes.REL_X, ecodes.REL_Y):
+    return
+   dx = ev.value * self.sens_x if ev.code == ecodes.REL_X else 0
+   dy = ev.value * self.sens_y if ev.code == ecodes.REL_Y else 0
    self.smoother.append((dx, dy))
    if self.smooth:
-    dx = sum(x[0] for x in self.smoother) / len(self.smoother)
-    dy = sum(x[1] for x in self.smoother) / len(self.smoother)
+    dx = sum(item[0] for item in self.smoother) / len(self.smoother)
+    dy = sum(item[1] for item in self.smoother) / len(self.smoother)
    self.m_rx = max(-32767, min(32767, self.m_rx + dx * 40))
    self.m_ry = max(-32767, min(32767, self.m_ry + dy * 40))
   elif ev.type == ecodes.EV_KEY:
+   pressed = 1 if ev.value else 0
    if ev.code == ecodes.BTN_LEFT:
-    self.ui.write(ecodes.EV_ABS, ecodes.ABS_RZ, 255 if ev.value else 0)
+    self.ui.write(ecodes.EV_ABS, ecodes.ABS_RZ, 255 if pressed else 0)
    elif ev.code == ecodes.BTN_RIGHT:
-    self.ui.write(ecodes.EV_ABS, ecodes.ABS_Z, 255 if ev.value else 0)
+    self.ui.write(ecodes.EV_ABS, ecodes.ABS_Z, 255 if pressed else 0)
    elif ev.code == ecodes.BTN_MIDDLE:
-    self.ui.write(ecodes.EV_KEY, ecodes.BTN_THUMBR, ev.value)
+    self.ui.write(ecodes.EV_KEY, ecodes.BTN_THUMBR, pressed)
+   else:
+    return
    self.ui.syn()
 
  def _dispatch(self, t, p):
@@ -511,6 +527,7 @@ class AppController:
   self.window.btn_defaults.clicked.connect(self._set_defaults)
   self.window.btn_img.clicked.connect(self._browse_image)
   self.window.btn_start.clicked.connect(self._toggle_emulation)
+  self.window.mouse_mode_toggled.connect(self._on_mouse_mode_changed)
   self.window.closing.connect(self._save_app_settings)
   self.window.gamepad.zones_changed.connect(self._save_app_settings)
 
@@ -546,11 +563,13 @@ class AppController:
     if data.get("zones"):
      self.window.gamepad.set_zones_data(data["zones"])
     self.pm.load_profiles(data)  # Загружает профили + триггерные режимы + миграция
-    # Восстановление настроек мыши (раскомментировать если чекбоксы есть в UI)
-    # self.window.chk_mouse.setChecked(data.get("mouse_on", False))
-    # self.window.sl_sens.setValue(data.get("sens", 5))
-    # self.window.chk_smooth.setChecked(data.get("smooth", True))
-    # self.window.chk_grab.setChecked(data.get("grab", True))
+    # Поддержка старого формата: единая sens применяется к обеим осям,
+    # если отдельных значений sens_x/sens_y ещё нет.
+    legacy_sens = data.get("sens", 5)
+    self.window.set_mouse_enabled(data.get("mouse_on", False))
+    self.window.set_mouse_settings(data.get("sens_x", legacy_sens), data.get("sens_y", legacy_sens))
+    self.window.chk_smooth.setChecked(data.get("smooth", True))
+    self.window.chk_grab.setChecked(data.get("grab", True))
    except:
     self.pm.load_profiles({})
   else:
@@ -565,8 +584,11 @@ class AppController:
    "last_profile": self.pm.current_profile,
    "profiles": self.pm.profiles,
    "trigger_modes": self.pm.trigger_modes,  # Триггерные режимы отдельно от маппингов
-   "mouse_on": self.window.chk_mouse.isChecked(),
-   "sens": self.window.sl_sens.value(),
+   "mouse_on": self.window.mouse_enabled(),
+   # sens оставлен для совместимости со старыми версиями приложения.
+   "sens": self.window.mouse_sens_x,
+   "sens_x": self.window.mouse_sens_x,
+   "sens_y": self.window.mouse_sens_y,
    "smooth": self.window.chk_smooth.isChecked(),
    "grab": self.window.chk_grab.isChecked()
   }
@@ -673,18 +695,42 @@ class AppController:
   else:
    self._start_emulation()
 
+ def _on_mouse_mode_changed(self, enabled):
+  """Сохраняет переключение режима и применяет его без запуска, если он остановлен."""
+  self._save_app_settings()
+  if self.worker and self.worker.isRunning():
+   self._start_emulation()
+
  def _start_emulation(self):
   """Запуск потока эмуляции геймпада"""
   self._stop_emulation()
   mapping = self.pm.get_mapping()           # Обычные маппинги (строки)
   trigger_modes = self.pm.get_trigger_modes()  # Триггерные режимы (dict)
-  self.worker = Worker(mapping, trigger_modes,
-                       self.window.chk_mouse.isChecked(), self.window.sl_sens.value(),
-                       self.window.chk_smooth.isChecked(), self.window.chk_grab.isChecked())
-  self.worker.status_sig.connect(self._update_status)
-  self.worker.error_sig.connect(lambda e: (QMessageBox.critical(self.window, "Ошибка", e), self._stop_emulation()))
-  self.worker.finished.connect(self._stop_emulation)
-  self.worker.start()
+  worker = Worker(mapping, trigger_modes,
+                  self.window.mouse_enabled(), self.window.mouse_sens_x, self.window.mouse_sens_y,
+                  self.window.chk_smooth.isChecked(), self.window.chk_grab.isChecked())
+  # Сигналы привязаны к конкретному экземпляру. Это предотвращает ситуацию,
+  # когда отложенный сигнал завершения старого потока останавливает уже новый.
+  worker.status_sig.connect(self._update_status)
+  worker.error_sig.connect(lambda error, source=worker: self._on_worker_error(source, error))
+  worker.finished.connect(lambda source=worker: self._on_worker_finished(source))
+  self.worker = worker
+  worker.start()
+
+ def _on_worker_error(self, source, error):
+  """Показывает ошибку только активного потока эмуляции."""
+  if self.worker is source:
+   QMessageBox.critical(self.window, "Ошибка", error)
+   self._stop_emulation()
+
+ def _on_worker_finished(self, source):
+  """Обрабатывает завершение только текущего, а не уже заменённого потока."""
+  if self.worker is source:
+   self.worker = None
+   self.window.st_lbl.setText("Статус: Остановлен")
+   self.window.st_lbl.setStyleSheet("font-weight: 600; color: #6C757D; font-size: 14px;")
+   self.window.btn_start.setText("▶  ЗАПУСК  ЭМУЛЯЦИИ")
+   self.window.btn_start.setStyleSheet("background:#198754;color:white;border:none;border-radius:4px;")
 
  def _update_status(self, msg):
   """Обновление строки статуса при успешном запуске"""

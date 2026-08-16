@@ -46,7 +46,6 @@ export MESA_VK_WSI_PRESENT_MODE="mailbox"
 export WINE_FULLSCREEN_FSR="1"
 export WINE_FULLSCREEN_FSR_STRENGTH="5"
 export SOUND_DRIVER_USE="pulse"
-#export MANGOHUD="1" # Включаем MangoHud
 export MANGOHUD_USER_CONF="1"
 export MANGOHUD_CONFIG="fps_metrics,horizontal,horizontal_stretch,hud_compact,font_size=24"
 ORIGIN_W=1920
@@ -61,11 +60,13 @@ if [ "$current_layout" == "00000002" ]; then
 fi
 cd "{0}"
 
+#export MANGOHUD="1" # Включаем MangoHud
 export WINEPREFIX="/home/egor/PortProton/data/prefixes/DEFAULT" # winetricks dxvk
 #DXVK_HUD=fps gamescope $GAMESCOPE_ARGS wine \"{1}\" -skipintro 1 # --dx11 -skipintro 1
-#DXVK_HUD=fps wine \"{1}\" -skipintro 1 # --dx11 -skipintro 1
 #gamescope $GAMESCOPE_ARGS -- env MANGOHUD=1 wine \"{1}\" -skipintro 1 # --dx11 -skipintro 1
 #gamescope $GAMESCOPE_ARGS -- wine \"{1}\" -skipintro 1 #--dx11 -skipintro 1
+#это обычно бывает по умолчанию env MANGOHUD=1 wine \"{1}\" -skipintro 1 # --dx11 -skipintro 1
+#DXVK_HUD=fps wine \"{1}\" -skipintro 1 # --dx11 -skipintro 1
 wine "{1}" -skipintro 1
 # portproton \"{1}\"
 exit 0

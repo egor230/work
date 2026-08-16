@@ -349,8 +349,10 @@
         },
         "gta": {}
     },
-    "mouse_on": false,
-    "sens": 5,
+    "mouse_on": true,
+    "sens": 7,
+    "sens_x": 7,
+    "sens_y": 7,
     "smooth": true,
     "grab": true
 }

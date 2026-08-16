@@ -1,7 +1,6 @@
-import time
-
-from pytq_libs_voice import *
-from write_text import *
+# from pytq_libs_voice import *
+# from write_text import *
+from write_text_fast import *
 
 class VoiceThread(QThread):
  icon_signal = pyqtSignal(str)
@@ -243,7 +242,7 @@ class VoiceThread(QThread):
       filter_elem = oknyx_core.get_attribute("data-testid") or ""
       classes = oknyx_core.get_attribute("class") or ""
       self.message, counts1 = self.get_user_message(self.counts)
-      print(classes)
+      # print(classes)
       if  "spe" in filter_elem and "стоп" in aria_label and "th" in classes:
        self.driver.execute_script("arguments[0].click();", self.button)
        time.sleep(3)

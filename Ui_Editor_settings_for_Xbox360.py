@@ -432,8 +432,73 @@ class VirtualKeyboard(QDialog):
     btn.setGeometry(x_pos, y_pos, w, h)
   main_layout.addWidget(keyboard_widget)
 
+class MouseSettingsDialog(QDialog):
+ """Настройки управления правым стиком посредством мыши."""
+ settings_changed = pyqtSignal(int, int)
+
+ def __init__(self, sens_x, sens_y, parent=None):
+  super().__init__(parent)
+  self.setWindowTitle("Мышь — правый стик")
+  self.setModal(True)
+  self.setFixedWidth(430)
+  self.setStyleSheet(
+   "QDialog{background:#0f1023;color:white;border:1px solid #2d5cf7;border-radius:8px;}"
+   "QLabel{background:transparent;color:#d8dcff;}"
+   "QSlider::groove:horizontal{height:6px;background:#2c2f5a;border-radius:3px;}"
+   "QSlider::handle:horizontal{width:16px;margin:-5px 0;background:#2d5cf7;border-radius:8px;}"
+   "QPushButton{background:#198754;color:white;border:none;border-radius:4px;padding:7px 18px;font-weight:600;}"
+   "QPushButton:hover{background:#24a46d;}"
+  )
+
+  layout = QVBoxLayout(self)
+  layout.setContentsMargins(20, 18, 20, 18)
+  layout.setSpacing(12)
+
+  title = QLabel("МЫШЬ → ПРАВЫЙ СТИК")
+  title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+  title.setStyleSheet("color:white;font-size:16px;font-weight:700;padding:6px;background:#1c1e3d;border-radius:5px;")
+  layout.addWidget(title)
+
+  note = QLabel("Настройте чувствительность отдельно для горизонтального и вертикального движения.")
+  note.setWordWrap(True)
+  note.setStyleSheet("color:#aaa;font-size:12px;")
+  layout.addWidget(note)
+
+  self.sl_sens_x, self.lbl_sens_x = self._add_slider(layout, "Горизонталь (X)", sens_x)
+  self.sl_sens_y, self.lbl_sens_y = self._add_slider(layout, "Вертикаль (Y)", sens_y)
+
+  layout.addSpacing(4)
+  apply_btn = QPushButton("Применить")
+  apply_btn.setFixedHeight(34)
+  apply_btn.clicked.connect(self._apply)
+  layout.addWidget(apply_btn, alignment=Qt.AlignmentFlag.AlignRight)
+
+ def _add_slider(self, layout, title, value):
+  row = QHBoxLayout()
+  label = QLabel(title)
+  label.setFixedWidth(135)
+  row.addWidget(label)
+  slider = QSlider(Qt.Orientation.Horizontal)
+  slider.setRange(1, 15)
+  slider.setValue(max(1, min(15, int(value))))
+  row.addWidget(slider, stretch=1)
+  value_label = QLabel(str(slider.value()))
+  value_label.setFixedWidth(22)
+  value_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+  value_label.setStyleSheet("color:white;font-weight:700;")
+  slider.valueChanged.connect(lambda current, target=value_label: target.setText(str(current)))
+  row.addWidget(value_label)
+  layout.addLayout(row)
+  return slider, value_label
+
+ def _apply(self):
+  self.settings_changed.emit(self.sl_sens_x.value(), self.sl_sens_y.value())
+  self.accept()
+
+
 class MainWindow(QWidget):
  closing = pyqtSignal()
+ mouse_mode_toggled = pyqtSignal(bool)
  def __init__(self):
   super().__init__()
   self.setWindowTitle("Xbox 360 Virtual Controller")
@@ -492,32 +557,32 @@ class MainWindow(QWidget):
   frame.setStyleSheet("QFrame{background:#1c1e3d;border-radius:6px;}")
   lay = QHBoxLayout(frame)
   lay.setContentsMargins(15, 4, 15, 4)
-  self.sl_sens = QSlider(Qt.Orientation.Horizontal)
-  self.sl_sens.setRange(1, 15)
-  self.sl_sens.setValue(5)
-  self.sl_sens.setFixedWidth(100)
+  # Эти переключатели сохранены как внутренние настройки для обратной
+  # совместимости с существующим файлом конфигурации.
   self.chk_grab = QCheckBox("Захват KB")
   self.chk_grab.setChecked(True)
-  self.chk_grab.setStyleSheet("color:#aaa;background:transparent;")
-  # lay.addWidget(self.chk_grab)  # [скрыто] Захват KB
-  self.chk_mouse = QCheckBox("Мышь → Правый стик")
-  self.chk_mouse.setStyleSheet("color:#aaa;background:transparent;")
-  # lay.addWidget(self.chk_mouse)  # [скрыто] Мышь → Правый стик
-  # lay.addWidget(QLabel("Чувств:"))  # [скрыто] Надпись чувствительности
-  self.lbl_sens = QLabel("5")
-  self.lbl_sens.setStyleSheet("color:white;")
-  # self.sl_sens.valueChanged.connect(lambda v: self.lbl_sens.setText(str(v)))  # [скрыто] Обновление метки
-  # lay.addWidget(self.sl_sens)  # [скрыто] Ползунок чувствительности
-  # lay.addWidget(self.lbl_sens)  # [скрыто] Значение чувствительности
   self.chk_smooth = QCheckBox("Сглаживание")
   self.chk_smooth.setChecked(True)
-  self.chk_smooth.setStyleSheet("color:#aaa;background:transparent;")
-  # lay.addWidget(self.chk_smooth)  # [скрыто] Сглаживание
+  self.mouse_sens_x = 5
+  self.mouse_sens_y = 5
+
   self.debug_cb = QCheckBox("Двигать зоны (F3)")
   self.debug_cb.setChecked(False)
   self.debug_cb.setStyleSheet("color:#aaa;background:transparent;")
-  lay.addWidget(self.debug_cb)  # [скрыто] Двигать зоны (F3)
+  lay.addWidget(self.debug_cb)
   self.debug_cb.toggled.connect(lambda v: self.gamepad.set_debug_mode(v))
+
+  self.btn_mouse = QPushButton("Мышь")
+  self.btn_mouse.setCheckable(True)
+  self.btn_mouse.setFixedSize(90, 28)
+  self.btn_mouse.setToolTip("Включить управление правым стиком мышью и настроить чувствительность")
+  self.btn_mouse.setStyleSheet(
+   "QPushButton{background:#495057;color:white;border:none;border-radius:4px;font-weight:600;}"
+   "QPushButton:hover{background:#5a6268;}"
+   "QPushButton:checked{background:#198754;}"
+  )
+  self.btn_mouse.clicked.connect(self._on_mouse_button_clicked)
+  lay.addWidget(self.btn_mouse)
 
   # --- ДОБАВЛЕННЫЕ ЭЛЕМЕНТЫ ДЛЯ ТРИГГЕРНЫХ РЕЖИМОВ ---
   lay.addStretch()
@@ -551,6 +616,31 @@ class MainWindow(QWidget):
   lay.addWidget(self.trigger_status_label)
 
   return frame
+
+ def _on_mouse_button_clicked(self, enabled):
+  """Включает или выключает управление правым стиком мышью."""
+  if enabled:
+   dialog = MouseSettingsDialog(self.mouse_sens_x, self.mouse_sens_y, self)
+   dialog.settings_changed.connect(self._set_mouse_settings_from_dialog)
+   dialog.exec()
+  # Сигнал отправляется после закрытия диалога: активный поток перезапускается
+  # ровно один раз уже с окончательными значениями двух ползунков.
+  self.mouse_mode_toggled.emit(enabled)
+
+ def _set_mouse_settings_from_dialog(self, sens_x, sens_y):
+  self.set_mouse_settings(sens_x, sens_y)
+
+ def set_mouse_enabled(self, enabled):
+  self.btn_mouse.blockSignals(True)
+  self.btn_mouse.setChecked(bool(enabled))
+  self.btn_mouse.blockSignals(False)
+
+ def mouse_enabled(self):
+  return self.btn_mouse.isChecked()
+
+ def set_mouse_settings(self, sens_x, sens_y):
+  self.mouse_sens_x = max(1, min(15, int(sens_x)))
+  self.mouse_sens_y = max(1, min(15, int(sens_y)))
 
  def _build_footer(self):
   frame = QFrame()
