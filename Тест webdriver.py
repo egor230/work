@@ -10,6 +10,19 @@ from urllib3 import HTTPConnectionPool
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.service import Service
 
+
+def get_cached_chromedriver():
+ import glob as _glob
+ candidates = []
+ for path in _glob.glob(os.path.expanduser("~/.wdm/drivers/chromedriver/linux64/*/chromedriver-linux64/chromedriver")):
+  ver = path.split("/linux64/")[1].split("/")[0]
+  parts = [int(x) for x in ver.split(".") if x.isdigit()]
+  candidates.append((parts, path))
+ if not candidates:
+  return None
+ candidates.sort(key=lambda t: t[0], reverse=True)
+ return candidates[0][1]
+
 try:
   option = webdriver.ChromeOptions()
 
@@ -19,19 +32,22 @@ try:
   option.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.6367.118 Safari/537.36")
   option.add_argument("--use-fake-ui-for-media-stream")  # звук
   option.add_argument("--disable-popup-blocking")  # блок всплывающих окон.
-
+  
+  option.add_argument('--user-data-dir=/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/google-chrome')
   # Указываем путь к chromedriver (если не в PATH, укажите явно)
   # service = Service("/usr/local/bin/chromedriver")  # Или используйте ChromeDriverManager().install()
   # options.add_argument("--headless")
 
-  # Автоматическая установка chromedriver
-  driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=option)
-
+  driver_path = get_cached_chromedriver()
+  if not driver_path:
+   driver_path = ChromeDriverManager().install()
+  driver = webdriver.Chrome(service=Service(driver_path), options=option)
   # Инициализация драйвера
   # driver = webdriver.Chrome(service=service, options=option)
 
   # Открываем сайт
-  driver.get("https://dzen.ru/id/5e81d2448e05bc7f847fbaea?tab=articles")
+  driver.get("https://arena.ai")
+  input()
 except Exception as ex1:
     print(ex1)  # driver.close()  # driver.quit()
     pass

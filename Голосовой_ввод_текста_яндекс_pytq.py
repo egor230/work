@@ -59,12 +59,76 @@ class VoiceThread(QThread):
   except:
    return "", len_c
  
- def start_selenium(self):  # Запуск браузера и переход на страницу Алисы."""
-  options = get_option()
-  options.add_argument("--disable-extensions")
-  options.add_argument('--user-data-dir=/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/google-chrome')
-  # options.add_argument("--headless=new")
-  self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+  def _chrome_version(self):
+   import subprocess as _sp, re as _re
+   for cmd in ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser"):
+    try:
+     out = _sp.run([cmd, "--version"], capture_output=True, text=True, timeout=10).stdout
+     m = _re.search(r'(\d+\.\d+\.\d+\.\d+)', out)
+     if m:
+      return [int(x) for x in m.group(1).split(".")]
+    except Exception:
+     continue
+   return None
+
+  def get_chromedriver_path(self):
+   import glob as _glob, re as _re, os as _os
+   def _ver(p):
+    m = _re.search(r'(\d+\.\d+\.\d+\.\d+)', p)
+    return [int(x) for x in m.group(1).split(".")] if m else None
+   found = []
+   for pat in (
+    _os.path.expanduser("~/.wdm/drivers/chromedriver/linux64/*/chromedriver-linux64/chromedriver"),
+   ):
+    for path in _glob.glob(pat):
+     if _os.access(path, _os.X_OK):
+      v = _ver(path)
+      if v:
+       found.append((v, path))
+   if not found:
+    return None, []
+   chrome_ver = self._chrome_version()
+   exact = None
+   if chrome_ver and len(chrome_ver) >= 3:
+    for v, p in found:
+     if v[:3] == chrome_ver[:3]:
+      exact = p
+      break
+   if exact:
+    return exact, [exact]
+   found.sort(key=lambda t: t[0], reverse=True)
+   return found[0][1], [p for _, p in found]
+
+  def start_selenium(self):  # Запуск браузера и переход на страницу Алисы."""
+   options = get_option()
+   options.add_argument("--disable-extensions")
+   options.add_argument('--user-data-dir=/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/google-chrome')
+   # options.add_argument("--headless=new")
+   driver_path, candidates = self.get_chromedriver_path()
+   last_err = None
+   for path in (candidates or []):
+    try:
+     self.driver = webdriver.Chrome(service=Service(path), options=options)
+     print(f"Chrome запущен с локальным драйвером: {path}")
+     break
+    except Exception as e:
+     last_err = e
+     print(f"Не удалось запустить Chrome с драйвером {path}: {e}")
+   if self.driver is None:
+    if candidates:
+     print("Все локальные драйверы не подошли — пытаюсь скачать свежий (нужна сеть)...")
+    else:
+     print("Локальный chromedriver не найден — пытаюсь скачать (нужна сеть)...")
+    try:
+     import concurrent.futures as _cf
+     with _cf.ThreadPoolExecutor(max_workers=1) as ex:
+      path = ex.submit(lambda: ChromeDriverManager().install()).result(timeout=120)
+     self.driver = webdriver.Chrome(service=Service(path), options=options)
+    except Exception as e:
+     print(f"Не удалось получить chromedriver: {e}")
+     if last_err:
+      raise last_err
+     raise
   # Установить только положительные координаты
   self.driver.set_window_position(0, 378)
   self.driver.set_window_size(532, 467)

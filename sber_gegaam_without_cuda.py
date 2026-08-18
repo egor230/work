@@ -7,9 +7,6 @@ from torch import Tensor, nn
 from torch.jit import TracerWarning
 from sentencepiece import SentencePieceProcessor
 from tqdm import tqdm
-from pyannote.audio import Model, Pipeline
-from pyannote.audio.core.task import Problem, Resolution, Specifications
-from pyannote.audio.pipelines import VoiceActivityDetection
 
 # Константы
 SAMPLE_RATE = 16000
@@ -30,6 +27,10 @@ _MODEL_HASHES = {
 	"v3_e2e_ctc": "367074d6498f426d960b25f49531cf68",
 	"v3_e2e_rnnt": "2730de7545ac43ad256485a462b0a27a",
 	"v3_ssl": "70cbf5ed7303a0ed242ddb257e9dc6a6",
+	"multilingual_ctc": "5379d887c53ccd9cb95981e2a1832720",
+	"multilingual_ssl": "af54fed7a0337eeae7c4a25b2f8779c8",
+	"multilingual_large_ctc": "79a9adde50dd7f35bbf70927cb6557d0",
+	"multilingual_large_ssl": "2ef65a2ca413f6e1f99a4df0e86c1cee",
 }
 
 _PIPELINE = None
@@ -651,8 +652,11 @@ class ConformerEncoder(nn.Module):
 		return audio_signal.transpose(1, 2), length
 
 
-def get_pipeline() -> Pipeline:
+def get_pipeline() -> "Pipeline":
 	"""Создает или возвращает кэшированный VAD пайплайн"""
+	from pyannote.audio import Model, Pipeline
+	from pyannote.audio.core.task import Problem, Resolution, Specifications
+	from pyannote.audio.pipelines import VoiceActivityDetection
 	global _PIPELINE
 	if _PIPELINE is not None:
 		return _PIPELINE
