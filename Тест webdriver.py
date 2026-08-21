@@ -33,20 +33,17 @@ try:
   option.add_argument("--use-fake-ui-for-media-stream")  # звук
   option.add_argument("--disable-popup-blocking")  # блок всплывающих окон.
   
-  option.add_argument('--user-data-dir=/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/google-chrome')
-  # Указываем путь к chromedriver (если не в PATH, укажите явно)
-  # service = Service("/usr/local/bin/chromedriver")  # Или используйте ChromeDriverManager().install()
-  # options.add_argument("--headless")
+  option.add_argument('--user-data-dir=/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/work')
+
 
   driver_path = get_cached_chromedriver()
   if not driver_path:
    driver_path = ChromeDriverManager().install()
   driver = webdriver.Chrome(service=Service(driver_path), options=option)
   # Инициализация драйвера
-  # driver = webdriver.Chrome(service=service, options=option)
 
   # Открываем сайт
-  driver.get("https://arena.ai")
+  driver.get("https://chat.z.ai/")
   input()
 except Exception as ex1:
     print(ex1)  # driver.close()  # driver.quit()

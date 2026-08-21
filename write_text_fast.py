@@ -194,7 +194,7 @@ class SmartTyper:
   self._us_mask_bit = 0x1000
   self.physical_keyboard = self.find_keyboard()
   self.ui = self.create_virtual_keyboard()
-  self.ensure_numlock_on()
+  # self.ensure_numlock_on()
 
  def find_keyboard(self):
   for path in glob.glob("/dev/input/event*"):

@@ -59,7 +59,7 @@ class VoiceThread(QThread):
   except:
    return "", len_c
  
-  def _chrome_version(self):
+ def _chrome_version(self):
    import subprocess as _sp, re as _re
    for cmd in ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser"):
     try:
@@ -71,7 +71,7 @@ class VoiceThread(QThread):
      continue
    return None
 
-  def get_chromedriver_path(self):
+ def get_chromedriver_path(self):
    import glob as _glob, re as _re, os as _os
    def _ver(p):
     m = _re.search(r'(\d+\.\d+\.\d+\.\d+)', p)
@@ -99,7 +99,7 @@ class VoiceThread(QThread):
    found.sort(key=lambda t: t[0], reverse=True)
    return found[0][1], [p for _, p in found]
 
-  def start_selenium(self):  # Запуск браузера и переход на страницу Алисы."""
+ def start_selenium(self):  # Запуск браузера и переход на страницу Алисы."""
    options = get_option()
    options.add_argument("--disable-extensions")
    options.add_argument('--user-data-dir=/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/google-chrome')
@@ -130,18 +130,18 @@ class VoiceThread(QThread):
       raise last_err
      raise
   # Установить только положительные координаты
-  self.driver.set_window_position(0, 378)
-  self.driver.set_window_size(532, 467)
-  self.driver.get("https://alice.yandex.ru/")  # открыть сайт
-  try:
-   WebDriverWait(self.driver, 15).until(
-    EC.presence_of_element_located((By.CSS_SELECTOR, "button.StandaloneOknyx, button.AliceButton_pin_circle"))
-   )
-  except:
-   pass
-  self.chrome_pid = self.driver.service.process.pid
-  self.window_id = subprocess.check_output(['xdotool', 'getactivewindow']).decode().strip()
-  
+   self.driver.set_window_position(0, 378)
+   self.driver.set_window_size(532, 467)
+   self.driver.get("https://alice.yandex.ru/")  # открыть сайт
+   try:
+    WebDriverWait(self.driver, 15).until(
+     EC.presence_of_element_located((By.CSS_SELECTOR, "button.StandaloneOknyx, button.AliceButton_pin_circle"))
+    )
+   except:
+    pass
+   self.chrome_pid = self.driver.service.process.pid
+   self.window_id = subprocess.check_output(['xdotool', 'getactivewindow']).decode().strip()
+
  def find_stop_button(self):
   selectors = [
    (By.CSS_SELECTOR, '.StandaloneRichInput-ControlsPlayer '
