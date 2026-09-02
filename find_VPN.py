@@ -95,7 +95,7 @@ SPEED_BYTES = 4000000
 SPEED_TIMEOUT = 7
 
 # ==================== ПОСТОЯННЫЙ VPN ====================
-RUN_BEST = True
+RUN_BEST = False
 RUN_PORT = 10999
 RUN_MONITOR = True
 MONITOR_INTERVAL = 45
@@ -1074,8 +1074,9 @@ def process_results(final_entries, need=1):
         return
     best = final_entries[0]
     alternates = pick_alternatives(final_entries, max(0, need - 1))
-    links_out = [sanitize_link(best[0])] + [sanitize_link(a[0]) for a in alternates]
-    copy_to_clipboard("\n".join(links_out))
+    best_link = sanitize_link(best[0])
+    links_out = [best_link]
+    copy_to_clipboard(best_link)
     try:
         os.makedirs(LOGS_DIR, exist_ok=True)
         ts = time.strftime("%Y%m%d_%H%M%S")
@@ -1090,6 +1091,7 @@ def process_results(final_entries, need=1):
         print(f"{Y}⚠ Не удалось сохранить отобранные конфиги: {e}{N}")
     print(f"{G}✅ ЛУЧШИЙ VPN (доступен {TARGET.upper()}):{N}")
     print_summary_row(best, "BEST")
+    print(f"{G}✓ В буфере обмена только лучший конфиг — вставьте в Hiddify: '+' → Import from Clipboard{N}")
     if alternates:
         print(f"{Y}Запасные:{N}")
         for i, a in enumerate(alternates, 1):
@@ -1124,7 +1126,7 @@ def main():
     parser.add_argument("--no-hiddify", action="store_true", help="Не запускать Hiddify")
     parser.add_argument("--no-clipboard", action="store_true", help="Не копировать в буфер обмена")
     parser.add_argument("--run-best", action="store_true", default=RUN_BEST,
-                        help="Оставить работать только тот VPN, который открывает целевой сайт (по умолчанию ВКЛ)")
+                        help="Держать постоянный локальный SOCKS5 VPN вместо запуска Hiddify")
     parser.add_argument("--no-run-best", action="store_true",
                         help="Не держать VPN, просто найти и выдать лучшие конфиги")
     parser.add_argument("--target", default=TARGET, choices=["gemini", "chatgpt"],
@@ -1163,6 +1165,8 @@ def main():
     print(f"{C}Тайм-бюджет: {MAX_TIME}с | re-probe: {reprobe_times}х | нужно выдать: {NEED}{N}")
     if RUN_BEST:
         print(f"{C}Режим: ПОСТОЯННЫЙ VPN (порт {RUN_PORT}){N}")
+    else:
+        print(f"{C}Режим: лучший конфиг → буфер обмена → Hiddify{N}")
     print(f"{C}{'=' * 70}{N}")
 
     for tool in ("xray", "curl"):
@@ -1305,6 +1309,12 @@ def main():
         ip, _ = server_ip(link)
         country = geo.get(ip) or extract_country(link)
         final.append((link, med, ok, sd, speed_map.get(link), _proto_of(link), country))
+
+    # Итоговое ранжирование: стабильность → скорость ↓ → задержка ↑ → разброс ↑
+    final.sort(key=lambda e: (0 if e[2] >= stable_bar else 1,
+                              -(e[4] or 0.0),
+                              e[1],
+                              e[3]))
 
     process_results(final, NEED)
     save_cache()

@@ -94,6 +94,91 @@ def safe_js(driver, script, *args):
         return None
 
 
+_CLICK_LISTENER_JS = r"""
+(function() {
+    if (window.__rec_installed) return;
+    window.__rec_installed = true;
+    window.__recorder_clicks = [];
+
+    function buildSelector(el) {
+        if (!el || el.nodeType !== 1) return '';
+        var parts = [];
+        var node = el;
+        while (node && node.nodeType === 1 && parts.length < 6) {
+            var tag = node.tagName.toLowerCase();
+            if (node.id) {
+                parts.unshift(tag + '#' + node.id);
+                break;
+            }
+            var cls = (node.className || '').toString()
+                .split(/\s+/).filter(function(c){ return c && c.length < 40; })
+                .slice(0, 3).join('.');
+            var sel = tag + (cls ? '.' + cls : '');
+            var sibs = node.parentNode ? Array.prototype.filter.call(
+                node.parentNode.children, function(c){ return c.tagName === node.tagName; }
+            ) : [];
+            if (sibs.length > 1) {
+                var idx = Array.prototype.indexOf.call(node.parentNode.children, node) + 1;
+                sel += ':nth-child(' + idx + ')';
+            }
+            parts.unshift(sel);
+            node = node.parentNode;
+        }
+        return parts.join(' > ');
+    }
+
+    function describe(el) {
+        return {
+            tag: el.tagName.toLowerCase(),
+            id: el.id || '',
+            cls: (el.className || '').toString().substring(0, 200),
+            text: (el.textContent || '').trim().substring(0, 100),
+            ariaLabel: el.getAttribute('aria-label') || '',
+            name: el.getAttribute('name') || '',
+            role: el.getAttribute('role') || '',
+            value: (el.value || '').substring(0, 200),
+            href: el.getAttribute('href') || '',
+            placeholder: el.getAttribute('placeholder') || '',
+            selector: buildSelector(el)
+        };
+    }
+
+    function capture(ev) {
+        var t = ev.target;
+        while (t && t.nodeType !== 1) t = t.parentNode;
+        var interactive = t ? t.closest(
+            'a,button,input,select,textarea,[role="button"],[role="link"],'
+            + '[contenteditable="true"],label,summary'
+        ) : null;
+        var el = interactive || t;
+        if (!el) return;
+        var info = describe(el);
+        info.targetCls = (t.className || '').toString().substring(0, 200);
+        info.targetTag = t ? t.tagName.toLowerCase() : '';
+        info.ts = Date.now();
+        window.__recorder_clicks.push(info);
+    }
+
+    document.addEventListener('click', capture, true);
+})();
+"""
+
+
+def install_click_listener(driver):
+    """Идемпотентно устанавливает перехватчик кликов (переживает SPA-навигацию)."""
+    safe_js(driver, _CLICK_LISTENER_JS)
+
+
+def read_clicks(driver):
+    """Возвращает и очищает очередь кликов, собранную на странице."""
+    res = safe_js(driver, """
+        var c = window.__recorder_clicks || [];
+        window.__recorder_clicks = [];
+        return c;
+    """)
+    return res or []
+
+
 def snapshot_page_elements(driver):
     """Снимок всех интерактивных элементов + сообщений чата. Возвращает dict."""
     snap = {}
@@ -203,6 +288,7 @@ def start_recording():
 
     driver.get("https://chat.z.ai/")
     time.sleep(5)
+    install_click_listener(driver)
     print("[Recorder] Браузер открыт. Выполняйте действия на сайте.")
     print(f"[Recorder] Запись в: {ACTIONS_FILE}")
     print("[Recorder] Закройте браузер или нажмите Ctrl+C — действия сохранятся.\n")
@@ -218,6 +304,7 @@ def start_recording():
     while not _stop_flag[0]:
         try:
             snap = snapshot_page_elements(driver)
+            install_click_listener(driver)
         except (WebDriverException, InvalidSessionIdException, NoSuchFrameException):
             print("[Recorder] Браузер закрыт или сессия потеряна.")
             break
@@ -322,6 +409,34 @@ def start_recording():
             save_actions(_actions_ref)
             step += 1
             print(f"  [{step}] NAV → {snap.get('url', '')}")
+
+        # --- Клики по элементам (id, классы, текст, селектор) ---
+        for clk in read_clicks(driver):
+            sel = clk.get("selector") or clk.get("id") or clk.get("cls", "")[:80] or clk.get("text", "")[:40]
+            new_action = {
+                "type": "click",
+                "selector": sel,
+                "id": clk.get("id", ""),
+                "class": clk.get("cls", "")[:200],
+                "text": clk.get("text", "")[:100],
+                "ariaLabel": clk.get("ariaLabel", ""),
+                "name": clk.get("name", ""),
+                "role": clk.get("role", ""),
+                "href": clk.get("href", ""),
+                "placeholder": clk.get("placeholder", ""),
+                "targetTag": clk.get("targetTag", ""),
+                "targetClass": clk.get("targetCls", "")[:200],
+                "time": round(time.time(), 2),
+                "step": step,
+            }
+            last = _actions_ref[-1] if _actions_ref else None
+            if not (last and last.get("type") == "click" and last.get("selector") == sel
+                    and abs(last.get("time", 0) - new_action["time"]) < 1.0):
+                _actions_ref.append(new_action)
+                save_actions(_actions_ref)
+                step += 1
+                label = clk.get("text") or clk.get("ariaLabel") or clk.get("id") or clk.get("cls", "")[:40]
+                print(f"  [{step}] CLICK [{sel}] → {label[:50]}")
 
         prev_snapshot = snap
         time.sleep(0.5)

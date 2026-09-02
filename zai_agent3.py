@@ -31,6 +31,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from playwright.sync_api import sync_playwright
+from openai import OpenAI
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -107,6 +108,68 @@ AGENT_FS_INSTRUCTION = (
     "- Max {max_iters} tool iterations.\n"
     "User request:\n"
 )
+
+# ---------------------------------------------------------------------------
+# Local executor (small model) configuration
+# ---------------------------------------------------------------------------
+# Большая облачная модель = ТОЛЬКО планировщик: выдаёт инструкцию.
+# Маленькая локальная модель (Qwen 1.5B) = исполнитель: читает инструкцию
+# и через инструменты реально пишет/читает/меняет файлы и exec'ит.
+LOCAL_PLANNER_INSTRUCTION = (
+    "[SYSTEM] You are a PLANNER, not an executor. You do NOT write files, run "
+    "commands, or use any tools — a local executor model performs the work.\n"
+    "Given the user request below, output a CONCISE, ORDERED instruction telling "
+    "the local executor exactly what to do: which files to create or modify (with "
+    "full paths and the key content/outline), and which shell commands to run. "
+    "Be concrete and unambiguous. Output ONLY the instruction text — no commentary, "
+    "no code fences, no meta-explanation.\n"
+    "User request:\n"
+)
+
+LOCAL_EXECUTOR_SYSTEM = (
+    "You are a local file-system executor. You receive an INSTRUCTION from a larger "
+    "planning model describing what to build or change. Your ONLY job is to execute "
+    "it using the provided tools, in the correct order, until the instruction is "
+    "complete.\n"
+    "Rules:\n"
+    "- Call the tools to actually perform each step; never only describe them.\n"
+    "- Read a file before editing it (read_file, then write_file with new content).\n"
+    "- Prefer absolute paths; quote paths containing spaces.\n"
+    "- When the instruction is fully satisfied, respond with the single word DONE "
+    "and make no tool calls.\n"
+    "- Never explain; never add steps beyond the instruction.\n"
+)
+
+LOCAL_TOOL_SCHEMAS = [
+    {"type": "function", "function": {
+        "name": "write_file",
+        "description": "Create or overwrite a file at the given path with the provided content.",
+        "parameters": {"type": "object", "properties": {
+            "path": {"type": "string", "description": "Absolute or work-dir-relative file path"},
+            "content": {"type": "string", "description": "Full file content to write"}},
+            "required": ["path", "content"]}}},
+    {"type": "function", "function": {
+        "name": "read_file",
+        "description": "Read a file's content.",
+        "parameters": {"type": "object", "properties": {
+            "path": {"type": "string", "description": "File path"}}, "required": ["path"]}}},
+    {"type": "function", "function": {
+        "name": "list_dir",
+        "description": "List the contents of a directory.",
+        "parameters": {"type": "object", "properties": {
+            "path": {"type": "string", "description": "Directory path"}}, "required": ["path"]}}},
+    {"type": "function", "function": {
+        "name": "delete_file",
+        "description": "Delete a file or an empty directory.",
+        "parameters": {"type": "object", "properties": {
+            "path": {"type": "string", "description": "Path to delete"}}, "required": ["path"]}}},
+    {"type": "function", "function": {
+        "name": "run_cmd",
+        "description": "Run a shell command via bash and return its rc and output.",
+        "parameters": {"type": "object", "properties": {
+            "command": {"type": "string", "description": "Shell command to execute"}},
+            "required": ["command"]}}},
+]
 
 # ---------------------------------------------------------------------------
 # JavaScript: extract {thinking, answer} from the LAST assistant message
@@ -518,6 +581,9 @@ class ZaiWorker(threading.Thread):
       self.work_dir = work_dir
       self.tool_timeout = tool_timeout
       self.max_tool_iters = max_tool_iters
+      self.local_url = None
+      self.local_model = None
+      self.max_exec_iters = 12
       self.jobs: queue.Queue[Job] = queue.Queue()
       self.stop_event = threading.Event()
       self.ready = threading.Event()
@@ -810,13 +876,12 @@ class ZaiWorker(threading.Thread):
       delta = thinking[len(last_thinking):]
       last_thinking = thinking
       yield {"type": "thinking_delta", "delta": delta}
-     if answer and len(answer) > len(last_answer):
-      delta = answer[len(last_answer):]
-      last_answer = answer
-      stable_since = time.time()
-      print(answer)
-      input()
-      # yield {"type": "answer_delta", "delta": delta}
+      if answer and len(answer) > len(last_answer):
+       delta = answer[len(last_answer):]
+       last_answer = answer
+       stable_since = time.time()
+       print(answer)
+       # yield {"type": "answer_delta", "delta": delta}
 
 
      # if last_answer:
@@ -1189,12 +1254,17 @@ class ZaiWorker(threading.Thread):
 # Нестриминговый запрос с инструментами и циклом правок файлов.
     # 29: _ask — нестриминговый запрос с инструментами
   def _ask(self, message: str, model: str | None, timeout: float) -> dict[str, Any]:
-      print("29: _ask — нестриминговый запрос с инструментами")
+      print("29: _ask — нестриминговый запрос (планировщик → локальный исполнитель)")
       if self._first_message:
           self._first_message = False
           if self._system_profile:
               self._attach_system_profile()
           self._attach_tools_doc()
+      if self.local_url:
+          # Большая модель — ТОЛЬКО планировщик: выдаёт инструкцию.
+          message = LOCAL_PLANNER_INSTRUCTION + message
+          raw = self._ask_raw(message, model, timeout)
+          return self._run_local_executor(raw["answer"], timeout)
       if not message.startswith("[RESULT]"):
           message = AGENT_FS_INSTRUCTION.format(
               max_iters=self.max_tool_iters) + message
@@ -1445,6 +1515,85 @@ class ZaiWorker(threading.Thread):
 
       return {"model": self.selected_model or DEFAULT_MODEL, "answer": last}
 
+  # ---------------------------------------------------------------------------
+  # Local executor (small model) — исполняет инструкцию облачного планировщика.
+  # ---------------------------------------------------------------------------
+  # Локальная модель (Qwen 1.5B) сама ведёт цикл инструментов: читает инструкцию
+  # и через write_file/read_file/list_dir/delete_file/run_cmd реально меняет диск.
+  def _run_local_executor(self, instruction: str, timeout: float) -> dict[str, Any]:
+      print("EXEC: _run_local_executor — локальная модель исполняет инструкцию")
+      if not self.local_url:
+          LOG.warning("[EXEC] local_url не задан, возврат к детерминированному циклу")
+          return self._run_tool_loop(instruction, timeout, None, "")
+      try:
+          client = OpenAI(base_url=self.local_url, api_key="local-not-needed")
+      except Exception as e:
+          LOG.exception("[EXEC] не удалось создать клиент локальной модели")
+          return {"model": "local", "answer": f"Local executor unavailable: {e}"}
+      model = self.local_model or "local-model"
+      messages = [
+          {"role": "system", "content": LOCAL_EXECUTOR_SYSTEM},
+          {"role": "user", "content": instruction},
+      ]
+      log_lines = []
+      for i in range(self.max_exec_iters):
+          LOG.info("[EXEC] iteration=%d", i)
+          try:
+              resp = client.chat.completions.create(
+                  model=model, messages=messages, tools=LOCAL_TOOL_SCHEMAS,
+                  tool_choice="auto", temperature=0,
+              )
+          except Exception as e:
+              LOG.exception("[EXEC] вызов локальной модели упал")
+              return {"model": model, "answer": "\n".join(log_lines) + f"\n[ERROR] {e}"}
+          msg = resp.choices[0].message
+          if not msg.tool_calls:
+              done_text = (msg.content or "").strip()
+              log_lines.append(f"[DONE] {done_text}")
+              LOG.info("[EXEC] модель завершила: %s", done_text[:200])
+              break
+          messages.append({
+              "role": "assistant",
+              "content": msg.content or "",
+              "tool_calls": [{
+                  "id": tc.id, "type": "function",
+                  "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+              } for tc in msg.tool_calls],
+          })
+          for tc in msg.tool_calls:
+              try:
+                  args = json.loads(tc.function.arguments or "{}")
+              except Exception:
+                  args = {}
+              result = self._local_tool_dispatch(tc.function.name, args)
+              label = args.get("path", args.get("command", ""))
+              LOG.info("[EXEC] %s(%s) -> %s", tc.function.name, label, result[:200])
+              log_lines.append(f"{tc.function.name}({label})")
+              messages.append({"role": "tool", "tool_call_id": tc.id, "content": result})
+      return {"model": model, "answer": "\n".join(log_lines)}
+
+  # Диспетчер инструментов локальной модели: вызывает реальные FS/exec операции.
+  def _local_tool_dispatch(self, name: str, args: dict[str, Any]) -> str:
+      try:
+          if name == "write_file":
+              r = self._do_write_file(str(args.get("path", "")), str(args.get("content", "")), append=False)
+              return json.dumps(r, ensure_ascii=False)
+          if name == "read_file":
+              r = self._do_read_file(str(args.get("path", "")))
+              return json.dumps(r, ensure_ascii=False)
+          if name == "list_dir":
+              r = self._do_list_dir(str(args.get("path", ".")))
+              return json.dumps(r, ensure_ascii=False)
+          if name == "delete_file":
+              r = self._do_delete_file(str(args.get("path", "")))
+              return json.dumps(r, ensure_ascii=False)
+          if name == "run_cmd":
+              rc, out = self.exec_tool_command(str(args.get("command", "")), self.work_dir, self.tool_timeout)
+              return json.dumps({"rc": rc, "output": out}, ensure_ascii=False)
+          return json.dumps({"ok": False, "error": f"unknown tool: {name}"}, ensure_ascii=False)
+      except Exception as e:
+          return json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False)
+
     # ---- New chat ----
 # Внутренний сброс чата (новый диалог) для воркера.
   def _new_chat(self) -> dict[str, Any]:
@@ -1669,6 +1818,12 @@ def main():
     parser.add_argument("--work-dir", default="/")
     parser.add_argument("--tool-timeout", type=float, default=300)
     parser.add_argument("--max-tool-iters", type=int, default=6)
+    parser.add_argument("--local-url", default=None,
+                        help="OpenAI-compatible URL of the local executor model "
+                             "(e.g. http://127.0.0.1:8002/v1)")
+    parser.add_argument("--local-model", default=None,
+                        help="Name/id of the local executor model")
+    parser.add_argument("--max-exec-iters", type=int, default=12)
     args = parser.parse_args()
 
     log_file = Path.cwd() / "zai_agent.log"
@@ -1696,6 +1851,9 @@ def main():
         tool_timeout=args.tool_timeout,
         max_tool_iters=args.max_tool_iters,
     )
+    worker.local_url = args.local_url
+    worker.local_model = args.local_model
+    worker.max_exec_iters = args.max_exec_iters
     worker.start()
     if not worker.ready.wait(90):
         raise RuntimeError("Worker not ready")
