@@ -120,6 +120,86 @@ def get_option():
  return option
 
 
+# ==============================
+# КАРТЫ СИМВОЛОВ (на уровне модуля — константы, не зависят от экземпляра)
+# ==============================
+
+# 1. Общие символы (одинаково печатаются в обеих раскладках)
+COMMON_MAP = {
+ ' ': ecodes.KEY_SPACE, '\n': ecodes.KEY_ENTER, '\t': ecodes.KEY_TAB,
+ '1': ecodes.KEY_1, '2': ecodes.KEY_2, '3': ecodes.KEY_3, '4': ecodes.KEY_4,
+ '5': ecodes.KEY_5, '6': ecodes.KEY_6, '7': ecodes.KEY_7, '8': ecodes.KEY_8,
+ '9': ecodes.KEY_9, '0': ecodes.KEY_0, '-': ecodes.KEY_MINUS, '=': ecodes.KEY_EQUAL,
+ '\\': ecodes.KEY_BACKSLASH, '!': ecodes.KEY_1, '%': ecodes.KEY_5, '*': ecodes.KEY_8,
+ '(': ecodes.KEY_9, ')': ecodes.KEY_0, '_': ecodes.KEY_MINUS, '+': ecodes.KEY_EQUAL
+}
+COMMON_SHIFT = frozenset(['!', '%', '*', '(', ')', '_', '+'])
+
+# 2. Английские буквы
+EN_MAP = {
+ 'q': ecodes.KEY_Q, 'w': ecodes.KEY_W, 'e': ecodes.KEY_E, 'r': ecodes.KEY_R, 't': ecodes.KEY_T,
+ 'y': ecodes.KEY_Y, 'u': ecodes.KEY_U, 'i': ecodes.KEY_I, 'o': ecodes.KEY_O, 'p': ecodes.KEY_P,
+ 'a': ecodes.KEY_A, 's': ecodes.KEY_S, 'd': ecodes.KEY_D, 'f': ecodes.KEY_F, 'g': ecodes.KEY_G,
+ 'h': ecodes.KEY_H, 'j': ecodes.KEY_J, 'k': ecodes.KEY_K, 'l': ecodes.KEY_L, 'z': ecodes.KEY_Z,
+ 'x': ecodes.KEY_X, 'c': ecodes.KEY_C, 'v': ecodes.KEY_V, 'b': ecodes.KEY_B, 'n': ecodes.KEY_N,
+ 'm': ecodes.KEY_M
+}
+
+# 3. Русские буквы
+RU_MAP = {
+ 'й': ecodes.KEY_Q, 'ц': ecodes.KEY_W, 'у': ecodes.KEY_E, 'к': ecodes.KEY_R, 'е': ecodes.KEY_T,
+ 'н': ecodes.KEY_Y, 'г': ecodes.KEY_U, 'ш': ecodes.KEY_I, 'щ': ecodes.KEY_O, 'з': ecodes.KEY_P,
+ 'х': ecodes.KEY_LEFTBRACE, 'ъ': ecodes.KEY_RIGHTBRACE, 'ф': ecodes.KEY_A, 'ы': ecodes.KEY_S,
+ 'в': ecodes.KEY_D, 'а': ecodes.KEY_F, 'п': ecodes.KEY_G, 'р': ecodes.KEY_H, 'о': ecodes.KEY_J,
+ 'л': ecodes.KEY_K, 'д': ecodes.KEY_L, 'ж': ecodes.KEY_SEMICOLON, 'э': ecodes.KEY_APOSTROPHE,
+ 'я': ecodes.KEY_Z, 'ч': ecodes.KEY_X, 'с': ecodes.KEY_C, 'м': ecodes.KEY_V, 'и': ecodes.KEY_B,
+ 'т': ecodes.KEY_N, 'ь': ecodes.KEY_M, 'б': ecodes.KEY_COMMA, 'ю': ecodes.KEY_DOT, 'ё': ecodes.KEY_GRAVE
+}
+
+# 4. Строго английская пунктуация (требует английскую раскладку)
+EN_ONLY_PUNCT = {
+ '@': ecodes.KEY_2, '#': ecodes.KEY_3, '$': ecodes.KEY_4, '^': ecodes.KEY_6, '&': ecodes.KEY_7,
+ '{': ecodes.KEY_LEFTBRACE, '}': ecodes.KEY_RIGHTBRACE, '|': ecodes.KEY_BACKSLASH,
+ '<': ecodes.KEY_COMMA, '>': ecodes.KEY_DOT, '~': ecodes.KEY_GRAVE,
+ '`': ecodes.KEY_GRAVE, '[': ecodes.KEY_LEFTBRACE, ']': ecodes.KEY_RIGHTBRACE
+}
+EN_ONLY_PUNCT_SHIFT = frozenset(['@', '#', '$', '^', '&', '{', '}', '|', '<', '>', '~'])
+
+# 5. Строго русская пунктуация (требует русскую раскладку)
+RU_ONLY_PUNCT = {
+ '№': ecodes.KEY_3
+}
+RU_ONLY_PUNCT_SHIFT = frozenset(['№'])
+
+# 6. Универсальная пунктуация (работает в ОБЕИХ раскладках, БЕЗ переключения)
+# Для английской раскладки
+PUNCT_EN = {
+ ',': ecodes.KEY_COMMA,
+ '.': ecodes.KEY_DOT,
+ '/': ecodes.KEY_SLASH,
+ ';': ecodes.KEY_SEMICOLON,
+ "'": ecodes.KEY_APOSTROPHE,
+ '?': ecodes.KEY_SLASH,
+ ':': ecodes.KEY_SEMICOLON,
+ '"': ecodes.KEY_APOSTROPHE,
+ '…': ecodes.KEY_DOT  # Троеточие в английской раскладке
+}
+PUNCT_EN_SHIFT = frozenset(['?', ':', '"'])
+
+# Для русской раскладки
+PUNCT_RU = {
+ ',': ecodes.KEY_SLASH,
+ '.': ecodes.KEY_SLASH,
+ '/': ecodes.KEY_BACKSLASH,
+ ';': ecodes.KEY_4,
+ '?': ecodes.KEY_7,
+ ':': ecodes.KEY_6,
+ '"': ecodes.KEY_2,
+ '…': ecodes.KEY_SLASH  # Троеточие в русской раскладке
+}
+PUNCT_RU_SHIFT = frozenset([',', '/', ';', '?', ':', '"'])
+
+
 class SmartTyper:
  def __init__(self):
   try:
@@ -127,80 +207,23 @@ class SmartTyper:
   except Exception:
    pass
 
-  # 1. Общие символы (одинаково печатаются в обеих раскладках)
-  self.COMMON_MAP = {
-   ' ': ecodes.KEY_SPACE, '\n': ecodes.KEY_ENTER, '\t': ecodes.KEY_TAB,
-   '1': ecodes.KEY_1, '2': ecodes.KEY_2, '3': ecodes.KEY_3, '4': ecodes.KEY_4,
-   '5': ecodes.KEY_5, '6': ecodes.KEY_6, '7': ecodes.KEY_7, '8': ecodes.KEY_8,
-   '9': ecodes.KEY_9, '0': ecodes.KEY_0, '-': ecodes.KEY_MINUS, '=': ecodes.KEY_EQUAL,
-   '\\': ecodes.KEY_BACKSLASH, '!': ecodes.KEY_1, '%': ecodes.KEY_5, '*': ecodes.KEY_8,
-   '(': ecodes.KEY_9, ')': ecodes.KEY_0, '_': ecodes.KEY_MINUS, '+': ecodes.KEY_EQUAL
-  }
-  self.COMMON_SHIFT = set(['!', '%', '*', '(', ')', '_', '+'])
+  # Карты символов вынесены в константы модуля (COMMON_MAP, EN_MAP, ...),
+  # чтобы не пересоздавать их для каждого экземпляра. Просто даём короткие
+  # ссылки для обратной совместимости с методами класса.
+  self.COMMON_MAP = COMMON_MAP
+  self.COMMON_SHIFT = COMMON_SHIFT
+  self.EN_MAP = EN_MAP
+  self.RU_MAP = RU_MAP
+  self.EN_ONLY_PUNCT = EN_ONLY_PUNCT
+  self.EN_ONLY_PUNCT_SHIFT = EN_ONLY_PUNCT_SHIFT
+  self.RU_ONLY_PUNCT = RU_ONLY_PUNCT
+  self.RU_ONLY_PUNCT_SHIFT = RU_ONLY_PUNCT_SHIFT
+  self.PUNCT_EN = PUNCT_EN
+  self.PUNCT_EN_SHIFT = PUNCT_EN_SHIFT
+  self.PUNCT_RU = PUNCT_RU
+  self.PUNCT_RU_SHIFT = PUNCT_RU_SHIFT
 
-  # 2. Английские буквы
-  self.EN_MAP = {
-   'q': ecodes.KEY_Q, 'w': ecodes.KEY_W, 'e': ecodes.KEY_E, 'r': ecodes.KEY_R, 't': ecodes.KEY_T,
-   'y': ecodes.KEY_Y, 'u': ecodes.KEY_U, 'i': ecodes.KEY_I, 'o': ecodes.KEY_O, 'p': ecodes.KEY_P,
-   'a': ecodes.KEY_A, 's': ecodes.KEY_S, 'd': ecodes.KEY_D, 'f': ecodes.KEY_F, 'g': ecodes.KEY_G,
-   'h': ecodes.KEY_H, 'j': ecodes.KEY_J, 'k': ecodes.KEY_K, 'l': ecodes.KEY_L, 'z': ecodes.KEY_Z,
-   'x': ecodes.KEY_X, 'c': ecodes.KEY_C, 'v': ecodes.KEY_V, 'b': ecodes.KEY_B, 'n': ecodes.KEY_N,
-   'm': ecodes.KEY_M
-  }
-
-  # 3. Русские буквы
-  self.RU_MAP = {
-   'й': ecodes.KEY_Q, 'ц': ecodes.KEY_W, 'у': ecodes.KEY_E, 'к': ecodes.KEY_R, 'е': ecodes.KEY_T,
-   'н': ecodes.KEY_Y, 'г': ecodes.KEY_U, 'ш': ecodes.KEY_I, 'щ': ecodes.KEY_O, 'з': ecodes.KEY_P,
-   'х': ecodes.KEY_LEFTBRACE, 'ъ': ecodes.KEY_RIGHTBRACE, 'ф': ecodes.KEY_A, 'ы': ecodes.KEY_S,
-   'в': ecodes.KEY_D, 'а': ecodes.KEY_F, 'п': ecodes.KEY_G, 'р': ecodes.KEY_H, 'о': ecodes.KEY_J,
-   'л': ecodes.KEY_K, 'д': ecodes.KEY_L, 'ж': ecodes.KEY_SEMICOLON, 'э': ecodes.KEY_APOSTROPHE,
-   'я': ecodes.KEY_Z, 'ч': ecodes.KEY_X, 'с': ecodes.KEY_C, 'м': ecodes.KEY_V, 'и': ecodes.KEY_B,
-   'т': ecodes.KEY_N, 'ь': ecodes.KEY_M, 'б': ecodes.KEY_COMMA, 'ю': ecodes.KEY_DOT, 'ё': ecodes.KEY_GRAVE
-  }
-
-  # 4. Строго английская пунктуация (требует английскую раскладку)
-  self.EN_ONLY_PUNCT = {
-   '@': ecodes.KEY_2, '#': ecodes.KEY_3, '$': ecodes.KEY_4, '^': ecodes.KEY_6, '&': ecodes.KEY_7,
-   '{': ecodes.KEY_LEFTBRACE, '}': ecodes.KEY_RIGHTBRACE, '|': ecodes.KEY_BACKSLASH,
-   '<': ecodes.KEY_COMMA, '>': ecodes.KEY_DOT, '~': ecodes.KEY_GRAVE,
-   '`': ecodes.KEY_GRAVE, '[': ecodes.KEY_LEFTBRACE, ']': ecodes.KEY_RIGHTBRACE
-  }
-  self.EN_ONLY_PUNCT_SHIFT = set(['@', '#', '$', '^', '&', '{', '}', '|', '<', '>', '~'])
-
-  # 5. Строго русская пунктуация (требует русскую раскладку)
-  self.RU_ONLY_PUNCT = {
-   '№': ecodes.KEY_3
-  }
-  self.RU_ONLY_PUNCT_SHIFT = set(['№'])
-
-  # 6. Универсальная пунктуация (работает в ОБЕИХ раскладках, БЕЗ переключения)
-  # Для английской раскладки
-  self.PUNCT_EN = {
-   ',': ecodes.KEY_COMMA,
-   '.': ecodes.KEY_DOT,
-   '/': ecodes.KEY_SLASH,
-   ';': ecodes.KEY_SEMICOLON,
-   "'": ecodes.KEY_APOSTROPHE,
-   '?': ecodes.KEY_SLASH,
-   ':': ecodes.KEY_SEMICOLON,
-   '"': ecodes.KEY_APOSTROPHE,
-   '…': ecodes.KEY_DOT  # Троеточие в английской раскладке
-  }
-  self.PUNCT_EN_SHIFT = set(['?', ':', '"'])
-
-  # Для русской раскладки
-  self.PUNCT_RU = {
-   ',': ecodes.KEY_SLASH,
-   '.': ecodes.KEY_SLASH,
-   '/': ecodes.KEY_BACKSLASH,
-   ';': ecodes.KEY_4,
-   '?': ecodes.KEY_7,
-   ':': ecodes.KEY_6,
-   '"': ecodes.KEY_2,
-   '…': ecodes.KEY_SLASH  # Троеточие в русской раскладке
-  }
-  self.PUNCT_RU_SHIFT = set([',', '/', ';', '?', ':', '"'])
+  self._current_layout = None
 
   self.physical_keyboard = self.find_keyboard()
   self.ui = self.create_virtual_keyboard()
@@ -244,41 +267,68 @@ class SmartTyper:
   except Exception as e:
    print(f"[WARN] Не удалось установить LED на физической клавиатуре: {e}")
 
-  ui.write(ecodes.EV_KEY, ecodes.KEY_NUMLOCK, 1)
-  ui.syn()
-  time.sleep(0.06)
-  ui.write(ecodes.EV_KEY, ecodes.KEY_NUMLOCK, 0)
-  ui.syn()
-  time.sleep(0.1)
-
+  # НЕ нажимаем тут клавишу NumLock — эмуляция KEY_NUMLOCK физически
+  # переключает NumLock пользователя и ломает работу клавиатуры. Достаточно
+  # только выставить состояние LED на виртуальном устройстве.
   ui.write(ecodes.EV_LED, ecodes.LED_NUML, 1)
   ui.syn()
 
   return ui
 
- def ensure_numlock_on(self):
-  """Надёжно включает NumLock и держит индикатор включённым"""
-  print("[INFO] Принудительное включение NumLock...")
+ def _physical_numlock_on(self):
+  """Проверяет фактическое состояние NumLock физической клавиатуры через evdev."""
   try:
-   self.physical_keyboard.set_led(ecodes.LED_NUML, 1)
+   leds = self.physical_keyboard.leds()
+   return ecodes.LED_NUML in leds
+  except Exception:
+   return None
+
+ def ensure_numlock_on(self):
+  """Принудительно включает NumLock и всегда выставляет LED-индикатор,
+  чтобы при старте состояние NumLock было предсказуемым (ВКЛ)."""
+  try:
+   # Сначала выставляем LED на физической и виртуальной клавиатуре.
+   try:
+    self.physical_keyboard.set_led(ecodes.LED_NUML, 1)
+   except Exception as e:
+    print(f"[WARN] Не удалось установить LED на физической клавиатуре: {e}")
    self.ui.write(ecodes.EV_LED, ecodes.LED_NUML, 1)
    self.ui.syn()
 
-   # Эмуляция нажатия NumLock
-   self.ui.write(ecodes.EV_KEY, ecodes.KEY_NUMLOCK, 1)
+   # Если NumLock физически выключен — эмулируем нажатие клавиши,
+   # чтобы реально включить его, а не только погасить индикатор.
+   state = self._physical_numlock_on()
+   if state is False:
+    print("[INFO] NumLock был выключен — включаю...")
+    self.ui.write(ecodes.EV_KEY, ecodes.KEY_NUMLOCK, 1)
+    self.ui.syn()
+    time.sleep(0.05)
+    self.ui.write(ecodes.EV_KEY, ecodes.KEY_NUMLOCK, 0)
+    self.ui.syn()
+
+   # После переключения гарантируем LED ещё раз (эмуляция могла сбросить).
+   self.ui.write(ecodes.EV_LED, ecodes.LED_NUML, 1)
    self.ui.syn()
-   time.sleep(0.5)
+   time.sleep(0.15)
   except Exception as e:
    print(f"[WARN] Ошибка при включении NumLock: {e}")
-   time.sleep(0.2)
    
  def get_current_layout(self):
   """
-  Определение текущей раскладки RU/US.
+  Определение текущей раскладки RU/US по номеру активной группы XKB.
 
-  ВАЖНО:
-  LED mask используется аккуратно:
-  состояние Caps Lock отбрасывается при сравнении.
+  Определяем именно номер группы (группа 1, 2, 3...), а не полагаемся на
+  бит 0x1000: на системах с раскладкой `ru,us,ru` групп может быть три,
+  и слепой детект по одному биту даёт сбои.
+
+  Схема LED mask (типичная):
+    0x00000002 — группа 1
+    0x00001002 — группа 2
+    0x00002002 — группа 3
+    ... и так далее (биты 0x1000, 0x2000, 0x4000 ...).
+
+  Номер группы переводим в раскладку через `setxkbmap -query`: список групп
+  вида "ru,us,ru" — индекс 0 равен группе 1 и т.д.
   """
   try:
    result = subprocess.run(
@@ -287,44 +337,67 @@ class SmartTyper:
     text=True,
     timeout=2
    )
-   
+
    if result.returncode != 0:
     return getattr(self, "_current_layout", "us")
-   
+
+   mask = None
    for line in result.stdout.splitlines():
     if "LED mask:" in line:
      mask_str = line.split("LED mask:")[-1].strip().split()[0]
-     
+
      try:
       mask = int(mask_str, 16)
      except ValueError:
       break
-     
-     # Убираем Caps Lock из маски.
-     # Благодаря этому Caps не будет восприниматься
-     # как изменение раскладки.
-     mask_without_caps = mask & ~0x04
-     
-     #
-     # Для стандартной конфигурации ru/us:
-     #
-     # 0x00001000 — одна XKB-группа
-     # 0x00000000 — другая.
-     #
-     if mask_without_caps & 0x1000:
-      layout = "us"
-     else:
-      layout = "ru"
-     
-     self._current_layout = layout
-     return layout
-  
+     break
+
+   if mask is None:
+    return getattr(self, "_current_layout", "us")
+
+   # Номер активной группы (1-based) по битам 0x1000/0x2000/0x4000...
+   group = 1
+   for g in range(2, 9):
+    if mask & (0x1000 << (g - 2)):
+     group = g
+     break
+
+   # Список групп из конфигурации XKB
+   groups = self._get_xkb_groups()
+
+   if 1 <= group <= len(groups):
+    layout = "us" if groups[group - 1] == "us" else "ru"
+   else:
+    layout = "ru"
+
+   self._current_layout = layout
+   return layout
+
   except Exception as e:
    print(f"[WARN] Ошибка определения раскладки: {e}")
-  
-  # Не возвращаем слепо US при любой ошибке.
-  # Это важно во время печати русского текста.
+
   return getattr(self, "_current_layout", "us")
+
+ @staticmethod
+ def _get_xkb_groups():
+  """Порядок раскладок из `setxkbmap -query`, например ['ru','us','ru']."""
+  try:
+   result = subprocess.run(
+    ["setxkbmap", "-query"],
+    capture_output=True,
+    text=True,
+    timeout=2
+   )
+   if result.returncode != 0:
+    return ["ru", "us"]
+   for line in result.stdout.splitlines():
+    if line.strip().startswith("layout:"):
+     groups = line.split(":", 1)[-1].strip().split(",")
+     groups = [g.strip() for g in groups if g.strip()]
+     return groups
+  except Exception:
+   pass
+  return ["ru", "us"]
 
  
  def is_capslock_on(self):
@@ -375,85 +448,143 @@ class SmartTyper:
  
  def set_layout(self, lang):
   """
-  Переключает только между RU <-> US.
- 
-  После каждого переключения проверяется реальное
-  состояние раскладки.
+  Переключает только между RU <-> US, корректно работая и при 2, и при 3+
+  группах (например `ru,us,ru`).
+
+  Стратегия: определяем номер ОБЩЕЙ активной группы из LED mask, находим
+  номер группы, на которой живёт нужная раскладка (`setxkbmap -query`),
+  и нажимаем `ISO_Next_Group` ровно (нужная_группа - текущая_группа) % n_groups
+  раз. Если xte не дал ожидаемого результата — повторяем до успеха.
   """
   if lang not in ("ru", "us"):
    return False
-  
-  for attempt in range(8):
-   
-   current = self.get_current_layout()
-   
-   if current == lang:
+
+  groups = self._get_xkb_groups()
+  n_groups = len(groups)
+  if n_groups == 0:
+   return False
+
+  # Номер группы, на которой лежит нужная раскладка (1-based).
+  # Если раскладка встречается несколько раз — берём ближайшую вперёд.
+  targets = [i + 1 for i, g in enumerate(groups) if (g == "us") == (lang == "us")]
+
+  current_group = self._current_xkb_group()
+  if current_group is None:
+   current_group = groups.index(
+    "us" if self.get_current_layout() == "us" else "ru"
+   ) + 1 if ("us" if self.get_current_layout() == "us" else "ru") in groups else 1
+
+  # Если уже стоим на нужной раскладке — ничего не делаем.
+  if current_group in targets:
+   self._current_layout = lang
+   return True
+
+  # Выбираем ближайшую целевую группу по количеству нажатий вперёд.
+  target = min(targets, key=lambda t: (t - current_group) % n_groups)
+  steps = (target - current_group) % n_groups
+  if steps == 0:
+   self._current_layout = lang
+   return True
+
+  for attempt in range(5):
+   for _ in range(steps):
+    try:
+     # ВАЖНО: xte принимает ОДНУ строку с целой командой,
+     # разделение же на отдельные аргументы даёт "Unknown command 'key'".
+     subprocess.run(
+      ["xte", "key ISO_Next_Group"],
+      check=True,
+      timeout=1
+     )
+    except Exception as e:
+     print(f"[WARN] Ошибка переключения раскладки: {e}")
+     time.sleep(0.05)
+    time.sleep(0.08)  # даём XKB время переключить группу
+
+   # Проверяем реальный результат.
+   if self.get_current_layout() == lang:
     self._current_layout = lang
     return True
-   
-   try:
-    subprocess.run(
-     ["xte", "key", "ISO_Next_Group"],
-     check=True,
-     timeout=1
-    )
-   
-   except Exception as e:
-    print(f"[WARN] Ошибка переключения раскладки: {e}")
-   
-   # Не нужно ждать 1.6 секунды после каждого символа.
-   # Даём XKB время переключить группу.
-   for _ in range(10):
-    time.sleep(0.05)
-    
-    current = self.get_current_layout()
-    
-    if current == lang:
-     self._current_layout = lang
-     return True
-  
+
+   # Не вышло — пересчитаем шаги с учётом фактической группы.
+   current_group = self._current_xkb_group()
+   if current_group is None:
+    break
+   steps = (target - current_group) % n_groups
+   if steps == 0:
+    break
+
   print(f"[ERROR] Не удалось переключить раскладку на {lang}")
   return False
+
+ def _current_xkb_group(self):
+  """Номер текущей активной группы XKB (1-based) по LED mask."""
+  try:
+   result = subprocess.run(
+    ["xset", "-q"],
+    capture_output=True,
+    text=True,
+    timeout=2
+   )
+   if result.returncode != 0:
+    return None
+   for line in result.stdout.splitlines():
+    if "LED mask:" in line:
+     mask_str = line.split("LED mask:")[-1].strip().split()[0]
+     try:
+      mask = int(mask_str, 16)
+     except ValueError:
+      return None
+     for g in range(2, 9):
+      if mask & (0x1000 << (g - 2)):
+       return g
+     return 1
+  except Exception:
+   return None
+  return None
  
  
- def type_text(self, text, delay=0.05):
+ def type_text(self, text, delay=0.02):
   """
   Печать русского/английского текста.
- 
+
   Учитывает:
   - RU/US;
   - переключение между RU и US прямо внутри строки;
   - Caps Lock;
   - Shift + Caps Lock;
   - знаки препинания;
-  - восстановление первоначальной раскладки.
+  - восстановление первоначальной раскладки;
+  - РЕАЛЬНОЕ состояние раскладки: перед каждым символом переспрашивает
+    XKB (xset), поэтому если пользователь вручную переключил раскладку во
+    время печати — скрипт вернёт нужную и продолжит корректно печатать.
   """
-  
-  shift_delay = 0.03
-  
+
+  shift_delay = 0.01
+
   original_layout = self.get_current_layout()
   current_layout = original_layout
-  
+
   # Запоминаем реальное состояние Caps Lock.
   caps_on = self.is_capslock_on()
-  
+
   for ch in text:
-   
+
    lower_ch = ch.lower()
    needed_layout = current_layout
-   
+
    keycode = None
    need_shift = False
-   
+
    # ------------------------------------------------
    # Русские буквы
    # ------------------------------------------------
-   
+
    if lower_ch in self.RU_MAP:
-    
+
     needed_layout = "ru"
     keycode = self.RU_MAP[lower_ch]
-    
+
     # Таблица:
     #
     # Caps OFF + а -> Shift OFF
@@ -462,96 +593,109 @@ class SmartTyper:
     # Caps ON  + А -> Shift OFF
     #
     need_shift = ch.isupper() != caps_on
-   
+
    # ------------------------------------------------
    # Английские буквы
    # ------------------------------------------------
-   
+
    elif lower_ch in self.EN_MAP:
-    
+
     needed_layout = "us"
     keycode = self.EN_MAP[lower_ch]
-    
+
     need_shift = ch.isupper() != caps_on
-   
+
    # ------------------------------------------------
    # Общие символы
    # ------------------------------------------------
-   
+
    elif ch in self.COMMON_MAP:
-    
+
     keycode = self.COMMON_MAP[ch]
     need_shift = ch in self.COMMON_SHIFT
-   
+
    # ------------------------------------------------
    # Только английские символы
    # ------------------------------------------------
-   
+
    elif ch in self.EN_ONLY_PUNCT:
-    
+
     needed_layout = "us"
     keycode = self.EN_ONLY_PUNCT[ch]
     need_shift = ch in self.EN_ONLY_PUNCT_SHIFT
-   
+
    # ------------------------------------------------
    # Только русские символы
    # ------------------------------------------------
-   
+
    elif ch in self.RU_ONLY_PUNCT:
-    
+
     needed_layout = "ru"
     keycode = self.RU_ONLY_PUNCT[ch]
     need_shift = ch in self.RU_ONLY_PUNCT_SHIFT
-   
+
    # ------------------------------------------------
    # Символы, зависящие от раскладки
    # ------------------------------------------------
-   
+
    elif ch in self.PUNCT_EN or ch in self.PUNCT_RU:
-    
-    if current_layout == "us":
-     keycode = self.PUNCT_EN.get(ch)
-     
-     if keycode is not None:
-      need_shift = ch in self.PUNCT_EN_SHIFT
-    
-    else:
+
+    # Символ есть только в одной раскладке — переключаемся на неё.
+    # Если есть в обеих — берём ту, что сейчас активна (цифры, знаки на
+    # общих клавишах набираются одинаково, разница не критична).
+    if ch in self.PUNCT_RU and ch not in self.PUNCT_EN:
+     needed_layout = "ru"
      keycode = self.PUNCT_RU.get(ch)
-     
-     if keycode is not None:
-      need_shift = ch in self.PUNCT_RU_SHIFT
-   
+     need_shift = ch in self.PUNCT_RU_SHIFT
+    elif ch in self.PUNCT_EN and ch not in self.PUNCT_RU:
+     needed_layout = "us"
+     keycode = self.PUNCT_EN.get(ch)
+     need_shift = ch in self.PUNCT_EN_SHIFT
+    elif needed_layout == "us" and ch in self.PUNCT_EN:
+     keycode = self.PUNCT_EN.get(ch)
+     need_shift = ch in self.PUNCT_EN_SHIFT
+    elif ch in self.PUNCT_RU:
+     needed_layout = "ru"
+     keycode = self.PUNCT_RU.get(ch)
+     need_shift = ch in self.PUNCT_RU_SHIFT
+    elif ch in self.PUNCT_EN:
+     needed_layout = "us"
+     keycode = self.PUNCT_EN.get(ch)
+     need_shift = ch in self.PUNCT_EN_SHIFT
+
    # ------------------------------------------------
    # Неизвестный символ
    # ------------------------------------------------
-   
+
    else:
     print(f"[WARN] Неизвестный символ: {repr(ch)}")
     continue
-   
+
    if keycode is None:
     continue
-   
+
    # ------------------------------------------------
-   # Переключение RU / US
+   # Переключение RU / US с ПРОВЕРКОЙ РЕАЛЬНОЙ раскладки
    # ------------------------------------------------
-   
-   if current_layout != needed_layout:
-    
-    if self.set_layout(needed_layout):
+
+   if needed_layout != current_layout or need_shift:
+
+    if self.get_current_layout() != needed_layout:
+     if self.set_layout(needed_layout):
+      current_layout = needed_layout
+     else:
+      print(
+       f"[ERROR] Не удалось установить "
+       f"раскладку {needed_layout} для {repr(ch)}"
+      )
+      continue
+    elif current_layout != needed_layout:
      current_layout = needed_layout
-    
-    else:
-     print(
-      f"[ERROR] Не удалось установить "
-      f"раскладку {needed_layout} для {repr(ch)}"
-     )
-     continue
-   
+
    # ------------------------------------------------
    # Shift
    # ------------------------------------------------
-   
+
    if need_shift:
     self.ui.write(
      ecodes.EV_KEY,
@@ -559,13 +703,13 @@ class SmartTyper:
      1
     )
     self.ui.syn()
-    
+
     time.sleep(shift_delay)
-   
+
    # ------------------------------------------------
    # Нажатие клавиши
    # ------------------------------------------------
-   
+
    try:
     self.ui.write(
      ecodes.EV_KEY,
@@ -573,18 +717,18 @@ class SmartTyper:
      1
     )
     self.ui.syn()
-    
-    time.sleep(max(delay / 3.5, 0.01))
-    
+
+    time.sleep(max(delay / 3.5, 0.006))
+
     self.ui.write(
      ecodes.EV_KEY,
      keycode,
      0
     )
     self.ui.syn()
-   
+
    finally:
-    
+
     # Shift обязательно отпускаем.
     # Иначе при исключении он может "залипнуть".
     if need_shift:
@@ -594,14 +738,14 @@ class SmartTyper:
       0
      )
      self.ui.syn()
-   
+
    time.sleep(delay)
-  
+
   # ----------------------------------------------------
   # Возвращаем исходную раскладку
   # ----------------------------------------------------
-  
-  if current_layout != original_layout:
+
+  if self.get_current_layout() != original_layout:
    self.set_layout(original_layout)
  
 
@@ -661,6 +805,10 @@ k = save_key()
 k.update_dict()  # Changed Contr1 to Controller
 keyboard = Controller()
 def on_press(key):
+  # ВАЖНО: Pynput на X11 держит глобальный захват клавиатуры, пока выполняется
+  # обратный вызов. Здесь допустимы ТОЛЬКО мгновенные операции (установка флагов),
+  # иначе захват блокирует ввод во всей системе. Тяжёлая работа (чтение файла)
+  # выполняется в отдельном потоке через _update_dict_async.
   key = str(key).replace(" ", "")
   if key == "Key.shift_r":
       k.set_flag(True)
@@ -669,10 +817,16 @@ def on_press(key):
       k.set_flag(False)
       return True
   if key == "Key.alt":
-      driver = k.get_driver()
-      k.update_dict()
+      threading.Thread(target=_update_dict_async, daemon=True).start()
       return True
   return True
+
+def _update_dict_async():
+  try:
+    k.update_dict()
+  except Exception as e:
+    print(f"Ошибка обновления словаря: {e}")
+
 def on_release(key):
   pass
   return True
@@ -725,7 +879,7 @@ def press_keys(text):
                 exit '''
   #subprocess.run(['bash', '-c', reset_keys_script])
   #time.sleep(1)
-  typer.type_text(text, delay=0.1)
+  typer.type_text(text, delay=0.02)
   #subprocess.call(['xkbset', 'sticky']) # Включаем sticky keys обратно
  except Exception as ex1:
   print(ex1)
