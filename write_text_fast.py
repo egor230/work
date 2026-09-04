@@ -271,183 +271,340 @@ class SmartTyper:
   except Exception as e:
    print(f"[WARN] Ошибка при включении NumLock: {e}")
    time.sleep(0.2)
-
+   
  def get_current_layout(self):
-  try:
-   time.sleep(1.5)
-   cmd = "xset -q | grep -A 0 'LED mask' | awk '{print $10}'"
-   result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-   mask = result.stdout.strip()
-   if mask == "00001002":
-    return 'us'
-   else:
-    return 'ru'
-  except Exception:
-   return 'us'
+  """
+  Определение текущей раскладки RU/US.
 
+  ВАЖНО:
+  LED mask используется аккуратно:
+  состояние Caps Lock отбрасывается при сравнении.
+  """
+  try:
+   result = subprocess.run(
+    ["xset", "-q"],
+    capture_output=True,
+    text=True,
+    timeout=2
+   )
+   
+   if result.returncode != 0:
+    return getattr(self, "_current_layout", "us")
+   
+   for line in result.stdout.splitlines():
+    if "LED mask:" in line:
+     mask_str = line.split("LED mask:")[-1].strip().split()[0]
+     
+     try:
+      mask = int(mask_str, 16)
+     except ValueError:
+      break
+     
+     # Убираем Caps Lock из маски.
+     # Благодаря этому Caps не будет восприниматься
+     # как изменение раскладки.
+     mask_without_caps = mask & ~0x04
+     
+     #
+     # Для стандартной конфигурации ru/us:
+     #
+     # 0x00001000 — одна XKB-группа
+     # 0x00000000 — другая.
+     #
+     if mask_without_caps & 0x1000:
+      layout = "us"
+     else:
+      layout = "ru"
+     
+     self._current_layout = layout
+     return layout
+  
+  except Exception as e:
+   print(f"[WARN] Ошибка определения раскладки: {e}")
+  
+  # Не возвращаем слепо US при любой ошибке.
+  # Это важно во время печати русского текста.
+  return getattr(self, "_current_layout", "us")
+
+ 
  def is_capslock_on(self):
-  """Улучшенное определение Caps Lock несколькими способами"""
+  """
+  Определение Caps Lock независимо от текущей
+  русской/английской раскладки.
+  """
   try:
-   # Способ 1: Через xset LED mask (самый надёжный)
-   cmd = "xset -q | grep -A 0 'LED mask' | awk '{print $10}'"
-   result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=2)
-   mask_str = result.stdout.strip()
-
-   if mask_str:
-    mask = int(mask_str, 16)
-    # Caps Lock бит — обычно 3-й байт (0x00000004)
-    if mask & 0x00000004:
-     return True
+   result = subprocess.run(
+    ["xset", "-q"],
+    capture_output=True,
+    text=True,
+    timeout=2
+   )
+   
+   if result.returncode != 0:
+    return False
+   
+   output = result.stdout
+   
+   # Сначала ищем нормальный текстовый статус.
+   for line in output.splitlines():
+    if "Caps Lock:" in line:
+     status = line.split("Caps Lock:")[-1].strip().split()[0].lower()
+     
+     if status == "on":
+      return True
+     
+     if status == "off":
+      return False
+   
+   # Если текстового статуса почему-то нет —
+   # используем LED mask.
+   for line in output.splitlines():
+    if "LED mask:" in line:
+     mask_str = line.split("LED mask:")[-1].strip().split()[0]
+     
+     try:
+      mask = int(mask_str, 16)
+      return bool(mask & 0x04)
+     except ValueError:
+      pass
+  
   except Exception as e:
    print(f"[WARN] Ошибка определения Caps Lock: {e}")
-
+  
   return False
-
+ 
  def set_layout(self, lang):
-  """Надёжное переключение раскладки"""
-  for attempt in range(10):
+  """
+  Переключает только между RU <-> US.
+ 
+  После каждого переключения проверяется реальное
+  состояние раскладки.
+  """
+  if lang not in ("ru", "us"):
+   return False
+  
+  for attempt in range(8):
+   
    current = self.get_current_layout()
+   
    if current == lang:
+    self._current_layout = lang
     return True
-
+   
    try:
-    subprocess.run(["xte", "key ISO_Next_Group"], check=True, timeout=1)
-    time.sleep(1.6)
-    if self.get_current_layout() == lang:
+    subprocess.run(
+     ["xte", "key", "ISO_Next_Group"],
+     check=True,
+     timeout=1
+    )
+   
+   except Exception as e:
+    print(f"[WARN] Ошибка переключения раскладки: {e}")
+   
+   # Не нужно ждать 1.6 секунды после каждого символа.
+   # Даём XKB время переключить группу.
+   for _ in range(10):
+    time.sleep(0.05)
+    
+    current = self.get_current_layout()
+    
+    if current == lang:
+     self._current_layout = lang
      return True
-   except Exception:
-    pass
-
-   time.sleep(0.1)
-
-  print(f"[ERROR] Не удалось переключить раскладку на {lang} после 10 попыток!")
+  
+  print(f"[ERROR] Не удалось переключить раскладку на {lang}")
   return False
-
+ 
+ 
  def type_text(self, text, delay=0.05):
-  shift_delay = 0.1
+  """
+  Печать русского/английского текста.
+ 
+  Учитывает:
+  - RU/US;
+  - переключение между RU и US прямо внутри строки;
+  - Caps Lock;
+  - Shift + Caps Lock;
+  - знаки препинания;
+  - восстановление первоначальной раскладки.
+  """
+  
+  shift_delay = 0.03
+  
   original_layout = self.get_current_layout()
   current_layout = original_layout
-
+  
+  # Запоминаем реальное состояние Caps Lock.
   caps_on = self.is_capslock_on()
-
+  
   for ch in text:
-   needed_layout = current_layout
+   
    lower_ch = ch.lower()
-
-   # Учёт Caps Lock для букв
-   if caps_on and (lower_ch in self.EN_MAP or lower_ch in self.RU_MAP):
-    # При включённом Caps Lock инвертируем логику Shift
-    effective_upper = not ch.isupper()
-   else:
-    effective_upper = ch.isupper()
-
-   # Обработка троеточия
-   if ch == '…':
-    if current_layout == 'us':
-     keycode = self.PUNCT_EN['…']
-     need_shift = False
-    else:
-     keycode = self.PUNCT_RU['…']
-     need_shift = True
-
+   needed_layout = current_layout
+   
+   keycode = None
+   need_shift = False
+   
+   # ------------------------------------------------
+   # Русские буквы
+   # ------------------------------------------------
+   
+   if lower_ch in self.RU_MAP:
+    
+    needed_layout = "ru"
+    keycode = self.RU_MAP[lower_ch]
+    
+    # Таблица:
+    #
+    # Caps OFF + а -> Shift OFF
+    # Caps OFF + А -> Shift ON
+    # Caps ON  + а -> Shift ON
+    # Caps ON  + А -> Shift OFF
+    #
+    need_shift = ch.isupper() != caps_on
+   
+   # ------------------------------------------------
+   # Английские буквы
+   # ------------------------------------------------
+   
+   elif lower_ch in self.EN_MAP:
+    
+    needed_layout = "us"
+    keycode = self.EN_MAP[lower_ch]
+    
+    need_shift = ch.isupper() != caps_on
+   
+   # ------------------------------------------------
+   # Общие символы
+   # ------------------------------------------------
+   
    elif ch in self.COMMON_MAP:
+    
     keycode = self.COMMON_MAP[ch]
     need_shift = ch in self.COMMON_SHIFT
-
-   elif lower_ch in self.RU_MAP:
-    needed_layout = 'ru'
-    keycode = self.RU_MAP[lower_ch]
-    need_shift = effective_upper
-
-   elif lower_ch in self.EN_MAP:
-    needed_layout = 'us'
-    keycode = self.EN_MAP[lower_ch]
-    need_shift = effective_upper
-
+   
+   # ------------------------------------------------
+   # Только английские символы
+   # ------------------------------------------------
+   
    elif ch in self.EN_ONLY_PUNCT:
-    needed_layout = 'us'
+    
+    needed_layout = "us"
     keycode = self.EN_ONLY_PUNCT[ch]
     need_shift = ch in self.EN_ONLY_PUNCT_SHIFT
-
+   
+   # ------------------------------------------------
+   # Только русские символы
+   # ------------------------------------------------
+   
    elif ch in self.RU_ONLY_PUNCT:
-    needed_layout = 'ru'
+    
+    needed_layout = "ru"
     keycode = self.RU_ONLY_PUNCT[ch]
     need_shift = ch in self.RU_ONLY_PUNCT_SHIFT
-
+   
+   # ------------------------------------------------
+   # Символы, зависящие от раскладки
+   # ------------------------------------------------
+   
    elif ch in self.PUNCT_EN or ch in self.PUNCT_RU:
-    needed_layout = current_layout
-    if current_layout == 'us':
+    
+    if current_layout == "us":
      keycode = self.PUNCT_EN.get(ch)
-     need_shift = ch in self.PUNCT_EN_SHIFT
+     
+     if keycode is not None:
+      need_shift = ch in self.PUNCT_EN_SHIFT
+    
     else:
      keycode = self.PUNCT_RU.get(ch)
-     need_shift = ch in self.PUNCT_RU_SHIFT
+     
+     if keycode is not None:
+      need_shift = ch in self.PUNCT_RU_SHIFT
+   
+   # ------------------------------------------------
+   # Неизвестный символ
+   # ------------------------------------------------
+   
    else:
+    print(f"[WARN] Неизвестный символ: {repr(ch)}")
     continue
-
+   
+   if keycode is None:
+    continue
+   
+   # ------------------------------------------------
+   # Переключение RU / US
+   # ------------------------------------------------
+   
    if current_layout != needed_layout:
-    success = self.set_layout(needed_layout)
-    if success:
+    
+    if self.set_layout(needed_layout):
      current_layout = needed_layout
+    
     else:
-     print(f"[ERROR] НЕ ПЕРЕКЛЮЧИЛОСЬ! Текущая: {self.get_current_layout()}")
-     time.sleep(0.3)
-     if self.set_layout(needed_layout):
-      current_layout = needed_layout
-     else:
-      continue
-
+     print(
+      f"[ERROR] Не удалось установить "
+      f"раскладку {needed_layout} для {repr(ch)}"
+     )
+     continue
+   
+   # ------------------------------------------------
+   # Shift
+   # ------------------------------------------------
+   
    if need_shift:
-    self.ui.write(ecodes.EV_KEY, ecodes.KEY_LEFTSHIFT, 1)
+    self.ui.write(
+     ecodes.EV_KEY,
+     ecodes.KEY_LEFTSHIFT,
+     1
+    )
     self.ui.syn()
+    
     time.sleep(shift_delay)
-
-   self.ui.write(ecodes.EV_KEY, keycode, 1)
-   self.ui.syn()
-   time.sleep(delay / 3.5)
-   self.ui.write(ecodes.EV_KEY, keycode, 0)
-   self.ui.syn()
-
-   if need_shift:
-    self.ui.write(ecodes.EV_KEY, ecodes.KEY_LEFTSHIFT, 0)
+   
+   # ------------------------------------------------
+   # Нажатие клавиши
+   # ------------------------------------------------
+   
+   try:
+    self.ui.write(
+     ecodes.EV_KEY,
+     keycode,
+     1
+    )
     self.ui.syn()
-
-  # Восстановление раскладки
-  final = self.get_current_layout()
-  if final != original_layout:
+    
+    time.sleep(max(delay / 3.5, 0.01))
+    
+    self.ui.write(
+     ecodes.EV_KEY,
+     keycode,
+     0
+    )
+    self.ui.syn()
+   
+   finally:
+    
+    # Shift обязательно отпускаем.
+    # Иначе при исключении он может "залипнуть".
+    if need_shift:
+     self.ui.write(
+      ecodes.EV_KEY,
+      ecodes.KEY_LEFTSHIFT,
+      0
+     )
+     self.ui.syn()
+   
+   time.sleep(delay)
+  
+  # ----------------------------------------------------
+  # Возвращаем исходную раскладку
+  # ----------------------------------------------------
+  
+  if current_layout != original_layout:
    self.set_layout(original_layout)
+ 
 
-   #  # Альтернативные биты (на некоторых системах)
-   #  if mask & 0x00000001 or mask & 0x00000002:
-   #   return True
-   #
-   # # Способ 2: Через xset q напрямую
-   # cmd2 = "xset q | grep -i 'caps lock'"
-   # result2 = subprocess.run(cmd2, shell=True, capture_output=True, text=True, timeout=2)
-   # if "on" in result2.stdout.lower():
-   #  return True
-   #
-   # # Способ 3: Через evdev (физическая клавиатура)
-   # if hasattr(self.physical_keyboard, 'leds'):
-   #  return ecodes.LED_CAPSL in self.physical_keyboard.leds()
-  # try:
-  #  subprocess.run(["xdotool", "key", "ISO_Next_Group"], check=True, timeout=1)
-  #  time.sleep(1.2)
-  #  if self.get_current_layout() == lang:
-  #   return True
-  # except Exception:
-  #  pass
-  #
-
-  # try:
-  #  if lang == 'us':
-  #   subprocess.run(["setxkbmap", "-layout", "us"], check=True, timeout=1)
-  #  else:
-  #   subprocess.run(["setxkbmap", "-layout", "ru"], check=True, timeout=1)
-  #  time.sleep(1.15)
-  #  if self.get_current_layout() == lang:
-  #   return True
-  # self.ensure_numlock_on()
 class save_key:
  def __init__(self):
   self.text = ""

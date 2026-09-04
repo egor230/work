@@ -1,7 +1,107 @@
 # from pytq_libs_voice import *
 # from write_text import *
 from write_text_fast import *
+import threading
+import time
+from selenium.webdriver.common.by import By
 
+def dom_classes_tracker(driver, interval_sec=0.5, label="classes"):
+  """
+  Отслеживает ИСКЛЮЧИТЕЛЬНО изменения классов у элементов DOM.
+  Запускается в отдельном потоке.
+  """
+  _prev = None
+  _call = 0
+  
+  def _snap():
+   curr = {}
+   try:
+    all_elems = driver.find_elements(By.CSS_SELECTOR, "*")
+    for idx, el in enumerate(all_elems):
+     try:
+      tag = el.tag_name
+      eid = el.get_attribute("id") or ""
+      cls = el.get_attribute("class") or ""
+      testid = el.get_attribute("data-testid") or ""
+      aria = el.get_attribute("aria-label") or ""
+      
+      if not (eid or cls or testid or aria):
+       continue
+      
+      # Ключ НЕ должен содержать class, иначе смена класса считается за удаление/появление
+      key = f"{tag}|id={eid}|testid={testid}|aria={aria[:20]}|idx={idx}"
+      curr[key] = {
+       "tag": tag,
+       "id": eid,
+       "classes": cls,
+       "testid": testid,
+       "aria": aria
+      }
+     except Exception:
+      continue
+   except Exception as e:
+    print(f"[DOM] Ошибка снимка: {e}")
+   return curr
+  
+  def _print_class_diff(n, prev, curr):
+   modified_classes = []
+   
+   for k in curr:
+    if k in prev:
+     old_cls = prev[k]["classes"]
+     new_cls = curr[k]["classes"]
+     
+     if old_cls != new_cls:
+      old_set = set(old_cls.split())
+      new_set = set(new_cls.split())
+      added = sorted(list(new_set - old_set))
+      removed = sorted(list(old_set - new_set))
+      
+      if added or removed:
+       modified_classes.append((curr[k], added, removed, old_cls, new_cls))
+   
+   if not modified_classes:
+    return False
+   
+   print(f"\n{'=' * 60}")
+   print(f"[DOM #{n} | {label}] ИЗМЕНЕНИЯ КЛАССОВ ({len(modified_classes)}):")
+   print(f"{'=' * 60}")
+   
+   for elem, added, removed, old_c, new_c in modified_classes[:20]:
+    info = []
+    if elem['id']:
+     info.append(f"id='{elem['id']}'")
+    if elem['testid']:
+     info.append(f"testid='{elem['testid']}'")
+    info_str = f" ({' '.join(info)})" if info else ""
+    
+    print(f"\n  [~] {elem['tag']}{info_str}")
+    if added:
+     print(f"      + Добавлены: {added}")
+    if removed:
+     print(f"      - Удалены:   {removed}")
+    print(f"      было:  '{old_c[:60]}'")
+    print(f"      стало: '{new_c[:60]}'")
+   
+   if len(modified_classes) > 20:
+    print(f"\n  ... и ещё {len(modified_classes) - 20} элементов с изменившимися классами")
+   return True
+  
+  print(f"[DOM] Трекер классов запущен, интервал={interval_sec}сек")
+  while True:
+   try:
+    curr = _snap()
+    _call += 1
+    if _prev is None:
+     _prev = curr
+     print(f"[DOM #{_call}] БАЗА КЛАССОВ: {len(curr)} элементов")
+    else:
+     _print_class_diff(_call, _prev, curr)
+     _prev = curr
+   except Exception as e:
+    print(f"[DOM] Ошибка цикла: {e}")
+   
+   time.sleep(interval_sec)
 class VoiceThread(QThread):
  icon_signal = pyqtSignal(str)
  status_signal = pyqtSignal(str)
@@ -173,19 +273,6 @@ class VoiceThread(QThread):
    pass
    return None
  
- def _OFF(self):
-  self.icon_signal.emit(self.icon_mic)
-  self.status_signal.emit("Обработка...")
-  button = self.find_stop_button()
-  if button and self.click_element(button):
-   time.sleep(0.3)
-   text = self.get_recognized_text()
-   if text:
-    thread = threading.Thread(target=press_keys, args=(text,))
-    thread.start()
-    self.clear_input_field()
-    thread.join()
- 
  def _ON(self):
   if self.mode == "record":
    self.icon_signal.emit(self.icon_record)
@@ -214,7 +301,18 @@ class VoiceThread(QThread):
       last_speech_time = time.time()
      else:
       if time.time() - last_speech_time > 3.3:
-       self._OFF()
+       self.icon_signal.emit(self.icon_mic)
+       self.status_signal.emit("Обработка...")
+       button = self.find_stop_button()
+       if button and self.click_element(button):
+        time.sleep(0.3)
+        text = self.get_recognized_text()
+        if text:
+         thread = threading.Thread(target=press_keys, args=(text,))
+         thread.start()
+         self.clear_input_field()
+         thread.join()
+       
        print("Тишина дольше 2.3 сек, остановка записи")
        break
 
@@ -279,7 +377,8 @@ class VoiceThread(QThread):
   listener_thread = threading.Thread(target=start_mouse_listener_with_delay, daemon=True)
   listener_thread.start()
   self.first_start = True
-  
+  classes1=""
+  # threading.Thread(target=dom_classes_tracker, args=(self.driver, 0.9), daemon=True).start()
   while True:
    try:
     time.sleep(0.01)
@@ -301,13 +400,17 @@ class VoiceThread(QThread):
      if not self.mic:
       self.show_message(None, False)
      else:
-      aria_label = self.button.get_attribute(self.alisa) or ""
       oknyx_core = self.button.find_element(By.CSS_SELECTOR, f".{self.OKNYX_CORE_CLASS}")
+      aria_label = self.button.get_attribute(self.alisa) or ""
       filter_elem = oknyx_core.get_attribute("data-testid") or ""
       classes = oknyx_core.get_attribute("class") or ""
+      # textarea = textarea_elem.get_attribute("class") or ""
+      # print(textarea)
       self.message, counts1 = self.get_user_message(self.counts)
-      # print(classes)
-      if  "spe" in filter_elem and "стоп" in aria_label and "th" in classes:
+      if classes1 != classes:
+       classes1=classes
+       # print(classes)
+      if  "spe" in filter_elem and "th" in classes:# and "стоп" in aria_label and "th" in classes:
        self.driver.execute_script("arguments[0].click();", self.button)
        time.sleep(3)
       if "su" in filter_elem or "ex" in classes and "сл" in aria_label.lower():
@@ -317,6 +420,13 @@ class VoiceThread(QThread):
       if counts1 > self.counts:
        white = oknyx_core.find_element(By.CSS_SELECTOR, ".StandaloneOknyxCore-WhiteCircleWrapper")
        thread = threading.Thread(target=process_text, args=(self.message,))
+       # Пример проверки окончательной готовности текста
+       # is_listening = "StandaloneOknyxCore_animation_listening" in lottie_elem.get_attribute("class")
+       # glow_visible = glow_elem.is_displayed()
+       #
+       # if not is_listening and not glow_visible:
+       #  print(self.message)
+       #  pass
        if "out" in classes or "col" in classes or "th" in filter_elem or white.value_of_css_property("display") == "none":
         thread.start()
         print(counts1)
@@ -353,8 +463,8 @@ class VoiceThread(QThread):
        // Если это обычный input или textarea
        else {
            // Фокусируем и выделяем весь текст внутри элемента
-           el.focus();
-           el.select();
+           // // // el.focus();
+           // el.select();
 
            // Команды на удаление выделенного текста (работает на уровне документа, не ОС)
            document.execCommand('selectAll', false, null);
