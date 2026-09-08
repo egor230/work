@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import os, sys, json, time, threading, tempfile, subprocess, signal, socket, base64, random, argparse, re, statistics, functools
+import os, sys, json, time, threading, tempfile, subprocess, signal, socket, base64, random, argparse, re, statistics, functools, shutil
 from urllib.request import urlopen, Request
 from urllib.parse import parse_qs, quote
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -24,8 +24,18 @@ EXTRA_REPOS = [
     "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/Vless-Reality-White-Lists-Rus-Mobile.txt",
     "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS.txt",
     "https://raw.githubusercontent.com/Romaxa55/MegaV_Public/main/subs/vless.txt",
-    "https://raw.githubusercontent.com/barry-far/V2ray-config/main/Sub.txt",
-    "https://raw.githubusercontent.com/MhdiJafari/Free-V2ray-Config/main/All_Configs_Sub.txt",
+    # новые источники (добавлены 2026-09-08, проверены живыми)
+    "https://raw.githubusercontent.com/Epodonios/v2ray-configs/main/All_Configs_Sub.txt",
+    "https://raw.githubusercontent.com/mahdibland/V2RayAggregator/master/sub/sub_merge.txt",
+    "https://raw.githubusercontent.com/ALIILAPRO/v2rayNG-Config/main/server.txt",
+    "https://raw.githubusercontent.com/mfuu/v2ray/master/sub",          # base64-подписка, декодируется автоматически
+    "https://raw.githubusercontent.com/pawdroid/Free-servers/main/sub", # base64-подписка, декодируется автоматически
+]
+# Зеркало на jsdelivr — используется автоматически, если raw.githubusercontent.com недоступен
+MIRROR_REWRITE = [
+    ("https://raw.githubusercontent.com/", "https://cdn.jsdelivr.net/gh/"),
+    ("@main/", "@main/"),
+    ("@master/", "@master/"),
 ]
 
 NEED = 1
@@ -80,6 +90,17 @@ GEMINI_BLOCK_MARKERS = [
     "gemini is not available", "this service is not available in your country",
 ]
 
+# ==================== ГЕО-ГЕЙТ (честная проверка) ====================
+# Лендинг gemini.google.com отдаёт HTTP 200 ЛЮБОМУ IP, даже из РФ — это НЕ доказывает доступ.
+# Google блокирует Gemini/AI-сервисы по стране выходного IP (список запрещённых ниже).
+# Поэтому подлинный критерий: страна выходного IP через гео-сервисы.
+GEO_BLOCKED_COUNTRIES = ["RU", "BY", "CN", "HK", "KP", "IR", "CU", "SY", "VE"]  # Google AI запрещает
+GEO_ENDPOINTS = [
+    "http://ip-api.com/json?fields=countryCode",           # основной
+    "https://ipinfo.io/country",                            # резерв 1
+    "https://ipapi.co/country_code/",                       # резерв 2 (лимит частоты)
+]
+
 MAX_LATENCY = 2500
 LOGS_DIR = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/logs"
 
@@ -95,7 +116,7 @@ SPEED_BYTES = 4000000
 SPEED_TIMEOUT = 7
 
 # ==================== ПОСТОЯННЫЙ VPN ====================
-RUN_BEST = False
+RUN_BEST = True          # по умолчанию скрипт САМ включает VPN (xray + системный прокси)
 RUN_PORT = 10999
 RUN_MONITOR = True
 MONITOR_INTERVAL = 45
@@ -165,11 +186,32 @@ def time_left():
 
 # ==================== ЗАГРУЗКА СПИСКОВ ====================
 
+def mirror_url(url):
+    """Фолбэк-зеркало: raw.githubusercontent.com → cdn.jsdelivr.net"""
+    if "raw.githubusercontent.com/" not in url:
+        return url
+    tail = url.split("raw.githubusercontent.com/", 1)[1]
+    # user/repo/branch/path → user/repo@branch/path
+    parts = tail.split("/", 3)
+    if len(parts) < 3:
+        return url
+    user, repo, branch, path = parts[0], parts[1], parts[2], (parts[3] if len(parts) > 3 else "")
+    return f"https://cdn.jsdelivr.net/gh/{user}/{repo}@{branch}/{path}"
+
+
 def download_one(url):
     safe = url.split("/")[-1].split("?")[0] or "list"
     tmp = os.path.join(LOGS_DIR, f".dl_{safe}")
-    for attempt in range(3):
+    for attempt in range(4):
         try:
+            # после 2-й неудачи пробуем зеркало jsdelivr
+            if attempt == 2:
+                murl = mirror_url(url)
+                if murl != url:
+                    print(f"{Y}⚠ GitHub не отвечает, пробую зеркало jsdelivr для {safe[:40]}{N}")
+                    url = murl
+                else:
+                    continue
             r = subprocess.run(
                 ["curl", "-sSL", "--retry", "2", "--retry-delay", "1",
                  "--connect-timeout", "10", "-m", str(TIMEOUT_DL),
@@ -179,6 +221,12 @@ def download_one(url):
             if r.returncode == 0 and os.path.getsize(tmp) > 0:
                 with open(tmp, "r", encoding="utf-8", errors="ignore") as f:
                     data = f.read()
+                # base64-подписка: нет ссылок в чистом виде — пробуем декодировать
+                if "://" not in data:
+                    stripped = "".join(data.split())
+                    decoded = b64_decode(stripped)
+                    if "://" in decoded:
+                        data = decoded
                 return data
         except Exception:
             pass
@@ -674,6 +722,10 @@ def chatgpt_reachable(port):
 def gemini_reachable(port):
     if stop_event.is_set():
         return False
+    # ГЛАВНОЕ: страна выходного IP. Лендинг Gemini отдаёт 200 даже из РФ,
+    # реальный доступ Google гейтит по гео — проверяем честно.
+    if not exit_country_allowed(port):
+        return False
     code, body = probe_site(port, GEMINI_SITE, timeout=TIMEOUT_TEST, ua=GEMINI_UA, body=True)
     low = body.lower()
     if code in ("301", "302", "303", "307", "308"):
@@ -686,6 +738,34 @@ def gemini_reachable(port):
         if "google" in low and '"cf"' not in low and not any(m in low for m in BLOCK_MARKERS):
             return True
     return False
+
+
+def exit_country_allowed(port):
+    """Честная проверка: страна выходного IP не должна быть в списке запрещённых Google."""
+    cc = exit_country(port)
+    if cc is None:
+        # гео-сервисы недоступны (сам туннель может быть жив) — не пропускаем,
+        # чтобы не врать пользователю как раньше
+        return False
+    if cc in GEO_BLOCKED_COUNTRIES:
+        return False
+    return True
+
+
+def exit_country(port):
+    """Определяет страну выходного IP туннеля (2-я попытка через резервные гео-сервисы)."""
+    for attempt, ep in enumerate(GEO_ENDPOINTS):
+        code, body = probe_site(port, ep, timeout=8, body=True)
+        body = (body or "").strip()
+        if code == "200" and body:
+            m = re.search(r'"countryCode"\s*:\s*"([A-Z]{2})"', body)
+            if not m:
+                m = re.search(r'\b([A-Z]{2})\b', body)
+            if m:
+                return m.group(1)
+        if attempt < len(GEO_ENDPOINTS) - 1:
+            continue
+    return None
 
 
 def target_reachable(port):
@@ -971,18 +1051,25 @@ def start_xray_persistent(outbound, port):
         return None
 
 
-def try_start_working_link(link, port):
+def try_start_working_link(link, port, stability_checks=3, interval=5.0):
     outbound = link_to_outbound(link)
     if outbound is None:
         return None
     proc = start_xray_persistent(outbound, port)
     if proc is None:
         return None
-    time.sleep(1)
-    if not target_reachable(port):
-        print(f"{Y}Ключ включён, но {TARGET.upper()} не открывается. Пропускаю.{N}")
-        stop_xray_proc(proc)
-        return None
+    # проверка живучести: ключ должен держаться несколько проверок подряд
+    for n in range(stability_checks):
+        time.sleep(interval if n else 1)
+        if proc.poll() is not None:
+            print(f"{Y}xray умер сразу после старта. Пропускаю.{N}")
+            stop_xray_proc(proc)
+            return None
+        if not target_reachable(port):
+            print(f"{Y}Ключ включён, но {TARGET.upper()} не открывается "
+                  f"(проверка {n + 1}/{stability_checks}). Пропускаю.{N}")
+            stop_xray_proc(proc)
+            return None
     return proc
 
 
@@ -995,6 +1082,7 @@ def run_best_persistent(final_entries):
     port = pick_run_port(RUN_PORT)
     print(f"{C}Держим рабочий VPN на socks5h://127.0.0.1:{port}{N}")
     i = 0
+    monitor_fails = {}   # link -> число подряд неудачных проверок монитора
     while not stop_event.is_set() and i < len(links):
         link = links[i]
         print(f"{C}Пробую включить VPN: {link[:70]}...{N}")
@@ -1003,7 +1091,9 @@ def run_best_persistent(final_entries):
             i += 1
             continue
         RUNNING_PROC = proc
+        cc = exit_country(port)
         print(f"{G}✅ Рабочий VPN включён и {TARGET.upper()} открывается.{N}")
+        print(f"{G}✓ Выходной IP: {cc or '?'} (гео-проверка пройдена — не из запрещённых Google стран){N}")
         print(f"{G}socks5h://127.0.0.1:{port}{N}")
         set_system_proxy(port)
         print(f"\nДля терминала:")
@@ -1022,12 +1112,19 @@ def run_best_persistent(final_entries):
                 i += 1
                 break
             if not target_reachable(port):
+                monitor_fails[link] = monitor_fails.get(link, 0) + 1
+                if monitor_fails[link] < 2:
+                    # одиночный сбой — сайт перегружен, даём ключу ещё один шанс
+                    print(f"{Y}{TARGET.upper()} не отвечает (попытка {monitor_fails[link]}), "
+                          f"проверю ещё раз через {MONITOR_INTERVAL}с...{N}")
+                    continue
                 print(f"{Y}VPN включён, но {TARGET.upper()} перестал открываться. Переключаюсь.{N}")
                 stop_xray_proc(proc)
                 RUNNING_PROC = None
                 clear_system_proxy()
                 i += 1
                 break
+            monitor_fails[link] = 0
     print(f"{R}Не удалось оставить рабочий VPN.{N}")
     clear_system_proxy()
 
@@ -1036,6 +1133,12 @@ def run_best_persistent(final_entries):
 
 SYSTEM_PROXY = True
 
+# На Linux Mint/Cinnamon (и прочих НЕ-GNOME столах) Chrome игнорирует gsettings-прокси.
+# Поэтому после включения VPN перезапускаем Chrome с явным --proxy-server (если он был открыт).
+# Отключить: --no-browser-restart
+BROWSER_RESTART = True
+BROWSER_CMD_CANDIDATES = ["google-chrome", "google-chrome-stable", "chromium-browser", "chromium", "firefox"]
+
 
 def _gset(*args):
     try:
@@ -1043,6 +1146,54 @@ def _gset(*args):
         return True
     except Exception:
         return False
+
+
+def find_browser_cmd():
+    """Возвращает (cmd, is_chromium) запущенного браузера или браузера по умолчанию."""
+    try:
+        running = subprocess.run(["ps", "-eo", "args"], capture_output=True, text=True, timeout=5).stdout
+    except Exception:
+        running = ""
+    for cand in BROWSER_CMD_CANDIDATES:
+        real = shutil.which(cand)
+        if not real:
+            continue
+        # имя процесса в ps: /opt/google/chrome/chrome, /usr/bin/firefox и т.п.
+        base = os.path.basename(real)
+        if base in running or cand in running:
+            return real, cand not in ("firefox",)
+    return None, False
+
+
+def restart_browser_with_proxy(port):
+    """Перезапускает открытый браузер с явным --proxy-server (нужно для Mint/Cinnamon)."""
+    if not BROWSER_RESTART:
+        return
+    cmd, is_chromium = find_browser_cmd()
+    if not cmd:
+        print(f"{Y}⚠ Не найден браузер для перезапуска — откройте браузер сами{N}")
+        return
+    if not is_chromium:
+        # Firefox читает gsettings-прокси сам, перезапуск не нужен
+        print(f"{G}✓ Firefox сам подхватит gsettings-прокси (перезапуск не нужен){N}")
+        return
+    # Chromium-подобный: если запущен — убить и стартовать заново с прокси
+    base = os.path.basename(cmd)
+    try:
+        subprocess.run(["pkill", "-f", f"^{cmd}"], capture_output=True, timeout=10)
+    except Exception:
+        pass
+    time.sleep(2)
+    try:
+        subprocess.Popen(
+            [cmd, f"--proxy-server=socks5://127.0.0.1:{port}", "--proxy-bypass-list=<-loopback>"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        print(f"{G}✓ Браузер перезапущен через VPN: {cmd} --proxy-server=socks5://127.0.0.1:{port}{N}")
+    except Exception as e:
+        print(f"{Y}⚠ Не удалось перезапустить браузер: {e}{N}")
+        print(f"{Y}  Запустите сами: {cmd} --proxy-server=socks5://127.0.0.1:{port}{N}")
 
 
 def set_system_proxy(port):
@@ -1055,8 +1206,13 @@ def set_system_proxy(port):
         return
     _gset("set", "org.gnome.system.proxy.socks", "host", "127.0.0.1")
     _gset("set", "org.gnome.system.proxy.socks", "port", str(port))
-    print(f"{G}✓ Системный прокси GNOME → socks5h://127.0.0.1:{port} "
-          f"(браузеры Chromium/Chrome работают сразу){N}")
+    desk = os.environ.get("XDG_CURRENT_DESKTOP", "")
+    if "GNOME" in desk and "Cinnamon" not in desk and "cinnamon" not in desk.lower():
+        print(f"{G}✓ Системный прокси GNOME → socks5h://127.0.0.1:{port}{N}")
+    else:
+        print(f"{Y}⚠ Десктоп {desk or '?'}: Chrome НЕ читает gsettings-прокси. "
+              f"Перезапускаю браузер с явным --proxy-server...{N}")
+        restart_browser_with_proxy(port)
 
 
 def clear_system_proxy():
@@ -1064,6 +1220,17 @@ def clear_system_proxy():
         return
     _gset("set", "org.gnome.system.proxy", "mode", "none")
     print(f"{C}Системный прокси GNOME сброшен.{N}")
+    # вернуть браузер к прямому соединению (без --proxy-server)
+    if BROWSER_RESTART and find_browser_cmd()[0]:
+        cmd, _ = find_browser_cmd()
+        if cmd and f"proxy-server" in subprocess.run(["ps", "-eo", "args"], capture_output=True, text=True, timeout=5).stdout:
+            try:
+                subprocess.run(["pkill", "-f", f"^{cmd}"], capture_output=True, timeout=10)
+                time.sleep(2)
+                subprocess.Popen([cmd], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+                print(f"{G}✓ Браузер перезапущен без прокси{N}")
+            except Exception:
+                pass
 
 
 # ==================== ОБРАБОТКА РЕЗУЛЬТАТОВ ====================
@@ -1137,6 +1304,8 @@ def main():
                         help="Локальный порт для постоянного SOCKS5 VPN")
     parser.add_argument("--no-monitor", action="store_true",
                         help="Не проверять периодически целевой сайт после включения")
+    parser.add_argument("--no-browser-restart", action="store_true",
+                        help="Не перезапускать браузер с --proxy-server (для Mint/Cinnamon)")
     args = parser.parse_args()
 
     NEED = max(1, args.need)
@@ -1148,6 +1317,7 @@ def main():
     globals()["TARGET"] = args.target
     RUN_BEST = args.run_best and not args.no_run_best
     globals()["SYSTEM_PROXY"] = SYSTEM_PROXY and not args.no_system_proxy
+    globals()["BROWSER_RESTART"] = BROWSER_RESTART and not args.no_browser_restart
     RUN_PORT = args.run_port
     RUN_MONITOR = not args.no_monitor
 

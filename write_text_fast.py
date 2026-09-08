@@ -229,7 +229,7 @@ class SmartTyper:
   self.ui = self.create_virtual_keyboard()
 
   # --- ВКЛЮЧЕНИЕ NUMLOCK С ГАРАНТИЕЙ LED ---
-  self.ensure_numlock_on()
+  # self.ensure_numlock_on()
 
  def find_keyboard(self):
   for path in glob.glob("/dev/input/event*"):
@@ -307,8 +307,8 @@ class SmartTyper:
     self.ui.syn()
 
    # После переключения гарантируем LED ещё раз (эмуляция могла сбросить).
-   self.ui.write(ecodes.EV_LED, ecodes.LED_NUML, 1)
-   self.ui.syn()
+   # self.ui.write(ecodes.EV_LED, ecodes.LED_NUML, 1)
+   # self.ui.syn()
    time.sleep(0.15)
   except Exception as e:
    print(f"[WARN] Ошибка при включении NumLock: {e}")
