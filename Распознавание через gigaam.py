@@ -24,7 +24,7 @@ def check_model():
 - multilingual_large_ssl — 600M энкодер-эмбеддинг, то же самое, но более мощный и точный для признаков.
 Для  скрипта (озвучка → текст) годятся только первые две; `large_ctc` лучше, но тяжелее и дольше грузится.
  '''
- model_name = "multilingual_large_ctc"  # активная модель (новая мультиязычная 600M CTC)
+ model_name = "v3_e2e_rnnt"  # активная модель (новая мультиязычная 600M CTC)
  try:  # Проверка наличия файла (указываем полный путь, как это делает gigaam)
   cache_dir = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache/gigaam"
   model = load_model(model_name, cache_dir ) # 4. Указываем корневой каталог, где лежит модель (GigaAM сам добавит /gigaam)

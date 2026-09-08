@@ -20,7 +20,8 @@ set_mute("0", source_id)# Проверка и загрузка модели Giga
 # Проверка наличия модели
 models = ["tiny", "base", "small", "medium", "large", "large-v2", "large-v3", "large-v3-turbo"]
 # Выбираем последнюю модель из списка
-model_name = "dvislobokov/faster-whisper-large-v3-turbo-russian"
+# model_name = "dvislobokov/faster-whisper-large-v3-turbo-russian"
+model_name = "large-v3-turbo"
 cache_dir = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache"
 t = time.time()
 # Инициализация модели

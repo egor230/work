@@ -204,6 +204,8 @@ class VoiceThread(QThread):
    options.add_argument("--disable-extensions")
    options.add_argument('--user-data-dir=/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/google-chrome')
    # options.add_argument("--headless=new")
+
+   options.add_argument("--no-proxy-server")
    driver_path, candidates = self.get_chromedriver_path()
    last_err = None
    for path in (candidates or []):
