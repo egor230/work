@@ -1,0 +1,9 @@
+{
+  "name": "voice_input_yandex",
+  "description": "Голосовой ввод от Яндекса — печать распознанного текста через evdev",
+  "path": "/home/egor/.local/share/voice-input-yandex/native_host.sh",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://pjdbgemnakkfhbeleampncfopechagcl/"
+  ]
+}

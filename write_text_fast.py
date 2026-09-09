@@ -4,8 +4,7 @@ from PyQt6 import QtCore, QtWidgets, QtGui
 from PyQt6.QtCore import QTimer, QObject, pyqtSignal, Qt, QThread
 from PyQt6.QtGui import QIcon, QFont, QAction
 from PyQt6.QtWidgets import ( QApplication, QWidget, QLabel, QVBoxLayout, QSystemTrayIcon, QMenu)
-from pynput.keyboard import Controller, Key, Listener
-from pynput import keyboard, mouse
+from pynput.keyboard import Controller
 from selenium import webdriver
 from selenium.common import TimeoutException, NoSuchElementException
 from selenium.webdriver.chrome.service import Service
@@ -236,11 +235,14 @@ class SmartTyper:
    try:
     dev = evdev.InputDevice(path)
     if "keyboard" in dev.name.lower() or "Keyboard" in dev.name:
+     print(f"[INFO] Физическая клавиатура найдена: {dev.name} ({path})")
      return dev
+   except PermissionError:
+    continue
    except Exception:
     continue
-  print("[ERROR] Клавиатура не найдена. Запустите скрипт с sudo.")
-  sys.exit(1)
+  print("[WARN] Физическая клавиатура не найдена (keyboard-only режим).")
+  return None
 
  def create_virtual_keyboard(self):
   capabilities = {
@@ -804,22 +806,15 @@ class save_key:
 k = save_key()
 k.update_dict()  # Changed Contr1 to Controller
 keyboard = Controller()
-def on_press(key):
-  # ВАЖНО: Pynput на X11 держит глобальный захват клавиатуры, пока выполняется
-  # обратный вызов. Здесь допустимы ТОЛЬКО мгновенные операции (установка флагов),
-  # иначе захват блокирует ввод во всей системе. Тяжёлая работа (чтение файла)
-  # выполняется в отдельном потоке через _update_dict_async.
-  key = str(key).replace(" ", "")
-  if key == "Key.shift_r":
-      k.set_flag(True)
-      return True
-  if key in ["Key.space", "Key.right", "Key.left", "Key.down", "Key.up"]:
-      k.set_flag(False)
-      return True
-  if key == "Key.alt":
-      threading.Thread(target=_update_dict_async, daemon=True).start()
-      return True
-  return True
+
+# ---------------------------------------------------------------------
+# ГЛОБАЛЬНЫЙ СЛУШАТЕЛЬ КЛАВИШ ЧЕРЕЗ evdev (НЕ pynput!)
+# ---------------------------------------------------------------------
+# pynput.keyboard.Listener захватывал клавиатуру через X11 и НЕ отпускал
+# её при краше — вся система переставала печатать. evdev читает устройства
+# ввода напрямую (/dev/input/event*), БЕЗ X-захвата, поэтому ввод никогда
+# не блокируется. Оперируем подтверждённым списком физических клавиатур.
+# ---------------------------------------------------------------------
 
 def _update_dict_async():
   try:
@@ -827,15 +822,77 @@ def _update_dict_async():
   except Exception as e:
     print(f"Ошибка обновления словаря: {e}")
 
-def on_release(key):
-  pass
-  return True
+_KB_DONT_GRAB = True
 
-def start_listener():
-  global listener
-  listener = Listener(on_press=on_press, on_release=on_release)
-  listener.start()
-start_listener()
+
+def _find_all_keyboards():
+  """Возвращает список InputDevice всех физических клавиатур."""
+  _list = []
+  try:
+   for path in glob.glob("/dev/input/event*"):
+    try:
+     dev = evdev.InputDevice(path)
+     name = (dev.name or "").lower()
+     # Отсекаем виртуальные клавиатуры (это и есть наши Selenium/мышь) и не-клавиатуры
+     if ("keyboard" in name or "корпус" in name or "logitech" in name
+         or "at translate" in name or "virtual core" in name) and "smart" not in name \
+         and "mouse setting" not in name:
+      _list.append(dev)
+    except PermissionError:
+     continue
+    except Exception:
+     continue
+  except Exception:
+   pass
+  return _list
+
+
+def _evdev_key_listener():
+  """Фоновый поток: читает нажатия физических клавиатур через evdev.
+  Устанавливает НУЖНЫЕ флаги и обновляет словарь — ровно как раньше,
+  но БЕЗ захвата X11."""
+  devs = _find_all_keyboards()
+  if not devs:
+   print("[evdev-listener] Физическая клавиатура не найдена — флаги работать не будут")
+   return
+  print(f"[evdev-listener] Читаю клавиатуры: {[d.name for d in devs]}")
+  while True:
+   try:
+    # Без блокировки X: evdev просто читает события как обычное устройство.
+    for dev in devs:
+     try:
+      for event in dev.read():
+       if event.type != ecodes.EV_KEY:
+        continue
+       # Re-скан таблицы: evdev даёт проиндексированный путь к событиям
+       # (может падать, если устройство отключено — ловим в try)
+       try:
+        keysym_idx = event.code
+       except Exception:
+        continue
+       # Нажатие (value=1) и автоповтор (value=2) — оба конвертируем в keycode
+       if event.value == 1 or event.value == 2:
+        if keysym_idx == ecodes.KEY_RIGHTSHIFT:
+         k.set_flag(True)
+        elif keysym_idx == ecodes.KEY_SPACE:
+         k.set_flag(False)
+        elif keysym_idx in (ecodes.KEY_LEFT, ecodes.KEY_RIGHT,
+                            ecodes.KEY_UP, ecodes.KEY_DOWN):
+         k.set_flag(False)
+        elif keysym_idx == ecodes.KEY_LEFTALT:
+         threading.Thread(target=_update_dict_async, daemon=True).start()
+     except OSError:
+      # Устройство исчезло (отключили клавиатуру) — пересоберём список
+      devs = _find_all_keyboards() or devs
+      time.sleep(0.2)
+     except Exception:
+      pass
+   except Exception as e:
+    print(f"[evdev-listener] Ошибка цикла: {e}")
+   time.sleep(0.001)
+
+
+threading.Thread(target=_evdev_key_listener, daemon=True).start()
 
 # llm=load_model(MODEL_PATH)
 def replace(match):

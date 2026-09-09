@@ -1,67 +1,82 @@
 'use strict';
 
 (function () {
-  var html = document.documentElement;
   var STORAGE_KEY = 'maTheme';
-  var RELOAD_FLAG = 'maThemeReloaded';
   var currentTheme = null;
 
-  function getThemeFromCookie() {
+  function getCookieParams() {
     try {
       var match = document.cookie.match(/PREF=([^;]*)/);
-      var params = new URLSearchParams(match ? match[1] : '');
-      if (params.get('f6') === '400') return 'dark';
-    } catch (e) {}
-    return 'light';
+      return new URLSearchParams(match ? match[1] : '');
+    } catch (e) {
+      return new URLSearchParams('');
+    }
+  }
+
+  function getThemeFromCookie() {
+    var html = document.documentElement;
+    var f6 = getCookieParams().get('f6');
+    if (f6 !== null && f6 !== '') {
+      return f6.charAt(0) === '4' ? 'dark' : 'light';
+    }
+    return html && html.hasAttribute('dark') ? 'dark' : 'light';
   }
 
   function syncCookie(theme) {
     try {
-      var match = document.cookie.match(/PREF=([^;]*)/);
-      var params = new URLSearchParams(match ? match[1] : '');
-      params.set('f6', theme === 'dark' ? '400' : '8');
+      var params = getCookieParams();
+      params.set('f6', theme === 'dark' ? '400' : '80000');
       document.cookie = 'PREF=' + params.toString() +
         ';max-age=22592000;path=/;domain=.youtube.com';
     } catch (e) {}
   }
 
   function setLock(theme) {
-    html.setAttribute('data-ma-theme', theme === 'dark' ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-ma-theme', theme);
   }
 
   function updateToggleIcon(theme) {
     var sw = document.getElementById('__magic-theme-switch');
-    if (sw) {
-      sw.classList.toggle('dark', theme === 'dark');
-    }
+    if (sw) sw.classList.toggle('dark', theme === 'dark');
   }
 
-  function applyTheme(theme, options) {
-    options = options || {};
-    currentTheme = theme;
+  function applyTheme(theme) {
+    var html = document.documentElement;
+    if (!html) return;
+    currentTheme = theme === 'dark' ? 'dark' : 'light';
 
     html.classList.remove('__ytnight', '__ytday');
-    setLock(theme);
+    setLock(currentTheme);
 
-    if (theme === 'dark') {
+    if (currentTheme === 'dark') {
       html.classList.add('__ytnight');
-      html.setAttribute('dark', 'true');
+      html.setAttribute('dark', '');
+      html.removeAttribute('light');
     } else {
       html.classList.add('__ytday');
+      html.setAttribute('light', '');
       html.removeAttribute('dark');
     }
 
-    syncCookie(theme);
-    updateToggleIcon(theme);
+    try { sessionStorage.setItem('maTheme', currentTheme); } catch (e) {}
+    syncCookie(currentTheme);
+    updateToggleIcon(currentTheme);
+  }
 
-    if (options.reload) {
-      location.reload();
-    }
+  function normalize(stored) {
+    if (stored === 'dark') return 'dark';
+    if (stored === 'light') return 'light';
+    return null;
   }
 
   function toggleTheme() {
-    var next = currentTheme === 'dark' ? 'light' : 'dark';
-    chrome.storage.local.set({ maTheme: next });
+    chrome.storage.local.set({ maTheme: currentTheme === 'dark' ? 'light' : 'dark' });
+  }
+
+  function onToggleActivate(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleTheme();
   }
 
   function createToggle() {
@@ -74,11 +89,10 @@
     sw.setAttribute('aria-label', 'Переключить тему YouTube');
     if (currentTheme === 'dark') sw.classList.add('dark');
 
-    sw.addEventListener('click', function (e) {
-      e.stopPropagation();
-      toggleTheme();
+    sw.addEventListener('click', onToggleActivate, true);
+    sw.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') onToggleActivate(e);
     }, true);
-
     sw.addEventListener('contextmenu', function (e) {
       e.preventDefault();
       e.stopPropagation();
@@ -99,43 +113,72 @@
           observer.disconnect();
         }
       });
-      observer.observe(html, { childList: true });
+      observer.observe(document.documentElement, { childList: true });
     }
   }
-
-  var syncTheme = getThemeFromCookie();
-  applyTheme(syncTheme, { reload: false });
-
-  chrome.storage.local.get([STORAGE_KEY], function (result) {
-    var stored = result[STORAGE_KEY];
-
-    if (stored === undefined || stored === null || stored === '') {
-      chrome.storage.local.set({ maTheme: syncTheme });
-      return;
-    }
-
-    if (stored !== syncTheme) {
-      if (sessionStorage.getItem(RELOAD_FLAG)) {
-        applyTheme(stored, { reload: false });
-      } else {
-        sessionStorage.setItem(RELOAD_FLAG, '1');
-        applyTheme(stored, { reload: true });
-      }
-    }
-  });
 
   chrome.storage.onChanged.addListener(function (changes, area) {
     if (area !== 'local') return;
     if (!(STORAGE_KEY in changes)) return;
-    var next = changes[STORAGE_KEY].newValue || 'light';
-    applyTheme(next, { reload: true });
+    var next = normalize(changes[STORAGE_KEY].newValue);
+    if (next) applyTheme(next);
   });
 
   document.addEventListener('yt-navigate-finish', function () {
     chrome.storage.local.get([STORAGE_KEY], function (result) {
-      applyTheme(result[STORAGE_KEY] || getThemeFromCookie(), { reload: false });
+      var stored = normalize(result[STORAGE_KEY]);
+      if (stored) applyTheme(stored);
     });
+    createToggle();
   });
 
-  createToggle();
+  function startGuards() {
+    var classGuard = new MutationObserver(function () {
+      var html = document.documentElement;
+      if (!html) return;
+      var cls = html.className || '';
+      var wanted = currentTheme === 'dark' ? '__ytnight' : '__ytday';
+      var unwanted = currentTheme === 'dark' ? '__ytday' : '__ytnight';
+      var attrOk = currentTheme === 'dark' ? html.hasAttribute('dark') : html.hasAttribute('light');
+      if (cls.indexOf(wanted) === -1 || cls.indexOf(unwanted) !== -1 || !attrOk) {
+        applyTheme(currentTheme);
+      }
+    });
+    classGuard.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class', 'dark', 'light']
+    });
+
+    var bodyGuard = new MutationObserver(function () {
+      if (document.body && !document.getElementById('__magic-theme-switch')) {
+        createToggle();
+      }
+    });
+    bodyGuard.observe(document.documentElement, { childList: true });
+  }
+
+  function boot() {
+    if (!document.documentElement) {
+      setTimeout(boot, 4);
+      return;
+    }
+
+    var quick = null;
+    try { quick = normalize(sessionStorage.getItem('maTheme')); } catch (e) {}
+    applyTheme(quick || getThemeFromCookie());
+
+    chrome.storage.local.get([STORAGE_KEY], function (result) {
+      var stored = normalize(result[STORAGE_KEY]);
+      if (stored === null) {
+        chrome.storage.local.set({ maTheme: currentTheme });
+      } else if (stored !== currentTheme) {
+        applyTheme(stored);
+      }
+      startGuards();
+    });
+
+    createToggle();
+  }
+
+  boot();
 })();

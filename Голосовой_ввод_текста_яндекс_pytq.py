@@ -355,29 +355,49 @@ class VoiceThread(QThread):
     except:
      continue
   
-  def start_mouse_listener_with_delay():
-   def on_press(key):
+  def _hotkey_evdev_listener(self):
+   """Горячая клавиша End через evdev (БЕЗ pynput/X-захвата!).
+   Читает /dev/input/event* напрямую, поэтому не блокирует клавиатуру
+   даже при краше скрипта. End запускает toggle()."""
+   import evdev as _evdev
+
+   def _find_kbs():
+    _list = []
+    import glob as _g
+    for path in _g.glob("/dev/input/event*"):
+     try:
+      dev = _evdev.InputDevice(path)
+      name = (dev.name or "").lower()
+      if ("keyboard" in name or "logitech" in name or "at translate" in name) \
+         and "smart" not in name and "mouse setting" not in name:
+       _list.append(dev)
+     except Exception:
+      continue
+    return _list
+
+   devs = _find_kbs()
+   while True:
     try:
-     key_name = (str(key).replace("'", "")
-                 .replace(" ", "").replace("Key.", ""))
-     if key_name == "end":
-      with self._mode_lock:  # <-- исправлено
-       self._stop_recording_flag = False  # <-- исправлено
-      self.toggle()
-      time.sleep(0.5)
-      return True
-    except Exception as e:
-     print(f"Ошибка при обработке: {e}")
-   
-   def start_listener():
-    listener = Listener(on_press=on_press)
-    listener.daemon = True
-    listener.start()
-   
-   start_listener()
-  
-  listener_thread = threading.Thread(target=start_mouse_listener_with_delay, daemon=True)
-  listener_thread.start()
+     for dev in devs:
+      try:
+       for event in dev.read():
+        if event.type == _evdev.ecodes.EV_KEY and event.code == _evdev.ecodes.KEY_END \
+           and event.value == 1:
+         with self._mode_lock:
+          self._stop_recording_flag = False
+         self.toggle()
+         time.sleep(0.5)
+      except OSError:
+       devs = _find_kbs() or devs
+       time.sleep(0.2)
+      except Exception:
+       pass
+    except Exception:
+     pass
+    time.sleep(0.001)
+
+   listener_thread = threading.Thread(target=self._hotkey_evdev_listener, daemon=True)
+   listener_thread.start()
   self.first_start = True
   classes1=""
   # threading.Thread(target=dom_classes_tracker, args=(self.driver, 0.9), daemon=True).start()
@@ -412,7 +432,10 @@ class VoiceThread(QThread):
       if classes1 != classes:
        classes1=classes
        # print(classes)
-      if  "spe" in filter_elem and "th" in classes:# and "стоп" in aria_label and "th" in classes:
+       circles = oknyx_core.find_elements(By.CSS_SELECTOR, ".StandaloneOknyxCore-ListeningCircle")
+       circles1 = any(c.value_of_css_property("display") != "none" for c in circles)
+       
+      if "spe" in filter_elem and "th" in classes  and circles1:# and "стоп" in aria_label and "th" in classes:
        self.driver.execute_script("arguments[0].click();", self.button)
        time.sleep(3)
       if "su" in filter_elem or "ex" in classes and "сл" in aria_label.lower():
@@ -422,14 +445,8 @@ class VoiceThread(QThread):
       if counts1 > self.counts:
        white = oknyx_core.find_element(By.CSS_SELECTOR, ".StandaloneOknyxCore-WhiteCircleWrapper")
        thread = threading.Thread(target=process_text, args=(self.message,))
-       # Пример проверки окончательной готовности текста
-       # is_listening = "StandaloneOknyxCore_animation_listening" in lottie_elem.get_attribute("class")
-       # glow_visible = glow_elem.is_displayed()
-       #
-       # if not is_listening and not glow_visible:
-       #  print(self.message)
-       #  pass
-       if "out" in classes or "col" in classes or "th" in filter_elem or white.value_of_css_property("display") == "none":
+
+       if "out" in classes or "col" in classes or "сл" in aria_label.lower() or "th" in filter_elem or white.value_of_css_property("display") == "none":
         thread.start()
         print(counts1)
         self.counts = counts1
@@ -442,7 +459,13 @@ class VoiceThread(QThread):
    
       # if counts1 > 0:
       #   self.show_message(None, False)
-  
+   # Пример проверки окончательной готовности текста
+   # is_listening = "StandaloneOknyxCore_animation_listening" in lottie_elem.get_attribute("class")
+   # glow_visible = glow_elem.is_displayed()
+   #
+   # if not is_listening and not glow_visible:
+   #  print(self.message)
+   #  pass
    except Exception as e:
     # print(f"Ошибка в selenium_worker: {e}")
     pass

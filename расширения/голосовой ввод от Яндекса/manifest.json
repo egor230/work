@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Голосовой ввод от Яндекса",
+  "description": "Голосовой ввод текста через распознавание Яндекс Алисы: говорите — текст печатается там, где курсор",
+  "version": "1.3.0",
+  "permissions": ["tabs", "activeTab", "nativeMessaging", "scripting", "alarms", "contextMenus", "storage"],
+  "host_permissions": ["https://alice.yandex.ru/*", "<all_urls>"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "16": "icons/voice16.png",
+    "48": "icons/voice48.png",
+    "128": "icons/voice128.png"
+  },
+  "action": {
+    "default_title": "Голосовой ввод (клик — старт/стоп)",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://alice.yandex.ru/*"],
+      "js": ["content-alice.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "minimum_chrome_version": "116"
+}

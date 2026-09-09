@@ -1,4 +1,5 @@
 import json, os, re, subprocess, threading, time, sys, bisect, traceback, pyatspi, tkinter as tk, glob
+from select import select
 from tkinter import Tk, Toplevel, Label, Frame
 from pynput import mouse, keyboard
 from gi.repository import GLib
@@ -14,6 +15,24 @@ ENTRY_NAMES = ("file_search_entry", "content_search_entry")
 SEARCH_LABEL_KEYWORDS = ("поиск файлов", "содержит", "search files", "contains", "поиск", "search", "find")
 DEBOUNCE_MS = 500  # Уменьшили с 1500 мс для более отзывчивого поиска в Nemo
 COOLDOWN_SEC = 0.3  # Уменьшили с 1.0 сек для быстрой реакции
+
+# Сопоставление evdev-кодов клавиш (QWERTY) -> РУССКАЯ буква (раскладка ЙЦУКЕН).
+# Значения русские, т.к. словарь подсказок (words.txt) и аббревиатуры — русские:
+# current_word обязан собираться кириллицей, иначе подсказки всегда «счёт=0».
+# Буквы ж,э,х,ъ,б,ю,ё живут на «пунктуационных» клавишах (; ' [ ] , . `) —
+# они тоже включены сюда и перехватываются ДО ветки пунктуации в слушателе.
+# При латинской раскладке слушатель сам переведёт букву в латиницу
+# через ru_to_en_layout (з -> p), как её раньше отдавал pynput.
+_EVDEV_LETTERS = {
+ ecodes.KEY_Q:'й', ecodes.KEY_W:'ц', ecodes.KEY_E:'у', ecodes.KEY_R:'к', ecodes.KEY_T:'е',
+ ecodes.KEY_Y:'н', ecodes.KEY_U:'г', ecodes.KEY_I:'ш', ecodes.KEY_O:'щ', ecodes.KEY_P:'з',
+ ecodes.KEY_A:'ф', ecodes.KEY_S:'ы', ecodes.KEY_D:'в', ecodes.KEY_F:'а', ecodes.KEY_G:'п',
+ ecodes.KEY_H:'р', ecodes.KEY_J:'о', ecodes.KEY_K:'л', ecodes.KEY_L:'д', ecodes.KEY_Z:'я',
+ ecodes.KEY_X:'ч', ecodes.KEY_C:'с', ecodes.KEY_V:'м', ecodes.KEY_B:'и', ecodes.KEY_N:'т',
+ ecodes.KEY_M:'ь', ecodes.KEY_LEFTBRACE:'х', ecodes.KEY_RIGHTBRACE:'ъ',
+ ecodes.KEY_SEMICOLON:'ж', ecodes.KEY_APOSTROPHE:'э', ecodes.KEY_COMMA:'б',
+ ecodes.KEY_DOT:'ю', ecodes.KEY_GRAVE:'ё', ecodes.KEY_BACKSLASH:'\\', ecodes.KEY_SLASH:'.',
+}
 
 class ToolTip: # Класс для отображения подсказок
  def __init__(self, widget, text):
@@ -125,9 +144,13 @@ class EvdevTyper:
    ecodes.KEY_6, ecodes.KEY_7, ecodes.KEY_8, ecodes.KEY_9, ecodes.KEY_0,
    ecodes.KEY_SEMICOLON, ecodes.KEY_APOSTROPHE, ecodes.KEY_GRAVE,
    ecodes.KEY_LEFTBRACE, ecodes.KEY_RIGHTBRACE, ecodes.KEY_BACKSLASH,
-   ecodes.KEY_MINUS, ecodes.KEY_EQUAL, ecodes.KEY_SLASH, ecodes.KEY_BACKSPACE,
-   ecodes.KEY_NUMLOCK
-  ]
+    ecodes.KEY_MINUS, ecodes.KEY_EQUAL, ecodes.KEY_SLASH, ecodes.KEY_BACKSPACE,
+    ecodes.KEY_NUMLOCK, ecodes.KEY_KP0, ecodes.KEY_KP1, ecodes.KEY_KP2,
+    ecodes.KEY_KP3, ecodes.KEY_KP4, ecodes.KEY_KP5, ecodes.KEY_KP6,
+    ecodes.KEY_KP7, ecodes.KEY_KP8, ecodes.KEY_KP9, ecodes.KEY_KPDOT,
+    ecodes.KEY_KPSLASH, ecodes.KEY_KPASTERISK, ecodes.KEY_KPMINUS,
+    ecodes.KEY_KPPLUS, ecodes.KEY_KPENTER
+   ]
   try:
    self.ui = UInput(
     {ecodes.EV_KEY: caps_keys},
@@ -309,6 +332,8 @@ class SmartTyper: # Основной класс для автозамены и �
   self.tooltip = None
   self.tooltip_root = None
   self.last_key_press_time = time.time()
+  self._last_key_id = ""
+  self._last_key_time = time.time()
   self.user = self._get_current_user() # Получаем текущего пользователя
   self.disabled = False
   self.replacing = False
@@ -322,6 +347,8 @@ class SmartTyper: # Основной класс для автозамены и �
   self._setup_ui() # Настраиваем интерфейс
   # Блокировка для защиты общих переменных от race conditions при быстром вводе
   self.state_lock = threading.Lock()
+  # Состояние shift'а из evdev-событий (для передачи регистра буквы)
+  self._evdev_shift = False
 
  def _load_data(self): # Загружает данные из файлов аббревиатур и словаря
   if os.path.exists(self.abbreviations_path):
@@ -849,7 +876,188 @@ class SmartTyper: # Основной класс для автозамены и �
    except Exception as e:
     print(e)
     self.disabled = False
+   pass
+
+ def _evdev_find_keyboards(self):
+  """Список физических клавиатур (отсекаем виртуальные, созданные скриптами)."""
+  _list = []
+  if not HAVE_EVDEV:
+   return _list
+  try:
+   for path in glob.glob("/dev/input/event*"):
+    try:
+     dev = InputDevice(path)
+     name = (dev.name or "").lower()
+     if ("keyboard" in name or "logitech" in name or "at translate" in name
+         or "корпус" in name) and "smart" not in name \
+         and "mouse setting" not in name and "virtual" not in name:
+      _list.append(dev)
+    except Exception:
+     continue
+  except Exception:
+   pass
+  return _list
+
+ def _evdev_find_devices_for_virtual(self):
+  """Эмуляция поиска (не используется, оставлено для совместимости)."""
+  return []
+
+ def _evdev_key_listener(self):
+  """Читает физические клавиатуры через evdev и транслирует нажатия в
+  вызовы _on_press() с pynput-совместимыми объектами Key/KeyCode.
+  НЕ захватывает клавиатуру X11, поэтому ввод никогда не блокируется."""
+  if not HAVE_EVDEV:
+   print("[evdev-listener] evdev недоступен — слушатель клавиатуры отключён")
+   return
+  devs = self._evdev_find_keyboards()
+  if not devs:
+   print("[evdev-listener] Физическая клавиатура не найдена")
+   return
+  print(f"[evdev-listener] Читаю: {[d.name for d in devs]}")
+
+  # Код -> объект, похожий на pynput Key (спецклавиши).
+  # ВАЖНО: shift'ов здесь НЕТ — они идут в SHIFT_CODES ниже, чтобы
+  # слушатель отслеживал регистр букв (верхний/нижний).
+  SPECIAL = {
+   ecodes.KEY_BACKSPACE: keyboard.Key.backspace,
+   ecodes.KEY_SPACE: keyboard.Key.space,
+   ecodes.KEY_ENTER: keyboard.Key.enter,
+   ecodes.KEY_LEFTCTRL: keyboard.Key.ctrl_l,
+   ecodes.KEY_RIGHTCTRL: keyboard.Key.ctrl_r,
+   ecodes.KEY_LEFTALT: keyboard.Key.alt_l,
+   ecodes.KEY_RIGHTALT: keyboard.Key.alt_r,
+   ecodes.KEY_TAB: keyboard.Key.tab,
+   ecodes.KEY_CAPSLOCK: keyboard.Key.caps_lock,
+   ecodes.KEY_LEFT: keyboard.Key.left,
+   ecodes.KEY_RIGHT: keyboard.Key.right,
+   ecodes.KEY_UP: keyboard.Key.up,
+   ecodes.KEY_DOWN: keyboard.Key.down,
+   ecodes.KEY_HOME: keyboard.Key.home,
+   ecodes.KEY_END: keyboard.Key.end,
+   ecodes.KEY_DELETE: keyboard.Key.delete,
+   ecodes.KEY_ESC: keyboard.Key.esc,
+   ecodes.KEY_LEFTMETA: keyboard.Key.cmd,
+   ecodes.KEY_RIGHTMETA: keyboard.Key.cmd,
+   ecodes.KEY_PAGEUP: keyboard.Key.page_up,
+   ecodes.KEY_PAGEDOWN: keyboard.Key.page_down,
+   ecodes.KEY_INSERT: keyboard.Key.insert,
+   ecodes.KEY_NUMLOCK: keyboard.Key.num_lock,
+   ecodes.KEY_F1: keyboard.Key.f1,
+   ecodes.KEY_F2: keyboard.Key.f2,
+   ecodes.KEY_F3: keyboard.Key.f3,
+   ecodes.KEY_F4: keyboard.Key.f4,
+   ecodes.KEY_F5: keyboard.Key.f5,
+   ecodes.KEY_F6: keyboard.Key.f6,
+   ecodes.KEY_F7: keyboard.Key.f7,
+   ecodes.KEY_F8: keyboard.Key.f8,
+   ecodes.KEY_F9: keyboard.Key.f9,
+   ecodes.KEY_F10: keyboard.Key.f10,
+   ecodes.KEY_F11: keyboard.Key.f11,
+   ecodes.KEY_F12: keyboard.Key.f12,
+  }
+
+  # Код -> символ для простых клавиш (не зависящих от раскладки в _on_press,
+  # т.к. пунктуация/цифры обрабатываются по строковому виду).
+  # ВАЖНО: здесь НЕТ клавиш ж/э/х/ъ/б/ю/ё (, . ; ' [ ] ` /) — они занесены
+  # в _EVDEV_LETTERS и перехватываются раньше, чтобы русские буквы с
+  # «пунктуационных» клавиш не обрезали current_word.
+  SIMPLE_CHAR = {
+   ecodes.KEY_1:'1', ecodes.KEY_2:'2', ecodes.KEY_3:'3', ecodes.KEY_4:'4',
+   ecodes.KEY_5:'5', ecodes.KEY_6:'6', ecodes.KEY_7:'7', ecodes.KEY_8:'8',
+   ecodes.KEY_9:'9', ecodes.KEY_0:'0', ecodes.KEY_MINUS:'-', ecodes.KEY_EQUAL:'=',
+  }
+
+  # Цифровая клавиатура (numpad). Старый pynput нормализовал KP-цифры
+  # в обычные символы — выбор подсказки цифрой 1–6 с numpad работал.
+  # evdev отдаёт отдельные коды KEY_KP*, поэтому маппим их так же —
+  # ВСЕГДА в цифру (как pynput): NumLock-ветка с dev.leds() оказалась
+  # ненадёжной (у UInput и части клавиатур LED недоступен -> KP1
+  # превращался в Key.end и стирал слово).
+  KP_NUM = {
+   ecodes.KEY_KP0:'0', ecodes.KEY_KP1:'1', ecodes.KEY_KP2:'2',
+   ecodes.KEY_KP3:'3', ecodes.KEY_KP4:'4', ecodes.KEY_KP5:'5',
+   ecodes.KEY_KP6:'6', ecodes.KEY_KP7:'7', ecodes.KEY_KP8:'8',
+   ecodes.KEY_KP9:'9', ecodes.KEY_KPDOT:'.', ecodes.KEY_KPSLASH:'/',
+   ecodes.KEY_KPASTERISK:'*', ecodes.KEY_KPMINUS:'-', ecodes.KEY_KPPLUS:'+',
+  }
+
+  # evdev-коды shift'ов — для передачи реального регистра нажатия в _on_press
+  SHIFT_CODES = {ecodes.KEY_LEFTSHIFT, ecodes.KEY_RIGHTSHIFT}
+
+  while getattr(self, '_kbd_running', True):
+   try:
+    if not devs:
+     devs = self._evdev_find_keyboards()
+     if not devs:
+      time.sleep(0.5)
+      continue
+    # select() блокирует до РЕАЛЬНОГО события на любой клавиатуре:
+    # без опроса. Раньше пустой dev.read() бросал BlockingIOError
+    # (подкласс OSError!) -> except делал sleep(0.2) на КАЖДОМ из 4
+    # устройств -> буквы ждали до 0.8 с и приходили пачкой.
+    fds = {d.fd: d for d in devs}
+    r, _, _ = select(list(fds), [], [], 0.5)
+    if r:
+     for fd in r:
+      dev = fds[fd]
+      try:
+       for event in dev.read():
+        if event.type != ecodes.EV_KEY:
+         continue
+        code = event.code
+        if code in SHIFT_CODES:
+         # Запоминаем состояние shift ДО фильтра значений: ловим и
+         # отпускание (value=0), иначе флаг регистра «залипнет» в True.
+         self._evdev_shift = bool(event.value)
+         continue
+        if event.value not in (1, 2):
+         continue
+        # value=2 — АВТОПОВТОР (удержание клавиши, delay 500 мс, период 33 мс).
+        # Раньше повторы обрабатывались как нажатия: «зд» при удержании
+        # превращалось в «зддд», тултип появлялся и сразу исчезал.
+        # Пропускаем повтор для ВСЕХ клавиш, кроме Backspace (удержание
+        # для удаления нескольких символов должно работать).
+        if event.value == 2 and code != ecodes.KEY_BACKSPACE:
+         continue
+        if code in SPECIAL:
+         self._on_press(SPECIAL[code])
+        elif code in KP_NUM:
+         # Numpad-цифры: ВСЕГДА цифры, как нормализовал старый pynput.
+         # Раньше читали NumLock через dev.leds() — но у части клавиатур
+         # (и у всех UInput) LED недоступен -> KP1 превращался в Key.end,
+         # что попадал в control_keys и стирал слово вместо выбора подсказки.
+         self._on_press(keyboard.KeyCode.from_char(KP_NUM[code]))
+        elif code == ecodes.KEY_KPENTER:
+         self._on_press(keyboard.Key.enter)
+        elif code in SIMPLE_CHAR:
+         # Цифры и -= : не зависят от раскладки
+         kc = keyboard.KeyCode.from_char(SIMPLE_CHAR[code])
+         self._on_press(kc)
+        else:
+         # Буквы ЙЦУКЕН (см. _EVDEV_LETTERS). Символ всегда русский,
+         # при активной латинской раскладке транслируем в латиницу
+         # (з -> p) — так же, как символ отдавал старый pynput.
+         ch = _EVDEV_LETTERS.get(code)
+         if ch:
+          if self._get_keyboard_layout() != "ru":
+           ch = self.ru_to_en_layout.get(ch, ch)
+          if getattr(self, '_evdev_shift', False):
+           ch = ch.upper()
+          self._on_press(keyboard.KeyCode.from_char(ch))
+      except BlockingIOError:
+       # норма: событий больше нет — НЕ пересоздаём список и НЕ спим
+       pass
+      except OSError:
+       # устройство реально отвалилось (USB-перетык) — обновляем список
+       try:
+        dev.close()
+       except Exception:
+        pass
+       devs = self._evdev_find_keyboards() or devs
+       time.sleep(0.2)
+   except Exception:
     pass
+   time.sleep(0.001)
 
  def _on_press(self, key): # Обрабатывает нажатия клавиш
   if self.replacing:
@@ -866,11 +1074,18 @@ class SmartTyper: # Основной класс для автозамены и �
   if key_str == "<65437>":
    key_str = "5"
 
-  if time.time() - self.last_key_press_time < 0.005:
-   self.last_key_press_time = time.time()
+  # Антидребезг: раньше ЛЮБАЯ клавиша ближе 5 мс «съедалась». При отходе
+  # от polling-слушателя буквы могли прийти пачкой (до 0.8 с в буфере
+  # ядра) и вторая буква слова терялась («ол» -> «о», тултип не показывался).
+  # select() устранил пачки, теперь опасны только истинные повторы
+  # железа — держим историю нажатий и игнорируем ТОЛЬКО точный дубликат
+  # той же клавиши в течение 5 мс (напр. дребезг контактов клавиатуры).
+  key_id = (str(key), time.time())
+  if key_id[0] == self._last_key_id and key_id[1] - self._last_key_time < 0.005:
+   self._last_key_time = key_id[1]
    return True
-
-  self.last_key_press_time = time.time()
+  self._last_key_id = key_id[0]
+  self._last_key_time = key_id[1]
 
   if key == keyboard.Key.backspace:
    if self.current_word:
@@ -951,17 +1166,21 @@ class SmartTyper: # Основной класс для автозамены и �
   window_checker_thread = threading.Thread(target=self._check_active_window_loop, daemon=True)
   window_checker_thread.start()
 
-  keyboard_listener = keyboard.Listener(on_press=self._on_press)
+  # КЛАВИАТУРА: читаем через evdev (/dev/input/event*) БЕЗ X11-захвата.
+  # Раньше pynput.keyboard.Listener захватывал клавиатуру X11 и при краше
+  # НЕ отпускал её — вся система переставала печатать. evdev не грабит X.
+  self._kbd_running = True
+  keyboard_thread = threading.Thread(target=self._evdev_key_listener, daemon=True)
+  keyboard_thread.start()
+
   mouse_listener = mouse.Listener(on_click=self._on_click)
-  keyboard_listener.start()
   mouse_listener.start()
 
   # --- GLib mainloop вместо tkinter mainloop ---
   pyatspi.Registry.start()
 
-  keyboard_listener.stop()
+  self._kbd_running = False
   mouse_listener.stop()
-  keyboard_listener.join()
   mouse_listener.join()
 
 if __name__ == "__main__":

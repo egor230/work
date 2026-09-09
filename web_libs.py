@@ -322,9 +322,9 @@ def run_wine_command(name):
    if [ ! -z "$WINDOW_ID" ]; then
      xdotool windowactivate "$WINDOW_ID"
      xte "keydown Control_R" "key V" "keyup Control_R"
-     sleep 3
+     sleep 9
      xte "keydown Shift_L" "key F12" "keyup Shift_L"
-     sleep 6   # 6. Завершаем процесс LibreOffice
+     sleep 18   # 6. Завершаем процесс LibreOffice
      # kill $LO_PID
    fi
 

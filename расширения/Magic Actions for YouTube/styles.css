@@ -10,7 +10,7 @@
   display: block !important;
   outline: 0 !important;
   position: fixed !important;
-  z-index: 2147483646 !important;
+  z-index: 2147483647 !important;
   top: 7px !important;
   left: 5px !important;
   width: 14px !important;
