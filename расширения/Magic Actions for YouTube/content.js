@@ -3,6 +3,16 @@
 (function () {
   var STORAGE_KEY = 'maTheme';
   var currentTheme = null;
+  var _maSearchRetry = null;
+
+  // ФИЛОСОФИЯ РАСШИРЕНИЯ:
+  //   dark  = расширение ВКЛЮЧЕНО: форсим пару атрибутов dark/light + кук f6,
+  //           guards не дают YouTube сбить тему;
+  //   light = расширение «ВЫКЛЮЧЕНО»: только ставим нативную пару атрибутов
+  //           и кук, счищаем застрявшие тёмные классы — дальше YouTube сам
+  //           рендерит и красит страницу (100% нативный вид). Никаких
+  //           CSS-переменных и страховок. Если пользователь переключил тему
+  //           родным тумблером YouTube — следуем за ним.
 
   function getCookieParams() {
     try {
@@ -13,6 +23,8 @@
     }
   }
 
+  // f6 — битовая маска (бит 165 = 0x400 dark, бит 174 = 0x80000 light),
+  // YouTube склеивает флаги (40080000 и т.п.) → читаем по первому символу.
   function getThemeFromCookie() {
     var html = document.documentElement;
     var f6 = getCookieParams().get('f6');
@@ -31,13 +43,66 @@
     } catch (e) {}
   }
 
-  function setLock(theme) {
-    document.documentElement.setAttribute('data-ma-theme', theme);
-  }
-
   function updateToggleIcon(theme) {
     var sw = document.getElementById('__magic-theme-switch');
     if (sw) sw.classList.toggle('dark', theme === 'dark');
+  }
+
+  // Classы *Dark висят на РАЗНЫХ элементах (не на хосте!) — по реальному DOM
+  // yt-searchbox=host, внутри него InputBox, рядом SearchButton,
+  // SuggestionsContainer. Правильно: найти каждый элемент по базовому классу
+  // и повесить тёмный вариант на НЕГО. Если базового класса нет — пропускаем.
+  // requestUpdate() заставляет Lit-компонент перечитать живой
+  // hasAttribute('dark') при следующем рендере — самокоррекция.
+  //
+  // ГЛАВНАЯ НАХОДКА (из оригинального расширения ImprovedTube=преемника
+  // Magic Actions for YouTube, themes.js): при переключении он ставит/снимает
+  // АТРИБУТ dark и на <html>, и на ytd-masthead: setAttribute('dark','') /
+  // removeAttribute('dark'). В CSS сегодняшнего YouTube тёмные токены поиска
+  // заданы селектором "[dark],html[dark]{" — то есть атрибут dark на любом
+  // элементе (в т.ч. на masthead) включает тёмные токены в его поддереве.
+  // Мы никогда не ставили атрибут на masthead (только класс) — поиск и
+  // оставался светлым в тёмной теме. Ниже зеркалим поведение оригинала.
+  var DARK_CLASS_MAP = [
+    ['ytSearchboxComponentHost', 'ytSearchboxComponentHostDark'],
+    ['ytSearchboxComponentInputBox', 'ytSearchboxComponentInputBoxDark'],
+    ['ytSearchboxComponentInput', 'yt-searchbox-input-dark'],
+    ['ytSearchboxComponentSearchButton', 'ytSearchboxComponentSearchButtonDark'],
+    ['ytSearchboxComponentSuggestionsContainer', 'ytSearchboxComponentSuggestionsContainerDark'],
+    ['ytSearchboxComponentClearButton', 'ytSearchboxComponentClearButtonDark'],
+    ['ytSearchboxComponentVoiceButton', 'ytSearchboxComponentVoiceButtonDark'],
+    ['ytSearchboxComponentDesktop', 'ytSearchboxComponentDesktopDark'],
+    ['ytSearchboxComponentSuggestionsItem', 'ytSearchboxComponentSuggestionsItemDark']
+  ];
+
+  function syncSearchboxClasses(theme) {
+    try {
+      var isDark = theme === 'dark';
+      for (var i = 0; i < DARK_CLASS_MAP.length; i++) {
+        var base = DARK_CLASS_MAP[i][0];
+        var dark = DARK_CLASS_MAP[i][1];
+        var els = document.querySelectorAll('.' + base);
+        for (var j = 0; j < els.length; j++) {
+          els[j].classList.toggle(dark, isDark);
+        }
+      }
+      var masthead = document.querySelector('ytd-masthead');
+      if (masthead) {
+        // как оригинал (ImprovedTube/themes.js): dark → атрибут dark="",
+        // light → снять атрибут; класс 'dark' — страховка второго слоя
+        masthead.classList.toggle('dark', isDark);
+        if (isDark) {
+          masthead.setAttribute('dark', '');
+        } else {
+          masthead.removeAttribute('dark');
+        }
+        try { masthead.requestUpdate && masthead.requestUpdate(); } catch (e) {}
+      }
+      var searchbox = document.querySelector('yt-searchbox');
+      if (searchbox) {
+        try { searchbox.requestUpdate && searchbox.requestUpdate(); } catch (e) {}
+      }
+    } catch (e) {}
   }
 
   function applyTheme(theme) {
@@ -45,22 +110,47 @@
     if (!html) return;
     currentTheme = theme === 'dark' ? 'dark' : 'light';
 
+    // наших классов темы больше нет — только нативные атрибуты YouTube
     html.classList.remove('__ytnight', '__ytday');
-    setLock(currentTheme);
+    html.setAttribute('data-ma-theme', currentTheme);
 
+    // Нативная пара атрибутов (как у родного тумблера YT):
+    // dark-тема → dark=""; light-тема → light="".
+    // ВАЖНО: ставить light обязательно — обфусцированные токены --t*
+    // имеют ТЁМНЫЙ дефолт в :root, без [light] страница останется чёрной.
     if (currentTheme === 'dark') {
-      html.classList.add('__ytnight');
       html.setAttribute('dark', '');
       html.removeAttribute('light');
     } else {
-      html.classList.add('__ytday');
       html.setAttribute('light', '');
       html.removeAttribute('dark');
     }
+    syncSearchboxClasses(currentTheme);
+
+    // Один короткий ретрай (~75мс): догоняет повторный рендер YouTube
+    // (главный паттерн старых багов — компонент перерисовывался и
+    // возвращал классы). Долгих ретраев (300/1200) — нет, они дрались.
+    try {
+      clearTimeout(_maSearchRetry);
+      _maSearchRetry = setTimeout(function () {
+        syncSearchboxClasses(currentTheme);
+      }, 75);
+    } catch (e) {}
 
     try { sessionStorage.setItem('maTheme', currentTheme); } catch (e) {}
     syncCookie(currentTheme);
     updateToggleIcon(currentTheme);
+    notifyYouTubeThemeChanged(currentTheme);
+  }
+
+  // Родной тумблер YT уведомляет компоненты экшеном
+  // yt-dark-mode-toggled-action через CustomEvent('yt-action') на body.
+  // Из ISOLATED world объект detail не доходит в MAIN world (граница миров),
+  // поэтому диспатчит main_world.js по метке data-ma-notify (см. там).
+  function notifyYouTubeThemeChanged(theme) {
+    try {
+      document.documentElement.setAttribute('data-ma-notify', theme);
+    } catch (e) {}
   }
 
   function normalize(stored) {
@@ -133,22 +223,29 @@
   });
 
   function startGuards() {
-    var classGuard = new MutationObserver(function () {
+    // dark: держим пару атрибутов (YouTube может пытаться сбить).
+    // light: режим «выключено» — не воюем; если пользователь переключил
+    // тему РОДНЫМ тумблером YouTube (появился dark) — синхронизируемся.
+    var attrGuard = new MutationObserver(function () {
       var html = document.documentElement;
       if (!html) return;
-      var cls = html.className || '';
-      var wanted = currentTheme === 'dark' ? '__ytnight' : '__ytday';
-      var unwanted = currentTheme === 'dark' ? '__ytday' : '__ytnight';
-      var attrOk = currentTheme === 'dark' ? html.hasAttribute('dark') : html.hasAttribute('light');
-      if (cls.indexOf(wanted) === -1 || cls.indexOf(unwanted) !== -1 || !attrOk) {
-        applyTheme(currentTheme);
+      if (currentTheme === 'dark') {
+        if (!html.hasAttribute('dark') || html.hasAttribute('light')) {
+          html.setAttribute('dark', '');
+          html.removeAttribute('light');
+        }
+      } else if (currentTheme === 'light') {
+        if (html.hasAttribute('dark')) {
+          chrome.storage.local.set({ maTheme: 'dark' });
+        }
       }
     });
-    classGuard.observe(document.documentElement, {
+    attrGuard.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ['class', 'dark', 'light']
+      attributeFilter: ['dark', 'light']
     });
 
+    // тумблер мог быть удалён YouTube из DOM — пересоздаём
     var bodyGuard = new MutationObserver(function () {
       if (document.body && !document.getElementById('__magic-theme-switch')) {
         createToggle();
@@ -163,6 +260,7 @@
       return;
     }
 
+    // мгновенное применение (до ответа storage) — без тёмной вспышки
     var quick = null;
     try { quick = normalize(sessionStorage.getItem('maTheme')); } catch (e) {}
     applyTheme(quick || getThemeFromCookie());
