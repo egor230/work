@@ -190,6 +190,15 @@ page-type (`setMastheadTheme` от `yt-navigate-finish`), а НЕ от экше�
   `--t518e925f61bdcb91` (старый InputBox: `[dark]`→`#212121`,
   `[light]`→`#fff`); признак здоровья — `--t3e41d7b17b187f69` =
   `#0f0f0f`/`#fff`.
+- Токены активной «пилюли» чипов: `--t1405e70a39276293` (фон:
+  `:root #0f0f0f` / `[dark] #f1f1f1` / `[light] #0f0f0f`),
+  `--t6216186c28b3834b` (текст: должен быть `[dark] #0f0f0f`, НО блок
+  `:root:root` (двойной `:root`, specificity (0,2,0)) задаёт `#f1f1f1` и
+  перебивает `[dark]` (0,1,0) → в тёмной теме белый текст на белой пилюле.
+  Лечение: `html[dark] .ytChipShapeActive { color:#0f0f0f }`. Диагностика
+  чипов всегда через РЕЗОЛЬВНУТЫЕ значения (`getComputedStyle`), не grep
+  по `[dark]`-блоку (значения из блока могут врать из-за более сильного
+  селектора).
 - `<html>` сервера: `darker-dark-theme darker-dark-theme-deprecate system-icons
   color-version="v2_0" typography typography-spacing` — старый атрибут темы,
   на него не опираться.
