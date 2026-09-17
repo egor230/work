@@ -1,89 +1,126 @@
 import os, subprocess, sys, re
 
-
-def find_most_similar_image(image_list, search_name):
+def find_best_icon(image_list, search_name):
  """
- Ищет наиболее похожую картинку в списке по заданному имени с помощью регулярных выражений.
+ Ищет наиболее подходящую иконку по имени с учетом приоритетов.
 
- Args:
-     image_list (list): Список имен файлов картинок.
-     search_name (str): Имя для поиска (например, "splintercell3").
+ Приоритеты:
+ 1. Точное совпадение имени (без учета регистра и расширения)
+ 2. Имя + суффикс 'icon', 'logo', 'cover'
+ 3. Частичное совпадение (подстрока)
 
- Returns:
-     str or None: Имя наиболее подходящего файла или None, если ничего не найдено.
+ Внутри каждой категории предпочтение отдается форматам: svg > png > jpg > bmp
  """
  if not image_list or not search_name:
   return None
-
- # Экранируем входное имя для безопасного использования в регулярке
- search_pattern = re.escape(search_name.lower())
-
- best_match = None
- best_score = float('inf')  # Чем меньше "лишнего" текста, тем лучше
-
+ 
+ # Приоритеты расширений (чем меньше индекс, тем лучше)
+ EXT_PRIORITY = {'.svg': 0, '.png': 1, '.jpg': 2, '.jpeg': 2, '.gif': 3, '.bmp': 4}
+ 
+ search_lower = search_name.lower()
+ candidates = []
+ 
  for image in image_list:
-  # Ищем совпадение в имени файла (игнорируем регистр)
-  image_lower = image.lower()
-  match = re.search(search_pattern, image_lower)
+  name_part, ext = os.path.splitext(image)
+  name_lower = name_part.lower()
+  ext_lower = ext.lower()
+  
+  if ext_lower not in EXT_PRIORITY:
+   continue
+  
+  score = float('inf')
+  
+  # Категория 0: Точное совпадение имени файла
+  if name_lower == search_lower:
+   score = 0
+  # Категория 1: Имя + стандартные суффиксы для иконок
+  elif re.match(rf'^{re.escape(search_lower)}[-_]?(icon|logo|cover|art)$', name_lower):
+   score = 10
+  # Категория 2: Имя является началом строки (префикс)
+  elif name_lower.startswith(search_lower):
+   score = 20 + len(name_lower) - len(search_lower)
+  # Категория 3: Подстрока (наименее желательный вариант)
+  elif search_lower in name_lower:
+   score = 100 + len(name_lower) - len(search_lower)
+  else:
+   continue
+  
+  # Добавляем приоритет расширения к общему счету
+  total_score = score + EXT_PRIORITY.get(ext_lower, 99) * 0.1
+  candidates.append((total_score, image))
+ 
+ if not candidates:
+  return None
+ 
+ # Сортируем по счету и берем лучший результат
+ candidates.sort(key=lambda x: x[0])
+ return candidates[0][1]
 
-  if match:
-   # Вычисляем "лишний" текст (до и после совпадения)
-   extra_chars = len(image_lower) - len(search_name)
-
-   # Если совпадение точное или с минимальным добавлением, обновляем лучший результат
-   if extra_chars < best_score:
-    best_score = extra_chars
-    best_match = image
- return best_match
 
 def get_files_with_extensions(folder_path):
- image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp']  # список расширений изображений
- image_files = []  # список для хранения имен изображений
+ """Рекурсивно собирает все изображения в папке."""
+ image_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg'}
+ image_files = []
+ 
  for root, dirs, files in os.walk(folder_path):
   for file in files:
-   # print(file)
    _, ext = os.path.splitext(file)
    if ext.lower() in image_extensions:
     image_files.append(file)
+ 
  return image_files
-def get_paths_file():  #  Получаем аргументы командной строки
-  num_args = len(sys.argv)# Получаем количество аргументов
-  url = ""
-  for arg in sys.argv[1:]:
-    url += str(arg) + " "# Объединяем аргументы через цикл for
-  # url="/mnt/807EB5FA7EB5E954/games/Splinter Cell - Chaos Theory/System/splintercell3.sh"
-  full_path = url.strip()
-  directory = os.path.dirname(full_path)
-  filename = os.path.basename(full_path)
-  if '.' in filename:
-    filename_without_extension = filename[:filename.rfind('.')]   # extension = filename[filename.rfind('.') + 1:]
-  else:
-    filename_without_extension = filename    # extension = None
-  return directory, filename_without_extension, filename, full_path
 
+
+def get_paths_file():
+ """Парсит аргументы командной строки и возвращает пути."""
+ # Объединяем аргументы (на случай если путь содержит пробелы и передан частями)
+ url = " ".join(str(arg) for arg in sys.argv[1:]).strip()
+ 
+ if not url:
+  print("Ошибка: Не передан путь к файлу.")
+  sys.exit(1)
+ 
+ full_path = url
+ directory = os.path.dirname(full_path)
+ filename = os.path.basename(full_path)
+ 
+ filename_without_extension = os.path.splitext(filename)[0]
+ 
+ return directory, filename_without_extension, filename, full_path
+
+
+# === Основная логика ===
 directory, filename_without_extension, filename, full_path = get_paths_file()
+
+# Получаем список картинок и ищем лучшую иконку
 image_list = get_files_with_extensions(directory)
-image = filename_without_extension
-image = find_most_similar_image(image_list, image)
-image = str(os.path.join(directory, image))
-# image="/mnt/807EB5FA7EB5E954/games/Splinter Cell - Chaos Theory/System/splintercell3logo.bmp"
-show_list_id = '''
-[Desktop Entry]
-Name={0}
-Exec=xdg-open "{1}"
-Icon="{2}"
+best_icon_name = find_best_icon(image_list, filename_without_extension)
+
+# Формируем полный путь к иконке или оставляем пустым, если не найдено
+if best_icon_name:
+ icon_path = os.path.join(directory, best_icon_name)
+else:
+ icon_path = ""  # Будет использована стандартная иконка системы
+ print(f"Предупреждение: Иконка для '{filename_without_extension}' не найдена.")
+
+# Генерация .desktop файла
+desktop_content = f"""[Desktop Entry]
+Name={filename_without_extension}
+Exec=xdg-open "{full_path}"
+Icon="{icon_path}"
 Terminal=false
 Type=Application
-exit; '''.format(filename_without_extension,full_path,image)  # показать список устройств в терминале
-file=str(os.path.join(directory, filename_without_extension))
-print(file)
-with open(file, 'w') as f:    # Записываем текст в файл
-  f.write(show_list_id)
+"""
 
-show_list_id = '''#!/bin/bash\n
-chmod +x "{0}"\n'''.format( file)
-subprocess.run(['bash', '-c', show_list_id])
+output_file = os.path.join(directory, filename_without_extension)
+print(f"Создание файла: {output_file}")
 
+with open(output_file, 'w') as f:
+ f.write(desktop_content)
+
+# Установка прав на исполнение
+chmod_cmd = f'chmod +x "{output_file}"'
+subprocess.run(['bash', '-c', chmod_cmd])
 
 
 
