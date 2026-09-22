@@ -122,9 +122,20 @@ class VoiceThread(QThread):
   self.source_id = get_webcam_source_id()
   self.counts = 0
   self._lock = threading.Lock()  # защита toggle от гонок
+  self._running = True  # флаг живости для quit_app
   self._mode_lock = threading.Lock()  # защита смены режима
   self._stop_recording_flag = False  # флаг для корректной остановки записи
  
+ def stop(self):
+  self._running = False
+  with self._mode_lock:
+   self._stop_recording_flag = True
+  try:
+   if self.driver is not None:
+    self.driver.quit()
+  except Exception:
+   pass
+
  def show_message(self, text, mic):
   self.hint_text = text
   if text:
@@ -159,17 +170,60 @@ class VoiceThread(QThread):
   except:
    return "", len_c
  
+ def _prepare_profile(self):  # Подбирает рабочий user-data-dir (NTFS может быть read-only).
+   import shutil as _shutil
+   ntfs_profile = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/google-chrome"
+   local_profile = os.path.expanduser("~/.config/alice-voice-chrome")
+   stale_locks = ("DevToolsActivePort", "SingletonLock", "SingletonCookie", "SingletonSocket")
+
+   def _clean_locks(d):
+    for name in stale_locks:
+     p = os.path.join(d, name)
+     try:
+      if os.path.lexists(p):
+       os.remove(p)
+     except Exception:
+      pass
+
+   try:
+    if os.path.isdir(ntfs_profile):
+     _clean_locks(ntfs_profile)
+     probe = os.path.join(ntfs_profile, ".write_test")
+     with open(probe, "w"):
+      pass
+     os.remove(probe)
+     return ntfs_profile
+   except Exception as e:
+    print(f"Профиль на NTFS недоступен для записи ({e}) — использую локальный профиль")
+   try:
+    if not os.path.isdir(os.path.join(local_profile, "Default")):
+     print("Копирую профиль в локальное хранилище (один раз)...")
+     os.makedirs(local_profile, exist_ok=True)
+     _shutil.copytree(
+      ntfs_profile, local_profile,
+      ignore=_shutil.ignore_patterns(
+       "Cache", "Code Cache", "GPUCache", "GrDpCache", "ShaderCache",
+       "DawnGraphiteCache", "DawnWebGPUCache", "Crashpad", "Crash Reports",
+       "Service Worker", "optimization_guide_model_store"),
+      symlinks=True)
+    _clean_locks(local_profile)
+    return local_profile
+   except Exception as e:
+    print(f"Не удалось скопировать профиль ({e}) — использую чистый локальный профиль")
+    os.makedirs(local_profile, exist_ok=True)
+    return local_profile
+
  def _chrome_version(self):
-   import subprocess as _sp, re as _re
-   for cmd in ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser"):
-    try:
-     out = _sp.run([cmd, "--version"], capture_output=True, text=True, timeout=10).stdout
-     m = _re.search(r'(\d+\.\d+\.\d+\.\d+)', out)
-     if m:
-      return [int(x) for x in m.group(1).split(".")]
-    except Exception:
-     continue
-   return None
+  import subprocess as _sp, re as _re
+  for cmd in ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser"):
+   try:
+    out = _sp.run([cmd, "--version"], capture_output=True, text=True, timeout=10).stdout
+    m = _re.search(r'(\d+\.\d+\.\d+\.\d+)', out)
+    if m:
+     return [int(x) for x in m.group(1).split(".")]
+   except Exception:
+    continue
+  return None
 
  def get_chromedriver_path(self):
    import glob as _glob, re as _re, os as _os
@@ -202,7 +256,7 @@ class VoiceThread(QThread):
  def start_selenium(self):  # Запуск браузера и переход на страницу Алисы."""
    options = get_option()
    options.add_argument("--disable-extensions")
-   options.add_argument('--user-data-dir=/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/google-chrome')
+   options.add_argument(f'--user-data-dir={self._prepare_profile()}')
    # options.add_argument("--headless=new")
 
    options.add_argument("--no-proxy-server")
@@ -241,8 +295,11 @@ class VoiceThread(QThread):
     )
    except:
     pass
-   self.chrome_pid = self.driver.service.process.pid
-   self.window_id = subprocess.check_output(['xdotool', 'getactivewindow']).decode().strip()
+    self.chrome_pid = self.driver.service.process.pid
+    try:
+     self.window_id = subprocess.check_output(['xdotool', 'getactivewindow'], timeout=5).decode().strip()
+    except Exception:
+     self.window_id = ""
 
  def find_stop_button(self):
   selectors = [
@@ -287,42 +344,42 @@ class VoiceThread(QThread):
   self._ON()
   last_speech_time = time.time()
   try:
-   with sd.InputStream(samplerate=fs, channels=1, dtype='float32') as stream:
-    while not self._stop_recording_flag:
-     #time.sleep(2)
-     with self._mode_lock:
-      if self.mode != "record":
-       self._stop_recording_flag = True
-       break
+    with sd.InputStream(samplerate=fs, channels=1, dtype='float32') as stream:
+     while not self._stop_recording_flag and self._running:
+      #time.sleep(2)
+      with self._mode_lock:
+       if self.mode != "record":
+        self._stop_recording_flag = True
+        break
      
-     audio_chunk, overflowed = stream.read(16096)
-     mean_amp = np.mean(np.abs(audio_chunk)) * 100
-     mean_amp = math.ceil(mean_amp)
+      audio_chunk, overflowed = stream.read(16096)
+      mean_amp = np.mean(np.abs(audio_chunk)) * 100
+      mean_amp = math.ceil(mean_amp)
      
-     if mean_amp > 4:
-      last_speech_time = time.time()
-     else:
-      if time.time() - last_speech_time > 3.3:
-       self.icon_signal.emit(self.icon_mic)
-       self.status_signal.emit("Обработка...")
-       button = self.find_stop_button()
-       if button and self.click_element(button):
-        time.sleep(0.3)
-        text = self.get_recognized_text()
-        if text:
-         thread = threading.Thread(target=press_keys, args=(text,))
-         thread.start()
-         self.clear_input_field()
-         thread.join()
+      if mean_amp > 4:
+       last_speech_time = time.time()
+      else:
+       if time.time() - last_speech_time > 3.3:
+        self.icon_signal.emit(self.icon_mic)
+        self.status_signal.emit("Обработка...")
+        button = self.find_stop_button()
+        if button and self.click_element(button):
+         time.sleep(0.3)
+         text = self.get_recognized_text()
+         if text:
+          thread = threading.Thread(target=press_keys, args=(text,))
+          thread.start()
+          self.clear_input_field()
+          thread.join()
        
-       print("Тишина дольше 2.3 сек, остановка записи")
-       break
+        print("Тишина дольше 2.3 сек, остановка записи")
+        break
 
-   with self._mode_lock:                 # <-- исправленос
-    self._stop_recording_flag = True  # <-- исправлено
+    with self._mode_lock:                 # <-- исправленос
+     self._stop_recording_flag = True  # <-- исправлено
 
-   self.icon_signal.emit(self.icon_mic)
-   time.sleep(0.82)
+    self.icon_signal.emit(self.icon_mic)
+    time.sleep(0.82)
   except Exception as e:
    print(f"Ошибка записи: {e}")
 
@@ -355,59 +412,18 @@ class VoiceThread(QThread):
     except:
      continue
   
-  def _hotkey_evdev_listener(self):
-   """Горячая клавиша End через evdev (БЕЗ pynput/X-захвата!).
-   Читает /dev/input/event* напрямую, поэтому не блокирует клавиатуру
-   даже при краше скрипта. End запускает toggle()."""
-   import evdev as _evdev
-
-   def _find_kbs():
-    _list = []
-    import glob as _g
-    for path in _g.glob("/dev/input/event*"):
-     try:
-      dev = _evdev.InputDevice(path)
-      name = (dev.name or "").lower()
-      if ("keyboard" in name or "logitech" in name or "at translate" in name) \
-         and "smart" not in name and "mouse setting" not in name:
-       _list.append(dev)
-     except Exception:
-      continue
-    return _list
-
-   devs = _find_kbs()
-   while True:
-    try:
-     for dev in devs:
-      try:
-       for event in dev.read():
-        if event.type == _evdev.ecodes.EV_KEY and event.code == _evdev.ecodes.KEY_END \
-           and event.value == 1:
-         with self._mode_lock:
-          self._stop_recording_flag = False
-         self.toggle()
-         time.sleep(0.5)
-      except OSError:
-       devs = _find_kbs() or devs
-       time.sleep(0.2)
-      except Exception:
-       pass
-    except Exception:
-     pass
-    time.sleep(0.001)
-
-   listener_thread = threading.Thread(target=self._hotkey_evdev_listener, daemon=True)
-   listener_thread.start()
+  listener_thread = threading.Thread(target=self._hotkey_evdev_listener, daemon=True)
+  listener_thread.start()
   self.first_start = True
   classes1=""
   # threading.Thread(target=dom_classes_tracker, args=(self.driver, 0.9), daemon=True).start()
-  while True:
+  while self._running:
    try:
     time.sleep(0.01)
-    
+
     with self._mode_lock:
      current_mode = self.mode
-    
+
     self.mic = get_mute_status(self.source_id)
     if current_mode == "record" and not self._stop_recording_flag:
       print(self._stop_recording_flag)
@@ -434,8 +450,8 @@ class VoiceThread(QThread):
        # print(classes)
        circles = oknyx_core.find_elements(By.CSS_SELECTOR, ".StandaloneOknyxCore-ListeningCircle")
        circles1 = any(c.value_of_css_property("display") != "none" for c in circles)
-       
-      if "spea" in filter_elem:# and "th" in classes:#  and circles1:# and "стоп" in aria_label and "th" in classes:
+
+      if "spea" in filter_elem and "th" in classes:#  and circles1:# and "стоп" in aria_label and "th" in classes:
        # print(filter_elem)
        # print(classes)
        print(aria_label)
@@ -456,11 +472,11 @@ class VoiceThread(QThread):
         self.counts = counts1
         self.mic = True
         self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        
+
         self.driver.execute_script("arguments[0].click();", self.button)
         time.sleep(2)
         self.driver.execute_script("arguments[0].click();", self.button)
-   
+
       # if counts1 > 0:
       #   self.show_message(None, False)
    # Пример проверки окончательной готовности текста
@@ -473,6 +489,48 @@ class VoiceThread(QThread):
    except Exception as e:
     # print(f"Ошибка в selenium_worker: {e}")
     pass
+
+
+ def _hotkey_evdev_listener(self):
+  """Горячая клавиша End через evdev (БЕЗ pynput/X-захвата!).
+  Читает /dev/input/event* напрямую, поэтому не блокирует клавиатуру
+  даже при краше скрипта. End запускает toggle()."""
+  import evdev as _evdev
+
+  def _find_kbs():
+   _list = []
+   import glob as _g
+   for path in _g.glob("/dev/input/event*"):
+    try:
+     dev = _evdev.InputDevice(path)
+     name = (dev.name or "").lower()
+     if ("keyboard" in name or "logitech" in name or "at translate" in name) \
+        and "smart" not in name and "mouse setting" not in name:
+      _list.append(dev)
+    except Exception:
+     continue
+   return _list
+
+  devs = _find_kbs()
+  while True:
+   try:
+    for dev in devs:
+     try:
+      for event in dev.read():
+       if event.type == _evdev.ecodes.EV_KEY and event.code == _evdev.ecodes.KEY_END \
+          and event.value == 1:
+        with self._mode_lock:
+         self._stop_recording_flag = False
+        self.toggle()
+        time.sleep(0.5)
+     except OSError:
+      devs = _find_kbs() or devs
+      time.sleep(0.2)
+     except Exception:
+      pass
+   except Exception:
+    pass
+   time.sleep(0.001)
  
  def clear_input_field(self):  # Очистка поля ввода."""
   try:

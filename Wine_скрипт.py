@@ -65,7 +65,7 @@ export WINEPREFIX="/home/egor/PortProton/data/prefixes/DEFAULT" # winetricks dxv
 #DXVK_HUD=fps gamescope $GAMESCOPE_ARGS wine \"{1}\" -skipintro 1 # --dx11 -skipintro 1
 #gamescope $GAMESCOPE_ARGS -- env MANGOHUD=1 wine \"{1}\" -skipintro 1 # --dx11 -skipintro 1
 #gamescope $GAMESCOPE_ARGS -- wine \"{1}\" -skipintro 1 #--dx11 -skipintro 1
-#это обычно бывает по умолчанию env MANGOHUD=1 wine \"{1}\" -skipintro 1 # --dx11 -skipintro 1
+#env MANGOHUD=1 wine \"{1}\" -skipintro 1 # --dx11 -skipintro 1
 #DXVK_HUD=fps wine \"{1}\" -skipintro 1 # --dx11 -skipintro 1
 wine "{1}" -skipintro 1
 # portproton \"{1}\"

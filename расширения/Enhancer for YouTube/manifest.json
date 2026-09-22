@@ -132,58 +132,116 @@
          "description": "__MSG_toggle_related_videos_visibility__"
       }
    },
-   "content_scripts": [ {
-      "css": [ "css/youtube.css" ],
-      "exclude_matches": [ "*://www.youtube.com/embed/*" ],
-      "js": [ "js/youtube-main.js" ],
-      "matches": [ "*://www.youtube.com/*" ],
-      "run_at": "document_start",
-      "world": "MAIN"
-   }, {
-      "exclude_matches": [ "*://www.youtube.com/embed/*" ],
-      "js": [ "js/config.js", "js/youtube-isolated.js" ],
-      "matches": [ "*://www.youtube.com/*" ],
-      "run_at": "document_start",
-      "world": "ISOLATED"
-   }, {
-      "all_frames": true,
-      "js": [ "js/embed-main.js" ],
-      "matches": [ "*://www.youtube.com/embed/*", "*://www.youtube-nocookie.com/embed/*" ],
-      "run_at": "document_start",
-      "world": "MAIN"
-   }, {
-      "all_frames": true,
-      "js": [ "js/config.js", "js/embed-isolated.js" ],
-      "matches": [ "*://www.youtube.com/embed/*", "*://www.youtube-nocookie.com/embed/*" ],
-      "run_at": "document_start",
-      "world": "ISOLATED"
-   }, {
-      "all_frames": true,
-      "js": [ "js/live-chat-main.js" ],
-      "matches": [ "*://www.youtube.com/live_chat*" ],
-      "run_at": "document_start",
-      "world": "MAIN"
-   }, {
-      "all_frames": true,
-      "js": [ "js/config.js", "js/live-chat-isolated.js" ],
-      "matches": [ "*://www.youtube.com/live_chat*" ],
-      "run_at": "document_start",
-      "world": "ISOLATED"
-   }, {
-      "css": [ "css/pop-up-player.css" ],
-      "js": [ "js/pop-up-player-isolated.js" ],
-      "matches": [ "*://www.youtube-nocookie.com/pop-up-player/*" ],
-      "run_at": "document_end",
-      "world": "ISOLATED"
-   }, {
-      "js": [ "js/config.js", "js/shorts-isolated.js" ],
-      "matches": [ "*://www.youtube.com/shorts/*" ],
-      "run_at": "document_start",
-      "world": "ISOLATED"
-   } ],
+   "content_scripts": [
+      {
+         "css": [
+            "css/youtube.css"
+         ],
+         "exclude_matches": [
+            "*://www.youtube.com/embed/*"
+         ],
+         "js": [
+            "js/youtube-main.js"
+         ],
+         "matches": [
+            "*://www.youtube.com/*"
+         ],
+         "run_at": "document_start",
+         "world": "MAIN"
+      },
+      {
+         "exclude_matches": [
+            "*://www.youtube.com/embed/*"
+         ],
+         "js": [
+            "js/config.js",
+            "js/youtube-isolated.js"
+         ],
+         "matches": [
+            "*://www.youtube.com/*"
+         ],
+         "run_at": "document_start",
+         "world": "ISOLATED"
+      },
+      {
+         "all_frames": true,
+         "js": [
+            "js/embed-main.js"
+         ],
+         "matches": [
+            "*://www.youtube.com/embed/*",
+            "*://www.youtube-nocookie.com/embed/*"
+         ],
+         "run_at": "document_start",
+         "world": "MAIN"
+      },
+      {
+         "all_frames": true,
+         "js": [
+            "js/config.js",
+            "js/embed-isolated.js"
+         ],
+         "matches": [
+            "*://www.youtube.com/embed/*",
+            "*://www.youtube-nocookie.com/embed/*"
+         ],
+         "run_at": "document_start",
+         "world": "ISOLATED"
+      },
+      {
+         "all_frames": true,
+         "js": [
+            "js/live-chat-main.js"
+         ],
+         "matches": [
+            "*://www.youtube.com/live_chat*"
+         ],
+         "run_at": "document_start",
+         "world": "MAIN"
+      },
+      {
+         "all_frames": true,
+         "js": [
+            "js/config.js",
+            "js/live-chat-isolated.js"
+         ],
+         "matches": [
+            "*://www.youtube.com/live_chat*"
+         ],
+         "run_at": "document_start",
+         "world": "ISOLATED"
+      },
+      {
+         "css": [
+            "css/pop-up-player.css"
+         ],
+         "js": [
+            "js/pop-up-player-isolated.js"
+         ],
+         "matches": [
+            "*://www.youtube-nocookie.com/pop-up-player/*"
+         ],
+         "run_at": "document_end",
+         "world": "ISOLATED"
+      },
+      {
+         "js": [
+            "js/config.js",
+            "js/shorts-isolated.js"
+         ],
+         "matches": [
+            "*://www.youtube.com/shorts/*"
+         ],
+         "run_at": "document_start",
+         "world": "ISOLATED"
+      }
+   ],
    "default_locale": "en_US",
    "description": "__MSG_description__",
-   "host_permissions": [ "*://www.youtube.com/*", "*://www.youtube-nocookie.com/*" ],
+   "host_permissions": [
+      "*://www.youtube.com/*",
+      "*://www.youtube-nocookie.com/*"
+   ],
    "icons": {
       "128": "img/icons/128.png",
       "16": "img/icons/16.png",
@@ -195,15 +253,27 @@
       "64": "img/icons/64.png",
       "96": "img/icons/96.png"
    },
-   "key": "MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCrJipzcs6r7wrOrIhajflr37G10c+X+VAhhAWTJdL9icUUzFYS91ZcvNKyLqWRSI1j9sQJLK4m4gLYL1nHMZp1Zc/Eeer97b+TRuyQbapxu6ui/6APYHydWPHektVFbrsWdWM/sUzobEsYpYfWvwAiXDjFbwxodGNgC94wYIff1QIDAQAB",
+   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqI2iM0qTIXo/RBl8sZx6Qmot/i4RzqT+kUnUunREeKlh1R0G8EUGqqA7HlZNbBOKgR8wwEZoq5f48Z4xmv6PhWpiAVT4ab/IMOo7DGKWjzLcKuPdi4r58K2tu0knFMYMiqzR0s3QynrDywER4n9twgwueJndojqY6mbMYNOxoCfdjuRX1lK+dxZQWi2fzvi1KEupIzeDe2V25PuPqvCY3+DILpg2PA9Pn1QtuB4g5K9XF59enHBXbjMnu/SNHwHNl+MNAT9HotQIRP2cmBjQ6uAgsy/llSQluIO3aKovYAtJPmkhCl36wPTfgypq12Es4cTu+yzhw47Vkpt8Hz/94wIDAQAB",
    "manifest_version": 3,
    "minimum_chrome_version": "128.0.0.0",
    "name": "Enhancer for YouTube™",
    "options_page": "html/options.html",
-   "permissions": [ "downloads", "storage" ],
+   "permissions": [
+      "downloads",
+      "storage"
+   ],
    "version": "3.1.0",
-   "web_accessible_resources": [ {
-      "matches": [ "*://www.youtube.com/*", "*://www.youtube-nocookie.com/*" ],
-      "resources": [ "_locales/*/messages.json", "css/themes/*", "vendor/*" ]
-   } ]
+   "web_accessible_resources": [
+      {
+         "matches": [
+            "*://www.youtube.com/*",
+            "*://www.youtube-nocookie.com/*"
+         ],
+         "resources": [
+            "_locales/*/messages.json",
+            "css/themes/*",
+            "vendor/*"
+         ]
+      }
+   ]
 }

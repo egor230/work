@@ -1,0 +1,41 @@
+{
+   "background": {
+      "service_worker": "background.js"
+   },
+   "content_scripts": [ {
+      "all_frames": false,
+      "js": [ "mainWorld.js" ],
+      "matches": [ "*://*.youtube.com/*" ],
+      "run_at": "document_start",
+      "world": "MAIN"
+   }, {
+      "all_frames": false,
+      "css": [ "trans.css" ],
+      "js": [ "index.js" ],
+      "matches": [ "*://*.youtube.com/*" ],
+      "world": "ISOLATED"
+   } ],
+   "content_security_policy": {
+      "extension_pages": "script-src 'self'; object-src 'self'"
+   },
+   "default_locale": "en",
+   "description": "__MSG_shortDesc__",
+   "host_permissions": [ "https://*/*" ],
+   "icons": {
+      "128": "icons/128x128.png",
+      "16": "icons/16x16.png",
+      "32": "icons/32x32.png",
+      "48": "icons/48x48.png",
+      "64": "icons/64x64.png"
+   },
+   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsa7XKnGqYAmuHeoXhzRa3se/EB0wRZBVQDMte/ZWVQjAw29vdY00r9saEOU5oVuLdKuudrK/BTAV4cSOYKgkANNP1iesTTRXOVs9zryBkdh4Ik4+Ny99Zr244KZJOHuAFwp5WdjUBl7SHfxiHWlkuiz01Yv5gra7I5eeVTwaAgvkWk5Kfkrzwk/wEUddwmtTWTw0tV5Mbv8IlSieGe6uA48t2LiN2DH6BQ9SmVrWZCeAInAg98CvMNm00CsUZt1p9vT+oowldcZNYjjlmAGZ89b2Y82IKw07P2UG+sWapmRgjBFSlfJdk3we2XWAcXKA3geWVY1Im/n2d2iTM+/CmwIDAQAB",
+   "manifest_version": 3,
+   "name": "__MSG_appName__",
+   "permissions": [ "storage" ],
+   "update_url": "https://clients2.google.com/service/update2/crx",
+   "version": "1.0.4",
+   "web_accessible_resources": [ {
+      "matches": [ "http://*/*", "https://*/*" ],
+      "resources": [ "icons/*.png" ]
+   } ]
+}
