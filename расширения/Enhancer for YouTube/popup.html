@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Magic Actions for YouTube</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <!-- Кнопка переключения темы -->
+  <button id="theme-toggle" title="Светлая / Тёмная тема"></button>
+  <div class="row">
+    <button id="open-options" type="button">Настройки Enhancer</button>
+    <button id="save-backup" type="button" title="Сохранить config-backup.json">💾 Сохранить настройки</button>
+    <button id="restore-backup" type="button" title="Восстановить из config-backup.json в папке">↩ Восстановить</button>
+    <div class="hint" id="backup-status">тема + скорость по каналам</div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

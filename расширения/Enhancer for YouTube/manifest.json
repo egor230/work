@@ -1,12 +1,13 @@
 {
-   "action": {
-      "default_icon": {
-         "16": "img/icons/16.png",
-         "24": "img/icons/24.png",
-         "32": "img/icons/32.png"
-      },
-      "default_title": "Enhancer for YouTube™"
-   },
+    "action": {
+       "default_icon": {
+          "16": "img/icons/16.png",
+          "24": "img/icons/24.png",
+          "32": "img/icons/32.png"
+       },
+       "default_popup": "popup.html",
+       "default_title": "Enhancer for YouTube™ — тема и параметры"
+    },
    "background": {
       "service_worker": "js/service-worker.js"
    },
@@ -133,36 +134,39 @@
       }
    },
    "content_scripts": [
-      {
-         "css": [
-            "css/youtube.css"
-         ],
-         "exclude_matches": [
-            "*://www.youtube.com/embed/*"
-         ],
-         "js": [
-            "js/youtube-main.js"
-         ],
-         "matches": [
-            "*://www.youtube.com/*"
-         ],
-         "run_at": "document_start",
-         "world": "MAIN"
-      },
-      {
-         "exclude_matches": [
-            "*://www.youtube.com/embed/*"
-         ],
-         "js": [
-            "js/config.js",
-            "js/youtube-isolated.js"
-         ],
-         "matches": [
-            "*://www.youtube.com/*"
-         ],
-         "run_at": "document_start",
-         "world": "ISOLATED"
-      },
+       {
+          "css": [
+             "css/youtube.css",
+             "css/ma.css"
+          ],
+          "exclude_matches": [
+             "*://www.youtube.com/embed/*"
+          ],
+          "js": [
+             "js/youtube-main.js",
+             "js/ma-main-world.js"
+          ],
+          "matches": [
+             "*://www.youtube.com/*"
+          ],
+          "run_at": "document_start",
+          "world": "MAIN"
+       },
+       {
+          "exclude_matches": [
+             "*://www.youtube.com/embed/*"
+          ],
+          "js": [
+             "js/config.js",
+             "js/youtube-isolated.js",
+             "js/ma-content.js"
+          ],
+          "matches": [
+             "*://www.youtube.com/*"
+          ],
+          "run_at": "document_start",
+          "world": "ISOLATED"
+       },
       {
          "all_frames": true,
          "js": [

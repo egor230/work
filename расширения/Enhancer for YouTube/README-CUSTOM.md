@@ -1,14 +1,23 @@
 # Enhancer for YouTube™ — кастомная копия
 
 Распакованная копия Chrome-расширения Enhancer for YouTube (MV3, store 3.1.0)
-с локальными правками (см. ниже). Собирается в .crx собственным скриптом
-`package-crx.sh` (раздел 3).
+с локальными правками. Общее руководство — в `README.md`, полная документация
+по Magic Actions — в `../Magic Actions for YouTube — исследование переключения
+темы (сводный документ).md` (в папке `../`).
+
+В этой копии три сессии локальных правок:
+
+| # | Дата | Что | Раздел |
+|---|---|---|---|
+| 1–2 | 2026-09-17 | Колесо=громкость, скорость по каналам | §1–§2 |
+| 3 | 2026-09-24 | Объединение Magic Actions (тема) | §3 |
+| 4 | 2026-09-24 | Сохранение/восстановление настроек | §4 |
+
+Собирается в .crx скриптом `package-crx.sh` (§5).
 
 ---
 
-## Что изменено (2026-09-17)
-
-### 1. Прокрутка громкости колёсиком мыши — по всему плееру
+## §1 Прокрутка громкости колёсиком мыши — по всему плееру
 
 **Файл:** `js/youtube-main.js`, функция `gd(a)` (обработчик `wheel` на
 `#player-container`).
@@ -37,7 +46,7 @@ S.textContent=f.isMuted()?0:b;kb();Ba(b)}
 Опции `controlvolume` / `controlvolumemousebutton` / `volumevariation`
 в `options.html` остались, но больше не блокируют колесо по всему плееру.
 
-### 2. Скорость воспроизведения — таблица по каналам (ID + название)
+## §2 Скорость воспроизведения — таблица по каналам (ID + название)
 
 **Файлы:** `js/youtube-main.js` (маин-ворлд) + `js/youtube-isolated.js`
 (изолированный, обращение к `chrome.storage.local`).
@@ -85,7 +94,7 @@ function efytAskChannelSpeed(){try{var a=efytChannelId(),b=efytChannelName();
       request:"channel-speed-get",channel:efytSpdReq,name:b&&a?b:void 0}}))}}catch(e){}}
 ```
 
-### 3. Скрипт упаковки в .crx (CRX3, канонический формат Chromium)
+## §5 Скрипт упаковки в .crx (CRX3, канонический формат Chromium)
 
 **Файлы:** `package-crx.sh` (в корне), `efyt_private.pem` (приватный ключ
 RSA-2048, PKCS#8; генерируется при первом запуске и определяет ID).
@@ -141,7 +150,8 @@ message SignedData { bytes crx_id = 1; }   // ровно 16 байт
 и подпись. Потеря = новый ID у всех последующих сборок.
 
 **ID этой сборки:** `ifojmbdceojdnhhagpmfnmjndpplcndi`
-(header 581 байт — ровно как у store-файлов; ~422 КБ).
+(header 581 байт — ровно как у store-файлов; ~230 КБ, после объединения
+с Magic Actions).
 
 Результат: `../Enhancer_for_YouTube.crx` (имя — из поля `name` манифеста).
 
@@ -153,15 +163,89 @@ cd "/home/egor/Downloads/расширения/Enhancer for YouTube"
 
 ---
 
+## §4 Сохранение/восстановление настроек (config-backup.json)
+
+Настройки расширения хранятся в `chrome.storage.local` (встроенный хранилище
+Chrome). Для архива и переноса на другой ПК:
+
+### Сохранение
+- Кнопка «Сохранить настройки» в popup (`popup.html`) → создаёт
+  `config-backup.json` в папке Загрузок (Chrome не даёт писать в папку
+  расширения напрямую из-за readonly-ограничений CRX). Скопируйте файл
+  в папку расширения.
+- Скрипт `save-config.sh` (в папке расширения) — читает LevelDB-хранилище
+  Chrome и выгружает `config-backup.json` прямо в папку расширения.
+  Работает с установленным расширением (CRX или unpacked).
+
+### Восстановление
+- Кнопка «Восстановить» в popup — читает `config-backup.json` из папки
+  расширения (в unpacked-режиме) и записывает все ключи в
+  `chrome.storage.local`.
+- При установке/обновлении расширения сервис-воркер автоматически ищет
+  `config-backup.json` в папке и восстанавливает настройки (только в
+  unpacked-режиме; в CRX-режиме папка readonly и файл недоступен).
+- Скрипт `restore-config.sh` — восстанавливает через CDP (Chrome должен быть
+  запущен с `--remote-debugging-port=9223`).
+
+### Какие данные сохраняются
+Все ключи `chrome.storage.local`: `maTheme`, `channelspeeds` (скорость по
+каналам — ID + название), `darktheme`, `theme`, `volume`, `speed`,
+`selectquality`, `cinemamode`, `miniplayer`, `hidecomments`, `controls`,
+`localecode`, `backdropcolor`, `filter`, `videofilters`, `customcss` и др.
+
+---
+
 ## Файлы, изменённые в этой сессии
+
+| Файл | § | Что |
+|---|---|---|
+| `js/youtube-main.js` | 1,3 | `gd` (колесо=громкость), `efytChannelName`, `efytSpdSave`, `efytAskChannelSpeed`, `sb` (вызов `efytAskChannelSpeed`), `efytApplySpeed` (защита на `S.style`), `gc`/`hc` (пропуск при `data-ma-theme="light"`) |
+| `js/youtube-isolated.js` | 2 | `channel-speed-get`/`set` — два ключа (id + `name:`) |
+| `js/config.js` | 1 | `controlvolume:!0` |
+| `manifest.json` | 3 | `key` → публичный ключ `efyt_private.pem` (ID `ifojmbdceojdnhhagpmfnmjndpplcndi`), новые `content_scripts` (ma-main-world.js, ma-content.js, css/ma.css), `default_popup` → `popup.html` |
+| `popup.html`/`popup.js`/`popup.css` | 3,4 | Popup: переключатель темы + «Настройки Enhancer» + «Сохранить/Восстановить настройки» |
+| `js/service-worker.js` | 3,4 | case `"open-options"`, auto-restore `config-backup.json` на install/update, `efyt-backup-save`/`efyt-backup-restore` через `chrome.runtime.onMessage` |
+| `html/options.html` | 4 | Панель «Сохранить/Восстановить» внизу страницы + JS-обработчик |
+| `save-config.sh` | 4 | Dump `chrome.storage.local` → `config-backup.json` в папке расширения (через LevelDB) |
+| `restore-config.sh` | 4 | Восстановление `config-backup.json` → `chrome.storage.local` (через CDP) |
+| `css/ma.css` | 3 | CSS для темы Magic Actions (только тёмная тема `html[dark]` + тумблер) |
+| `js/ma-content.js` | 3 | ISOLATED: применение темы, кукка PREF f6, чистка классов `*Dark`, тумблер |
+| `js/ma-main-world.js` | 3 | MAIN: блокировка атрибутов dark/light, перехват cookie, диспатч `yt-action` |
+| `package-crx.sh` | 5 | Скрипт упаковки в CRX3: канонический формат Chromium + встроенная верификация; SKIP: `config-backup.json`, `save-config.sh`, `restore-config.sh` |
+| `efyt_private.pem` | 5 | Приватный ключ подписи CRX (PKCS#8, RSA-2048) — определяет ID |
+
+Оригинальные `key`, `version`, `_locales`, `vendor`, `css` не тронуты.
+
+
+---
+
+## §3 Объединение с «Magic Actions for YouTube» (2026-09-24)
+
+**Файлы добавлены в §3:**
 
 | Файл | Что |
 |---|---|
-| `js/youtube-main.js` | `gd` (колесо=громкость), `efytChannelName`, `efytSpdSave`, `efytAskChannelSpeed`, `sb` (вызов `efytAskChannelSpeed`), `efytApplySpeed` (защита на `S.style`) |
-| `js/youtube-isolated.js` | `channel-speed-get`/`set` — два ключа (id + `name:`) |
-| `js/config.js` | `controlvolume:!0` |
-| `manifest.json` | `key` → публичный ключ `efyt_private.pem` (ID `fecamaihcghhlonfaaaa`) |
-| `package-crx.sh` | скрипт упаковки в CRX3: канонический формат Chromium + встроенная верификация |
-| `efyt_private.pem` | приватный ключ подписи CRX (PKCS#8, RSA-2048) — определяет ID |
+| `js/ma-content.js` | ISOLATED world: применение темы (dark/light), кукка PREF f6, чистка классов `*Dark`, тумблер `#__magic-theme-switch` |
+| `js/ma-main-world.js` | MAIN world: блокировка атрибутов dark/light, перехват cookie PREF, диспатч `yt-action` по метке `data-ma-notify` |
+| `css/ma.css` | CSS для темы (только тёмная тема `html[dark]` + тумблер) |
+| `popup.html`, `popup.css`, `popup.js` | Popup-окно: переключатель темы + кнопка «Настройки Enhancer» |
+| `manifest.json` | Новые `content_scripts` (MAIN + ISOLATED для магии), `action.default_popup` → `popup.html` |
+| `js/service-worker.js` | Новый case `"open-options"` → `chrome.runtime.openOptionsPage()` |
 
-Оригинальные `key`, `version`, `_locales`, `vendor`, `css` не тронуты.
+**Изменения в `js/youtube-main.js` (§3):**
+- `gc()` — пропускается, если `data-ma-theme="light"` (чтобы Enhancer не ставил тёмный `dark=""` при выборе светлой темы)
+- `hc()` — пропускается, если `data-ma-theme="light"` (стили не вставляются)
+
+**Философия темы (перенесена из Magic Actions §3):**
+- `maTheme="dark"` = форсаж: атрибуты + куки + блокировки в MAIN world + CSS-токены
+- `maTheme="light"` = расширение «выключено»: только нативные атрибуты, никаких CSS-правил
+
+> **Папка `../Magic Actions for YouTube/` удалена.** Весь функционал темы
+> влит сюда (§3). Исходники и документация сохранены в
+> `../Magic Actions for YouTube — исследование переключения темы (сводный
+> документ).md` и `../Magic Actions for YouTube — проблемы и ошибки.md`
+> (в родительской папке `../расширения/`).
+
+---
+
+## Файлы, изменённые в этой сессии

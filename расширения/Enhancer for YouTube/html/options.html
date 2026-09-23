@@ -1025,5 +1025,81 @@
     </main>
   </div>
   <div class="tooltip"></div>
+  <!-- efyt-backup: save/restore settings as config-backup.json -->
+  <div id="efyt-backup-panel" style="position:fixed;bottom:8px;right:8px;z-index:99999;
+       background:rgba(20,20,20,.92);color:#ddd;padding:8px 10px;border-radius:6px;
+       font:12px/1.5 system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.5);">
+    <div style="display:flex;gap:6px;align-items:center;">
+      <button id="efyt-save-btn" style="cursor:pointer;padding:2px 8px;">Сохранить</button>
+      <button id="efyt-restore-btn" style="cursor:pointer;padding:2px 8px;">Восстановить</button>
+      <input type="file" id="efyt-restore-file" accept=".json" style="display:none;">
+      <span id="efyt-backup-status" style="color:#888;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+    </div>
+  </div>
 </body>
-</html>
+</html><script>
+// efyt-backup: save/restore config-backup.json
+(function(){
+  var btn = document.getElementById('efyt-save-btn');
+  var restoreBtn = document.getElementById('efyt-restore-btn');
+  var status = document.getElementById('efyt-backup-status');
+  var fileInput = document.getElementById('efyt-restore-file');
+  var CFG = 'config-backup.json';
+
+  function log(msg) { status.textContent = msg; }
+
+  // Save: read chrome.storage.local, dump as JSON, trigger download to extension folder
+  if (btn) btn.addEventListener('click', function(){
+    chrome.storage.local.get(null, function(data){
+      var out = Object.assign({ _meta: { savedAt: new Date().toISOString(), version: chrome.runtime.getManifest().version } }, data);
+      var blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
+      var url = URL.createObjectURL(blob);
+      // In unpacked mode, chrome.downloads downloads to user's Downloads dir
+      // For saving directly to extension folder, user copies the file
+      chrome.downloads.download({ url: url, filename: 'config-backup.json', conflictAction: 'overwrite', saveAs: true },
+        function(id){
+          if (chrome.runtime.lastError) log('Ошибка: ' + chrome.runtime.lastError.message);
+          else log('config-backup.json сохранён в Загрузки — скопируйте в папку расширения');
+          URL.revokeObjectURL(url);
+        });
+    });
+  });
+
+  // Restore: load config-backup.json from extension folder
+  if (restoreBtn) restoreBtn.addEventListener('click', function(){
+    fetch(chrome.runtime.getURL(CFG)).then(function(r){
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function(data){
+      var restore = {};
+      for (var k in data) if (k !== '_meta') restore[k] = data[k];
+      if (Object.keys(restore).length === 0) throw new Error('Пустой файл');
+      chrome.storage.local.set(restore, function(){
+        log('Восстановлено: ' + Object.keys(restore).length + ' ключей. Перезагрузите вкладки YouTube.');
+      });
+    }).catch(function(e){
+      log('Файл ' + CFG + ' не найден в папке расширения (' + e.message + '). ' +
+          'Скопируйте config-backup.json в папку расширения и повторите.');
+      fileInput.click();
+    });
+  });
+
+  // Fallback: manual file picker
+  if (fileInput) fileInput.addEventListener('change', function(){
+    var file = this.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function(){
+      try {
+        var data = JSON.parse(reader.result);
+        var restore = {};
+        for (var k in data) if (k !== '_meta') restore[k] = data[k];
+        chrome.storage.local.set(restore, function(){
+          log('Восстановлено из файла: ' + Object.keys(restore).length + ' ключей. Перезагрузите вкладки YouTube.');
+        });
+      } catch(e) { log('Ошибка чтения JSON: ' + e.message); }
+    };
+    reader.readAsText(file);
+  });
+})();
+</script>
