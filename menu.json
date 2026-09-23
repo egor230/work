@@ -151,12 +151,13 @@
             "Internet",
             "Office",
             "Accessories",
+            "Preferences",
             "Administration",
             "favorite_files",
-            "Preferences",
             "recents",
             "places",
-            "/home/egor"
+            "/home/egor",
+            "Other"
         ]
     },
     "custom-menu-width": {
@@ -173,26 +174,26 @@
         "type": "generic",
         "default": [],
         "value": [
-            "alacarte-made-ae28dbfb-08a5-11f1-980c-10ffe0293379.desktop",
-            "cinnamon-settings-startup.desktop",
-            "hiddify.desktop",
             "alacarte-made-892e7095-0894-11f1-8ed9-10ffe0293379.desktop",
+            null,
+            "opencode-desktop-linux-x86_64.desktop",
             "alacarte-made-67ebfe5b-089b-11f1-8267-10ffe0293379.desktop",
-            "mintupdate.desktop",
-            null,
-            "timeshift-gtk.desktop",
-            "alacarte-made-bdc0156d-81c3-11f1-b772-10ffe0293379.desktop",
+            "yandex-browser.desktop",
+            "alacarte-made-d694b5d6-b09b-11f1-b22b-10ffe0293379.desktop",
+            "riseup-vpn.desktop",
             "google-chrome.desktop",
+            "mintupdate.desktop",
+            "chatgpt.desktop",
+            "alacarte-made-ae28dbfb-08a5-11f1-980c-10ffe0293379.desktop",
             null,
-            "org.gnome.Calculator.desktop",
-            "Gta Sa.desktop",
-            "TES4: Oblivion.desktop",
+            "chromium-browser.desktop",
+            "com.cloudflare.WarpTaskbar.desktop",
+            "alacarte-made-15a3f15a-fd4a-11f0-822d-10ffe0293379.desktop",
             null,
-            "Quantum Break.desktop",
-            "alacarte-made-2a0eb4b9-fcc5-11f0-b631-10ffe0293379.desktop",
-            "alacarte-made-79eaeb47-88b7-11f1-a3aa-10ffe0293379.desktop",
+            "libreoffice-writer.desktop",
+            "alacarte-made-bdc0156d-81c3-11f1-b772-10ffe0293379.desktop",
             null,
-            "io.github.benjamimgois.goverlay.desktop"
+            "hermes.desktop"
         ]
     },
     "search-start-folder": {

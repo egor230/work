@@ -105,23 +105,140 @@ def simplify_html(html, base_url="https://dzen.ru"):
    process.kill()
    print("Предупреждение: xclip не ответил вовремя, продолжаем выполнение.")
 
-  return title_text
-
+   return title_text
  except Exception as e:
   print(f"Ошибка при работе с буфером: {e}")
   return title_text
 
-option = get_option()
-driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=option)
-# url = "https://dzen.ru/a/aXCnP6pOEEGFgQ6Z"
-url = str(pyperclip.paste())
-driver.get(url)
-# Использование BeautifulSoup для парсинга
-res = {}  # Ваш словарь для результатов
-source = driver.page_source
-res[simplify_html(source)] =url
-# print(res)
-time.sleep(3)  # Дополнительное время для загрузки контента
-copy_and_rename_file(res)
-open_documents_from_dict(res, driver)
-driver.quit()
+ def _prepare_profile(self):  # Подбирает рабочий user-data-dir (NTFS может быть read-only).
+  import shutil as _shutil
+  ntfs_profile = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/google-chrome"
+  local_profile = os.path.expanduser("~/.config/alice-voice-chrome")
+  stale_locks = ("DevToolsActivePort", "SingletonLock", "SingletonCookie", "SingletonSocket")
+
+  def _clean_locks(d):
+   for name in stale_locks:
+    p = os.path.join(d, name)
+    try:
+     if os.path.lexists(p):
+      os.remove(p)
+    except Exception:
+     pass
+
+  try:
+   if os.path.isdir(ntfs_profile):
+    _clean_locks(ntfs_profile)
+    probe = os.path.join(ntfs_profile, ".write_test")
+    with open(probe, "w"):
+     pass
+    os.remove(probe)
+    return ntfs_profile
+  except Exception as e:
+   print(f"Профиль на NTFS недоступен для записи ({e}) — использую локальный профиль")
+  try:
+   if not os.path.isdir(os.path.join(local_profile, "Default")):
+    print("Копирую профиль в локальное хранилище (один раз)...")
+    os.makedirs(local_profile, exist_ok=True)
+    _shutil.copytree(
+     ntfs_profile, local_profile,
+     ignore=_shutil.ignore_patterns(
+      "Cache", "Code Cache", "GPUCache", "GrDpCache", "ShaderCache",
+      "DawnGraphiteCache", "DawnWebGPUCache", "Crashpad", "Crash Reports",
+      "Service Worker", "optimization_guide_model_store"),
+     symlinks=True)
+   _clean_locks(local_profile)
+   return local_profile
+  except Exception as e:
+   print(f"Не удалось скопировать профиль ({e}) — использую чистый локальный профиль")
+   os.makedirs(local_profile, exist_ok=True)
+   return local_profile
+
+def _chrome_version():
+  import subprocess as _sp, re as _re
+  for cmd in ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser"):
+   try:
+    out = _sp.run([cmd, "--version"], capture_output=True, text=True, timeout=10).stdout
+    m = _re.search(r'(\d+\.\d+\.\d+\.\d+)', out)
+    if m:
+     return [int(x) for x in m.group(1).split(".")]
+   except Exception:
+    continue
+  return None
+
+def get_chromedriver_path():
+  import glob as _glob, re as _re, os as _os
+  def _ver(p):
+   m = _re.search(r'(\d+\.\d+\.\d+\.\d+)', p)
+   return [int(x) for x in m.group(1).split(".")] if m else None
+  found = []
+  for pat in (
+   _os.path.expanduser("~/.wdm/drivers/chromedriver/linux64/*/chromedriver-linux64/chromedriver"),
+  ):
+   for path in _glob.glob(pat):
+    if _os.access(path, _os.X_OK):
+     v = _ver(path)
+     if v:
+      found.append((v, path))
+  if not found:
+   return None, []
+  chrome_ver = _chrome_version()
+  exact = None
+  if chrome_ver and len(chrome_ver) >= 3:
+   for v, p in found:
+    if v[:3] == chrome_ver[:3]:
+     exact = p
+     break
+  if exact:
+   return exact, [exact]
+  found.sort(key=lambda t: t[0], reverse=True)
+  return found[0][1], [p for _, p in found]
+
+def main():
+  driver = None
+  options = get_option()
+  options.add_argument("--disable-extensions")
+  # options.add_argument(f'--user-data-dir={self._prepare_profile()}')
+  # options.add_argument("--headless=new")
+
+  options.add_argument("--no-proxy-server")
+  driver_path, candidates = get_chromedriver_path()
+  last_err = None
+  for path in (candidates or []):
+   try:
+    driver = webdriver.Chrome(service=Service(path), options=options)
+    print(f"Chrome запущен с локальным драйвером: {path}")
+    break
+   except Exception as e:
+    last_err = e
+    print(f"Не удалось запустить Chrome с драйвером {path}: {e}")
+  if driver is None:
+   if candidates:
+    print("Все локальные драйверы не подошли — пытаюсь скачать свежий (нужна сеть)...")
+   else:
+    print("Локальный chromedriver не найден — пытаюсь скачать (нужна сеть)...")
+   try:
+    import concurrent.futures as _cf
+    with _cf.ThreadPoolExecutor(max_workers=1) as ex:
+     path = ex.submit(lambda: ChromeDriverManager().install()).result(timeout=120)
+    driver = webdriver.Chrome(service=Service(path), options=options)
+   except Exception as e:
+    print(f"Не удалось получить chromedriver: {e}")
+    if last_err:
+     raise last_err
+    raise
+
+  url = "https://dzen.ru/a/anBARge4ThSHKg_w"
+  # url = str(pyperclip.paste())
+  driver.get(url)
+  # Использование BeautifulSoup для парсинга
+  res = {}  # Ваш словарь для результатов
+  source = driver.page_source
+  res[simplify_html(source)] = url
+  # print(res)
+  time.sleep(3)  # Дополнительное время для загрузки контента
+  copy_and_rename_file(res)
+  open_documents_from_dict(res, driver)
+  driver.quit()
+
+if __name__ == "__main__":
+  main()
