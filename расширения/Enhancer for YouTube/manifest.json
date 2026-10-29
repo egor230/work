@@ -137,14 +137,16 @@
        {
           "css": [
              "css/youtube.css",
-             "css/ma.css"
+             "css/ma.css",
+             "css/channel-speed-panel.css"
           ],
           "exclude_matches": [
              "*://www.youtube.com/embed/*"
           ],
           "js": [
              "js/youtube-main.js",
-             "js/ma-main-world.js"
+             "js/ma-main-world.js",
+             "js/channel-speed-panel.js"
           ],
           "matches": [
              "*://www.youtube.com/*"
@@ -159,7 +161,8 @@
           "js": [
              "js/config.js",
              "js/youtube-isolated.js",
-             "js/ma-content.js"
+             "js/ma-content.js",
+             "js/channel-speed-bridge.js"
           ],
           "matches": [
              "*://www.youtube.com/*"
@@ -263,6 +266,7 @@
    "name": "Enhancer for YouTube™",
    "options_page": "html/options.html",
    "permissions": [
+      "contextMenus",
       "downloads",
       "storage"
    ],

@@ -228,7 +228,7 @@ def main():
     raise
 
   url = "https://dzen.ru/a/anBARge4ThSHKg_w"
-  # url = str(pyperclip.paste())
+  url = str(pyperclip.paste())
   driver.get(url)
   # Использование BeautifulSoup для парсинга
   res = {}  # Ваш словарь для результатов

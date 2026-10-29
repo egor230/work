@@ -78,3 +78,35 @@ active:!0});break;case "dark-theme-off":chrome.storage.local.set({darktheme:!1})
 "c190-increase-speed":"speed-plus","c200-default-speed":"speed","c210-normal-speed":"speed","c220-toggle-video-filters":"video-filters","c230-flip-horizontally":"flip-horizontally","c240-flip-vertically":"flip-vertically","c250-take-screenshot":"screenshot","c260-keyboard-shortcuts":"keyboard-shortcuts","c270-custom-script":"custom-script"};switch(c){case "c000-options-page":chrome.runtime.openOptionsPage();break;case "c020-theme-youtube-dark":chrome.storage.local.set({darktheme:!0,theme:"default-dark"});
 break;case "c025-theme-enhanced-dark":chrome.storage.local.set({darktheme:!0,theme:"enhanced-dark"});break;case "c030-theme-youtube-deep-dark":chrome.storage.local.set({darktheme:!0,theme:"youtube-deep-dark"});break;case "c040-theme-youtube-deep-dark-custom":chrome.storage.local.set({darktheme:!0,theme:"youtube-deep-dark-custom"});break;case "c050-theme-custom-theme":chrome.storage.local.get({customtheme:f.customtheme},b=>{chrome.storage.local.set({customtheme:!b.customtheme})});break;default:chrome.tabs.query({lastFocusedWindow:!0,
 active:!0},b=>{b[0]&&chrome.tabs.sendMessage(b[0].id,{message:"command",command:c,control:a[c]?a[c]:""}).catch(()=>{})})}})})(config);
+// === ytcs: контекстное меню «Поиск на YouTube» ===
+// Выделить текст на любой странице → правый клик → «Поиск на YouTube»:
+// открывается новая вкладка с результатами поиска YouTube.
+// Пункт меню и иконка перенесены из расширения «Contextual Search for YouTube».
+const YTCS_MENU_ID = "ytcs-search-youtube";
+
+function ytcsCreateMenu() {
+  // removeAll убирает дубли после переустановки/обновления расширения.
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({
+      id: YTCS_MENU_ID,
+      title: "Поиск на YouTube",
+      contexts: ["selection"]
+    });
+  });
+}
+
+chrome.runtime.onInstalled.addListener(ytcsCreateMenu);
+chrome.runtime.onStartup.addListener(ytcsCreateMenu);
+
+chrome.contextMenus.onClicked.addListener((info) => {
+  if (info.menuItemId !== YTCS_MENU_ID) return;
+
+  // Схлопываем переносы строк и повторные пробелы — YouTube их не любит.
+  const query = String(info.selectionText || "").replace(/\s+/g, " ").trim();
+  if (!query) return;
+
+  // encodeURIComponent сохраняет кириллицу и спецсимволы (в оригинале они терялись).
+  chrome.tabs.create({
+    url: "https://www.youtube.com/results?search_query=" + encodeURIComponent(query)
+  });
+});

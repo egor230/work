@@ -18,10 +18,13 @@ set_mute("0", source_id)# Проверка и загрузка модели Giga
 #     "large": "https://huggingface.co/openai/whisper-large/resolve/main/pytorch_model.bin",
 #  }
 # Проверка наличия модели
+
 models = ["tiny", "base", "small", "medium", "large", "large-v2", "large-v3", "large-v3-turbo"]
 # Выбираем последнюю модель из списка
 # model_name = "dvislobokov/faster-whisper-large-v3-turbo-russian"
-model_name = "large-v3-turbo"
+# Русскоязычная дообученная модель, формат CTranslate2 под compute_type="int8".
+# Путь локальный — интернет не нужен.
+model_name = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache/coriollon-whisper-large-v3-turbo-russian/ct2_int8_float16"
 cache_dir = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache"
 t = time.time()
 # Инициализация модели

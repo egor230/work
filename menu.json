@@ -146,67 +146,44 @@
         "value": [
             "all",
             "Multimedia",
-            "Games",
             "Graphics",
+            "Games",
             "Internet",
             "Office",
             "Accessories",
-            "Preferences",
             "Administration",
+            "Preferences",
             "favorite_files",
-            "recents",
             "places",
-            "/home/egor",
-            "Other"
+            "recents"
         ]
     },
     "custom-menu-width": {
         "type": "generic",
         "default": 800,
-        "value": 1382.05078125
+        "value": 1374.2015380859375
     },
     "custom-menu-height": {
         "type": "generic",
         "default": 530,
-        "value": 865.38232421875
+        "value": 838.5700225830078
     },
     "recent-apps": {
         "type": "generic",
         "default": [],
         "value": [
-            "alacarte-made-892e7095-0894-11f1-8ed9-10ffe0293379.desktop",
-            null,
-            "opencode-desktop-linux-x86_64.desktop",
-            "alacarte-made-67ebfe5b-089b-11f1-8267-10ffe0293379.desktop",
-            "yandex-browser.desktop",
-            "alacarte-made-d694b5d6-b09b-11f1-b22b-10ffe0293379.desktop",
-            "riseup-vpn.desktop",
-            "google-chrome.desktop",
-            "mintupdate.desktop",
-            "chatgpt.desktop",
-            "alacarte-made-ae28dbfb-08a5-11f1-980c-10ffe0293379.desktop",
-            null,
-            "chromium-browser.desktop",
-            "com.cloudflare.WarpTaskbar.desktop",
-            "alacarte-made-15a3f15a-fd4a-11f0-822d-10ffe0293379.desktop",
-            null,
-            "libreoffice-writer.desktop",
-            "alacarte-made-bdc0156d-81c3-11f1-b772-10ffe0293379.desktop",
-            null,
             "hermes.desktop"
         ]
     },
     "search-start-folder": {
         "type": "generic",
         "default": "",
-        "value": "/home/egor"
+        "value": ""
     },
     "folder-categories": {
         "type": "generic",
         "default": [],
-        "value": [
-            "/home/egor"
-        ]
+        "value": []
     },
     "all-apps-old-style": {
         "type": "generic",
@@ -360,7 +337,7 @@
         "default": true,
         "description": "Activate categories on click",
         "tooltip": "Activate categories on click instead of on hover",
-        "value": false
+        "value": true
     },
     "open-on-category": {
         "dependency": "show-categories",
@@ -630,7 +607,7 @@
         "description": "Panel icon size (pixels)",
         "dependency": "menu-icon-size-custom",
         "tooltip": "Choose a custom size for the panel icon",
-        "value": 38
+        "value": 32
     },
     "menu-label": {
         "type": "entry",
@@ -649,7 +626,7 @@
         "units": "",
         "description": "Category icon size (pixels)",
         "tooltip": "Category icon size (pixels)",
-        "value": 28
+        "value": 24
     },
     "apps-list-icon-size": {
         "type": "spinbutton",
@@ -660,7 +637,7 @@
         "units": "",
         "description": "Applications list icon size (pixels)",
         "tooltip": "Applications list icon size (pixels)",
-        "value": 28
+        "value": 24
     },
     "apps-grid-icon-size": {
         "type": "spinbutton",
@@ -671,7 +648,7 @@
         "units": "",
         "description": "Applications grid icon size (pixels)",
         "tooltip": "Applications grid icon size (pixels)",
-        "value": 28
+        "value": 30
     },
     "sidebar-icon-size": {
         "dependency": "show-sidebar",
@@ -683,7 +660,7 @@
         "units": "",
         "description": "Sidebar icon size (pixels)",
         "tooltip": "Sidebar icon size (pixels)",
-        "value": 28
+        "value": 32
     },
     "use-box-style": {
         "dependency": "show-sidebar",

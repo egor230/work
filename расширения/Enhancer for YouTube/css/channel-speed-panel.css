@@ -1,0 +1,188 @@
+/* Панель скорости канала (дополнение к Enhancer §2/§7/§9).
+   Все классы с префиксом ytcs-, чтобы не пересекаться с efyt-* и YouTube. */
+
+.ytcs-btn {
+  width: 44px;
+  min-width: 44px;
+  padding: 0 4px;
+  color: #eee;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  opacity: 0.85;
+}
+
+.ytcs-btn:hover {
+  opacity: 1;
+}
+
+/* Синий — для канала есть сохранённая скорость. */
+.ytcs-btn.ytcs-saved {
+  color: #3ea6ff;
+}
+
+.ytcs-btn-label {
+  pointer-events: none;
+}
+
+.ytcs-panel {
+  position: absolute;
+  right: 12px;
+  bottom: 58px;
+  z-index: 9999;
+  box-sizing: border-box;
+  width: 300px;
+  max-width: calc(100% - 16px);
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  background: rgba(28, 28, 28, 0.97);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-family: "Roboto", "Arial", sans-serif;
+  font-size: 13px;
+  line-height: 1.35;
+  text-align: left;
+  backdrop-filter: blur(10px);
+}
+
+.ytcs-panel[hidden] {
+  display: none !important;
+}
+
+.ytcs-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.ytcs-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ytcs-close {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #aaa;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.ytcs-close:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.ytcs-channel {
+  margin-bottom: 10px;
+  overflow: hidden;
+  color: #aaa;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ytcs-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.ytcs-step {
+  width: 40px;
+  height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.ytcs-step:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.ytcs-value {
+  flex: 1;
+  color: #3ea6ff;
+  font-size: 20px;
+  font-weight: 700;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.ytcs-presets {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.ytcs-preset {
+  height: 30px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #ddd;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ytcs-preset:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+.ytcs-preset.ytcs-active {
+  border-color: #3ea6ff;
+  background: rgba(62, 166, 255, 0.2);
+  color: #fff;
+  font-weight: 600;
+}
+
+.ytcs-foot {
+  display: flex;
+  gap: 6px;
+}
+
+.ytcs-reset,
+.ytcs-forget {
+  flex: 1;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 7px;
+  background: transparent;
+  color: #ddd;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ytcs-reset:hover,
+.ytcs-forget:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.ytcs-forget:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.ytcs-hint {
+  margin-top: 9px;
+  color: #888;
+  font-size: 11px;
+  line-height: 1.3;
+}

@@ -391,7 +391,6 @@ class VoiceThread(QThread):
    aria_label = self.button.get_attribute(self.alisa) or ""
    oknyx_core = self.button.find_element(By.CSS_SELECTOR, f".{self.OKNYX_CORE_CLASS}")
    classes = oknyx_core.get_attribute("class") or ""
-   print(classes)
    if "li" or "Out" in classes or "сл" in aria_label.lower():
     self.driver.execute_script("arguments[0].click();", self.button)
    self.show_message(None, False)
@@ -442,8 +441,8 @@ class VoiceThread(QThread):
       aria_label = self.button.get_attribute(self.alisa) or ""
       filter_elem = oknyx_core.get_attribute("data-testid") or ""
       classes = oknyx_core.get_attribute("class") or ""
-      # textarea = textarea_elem.get_attribute("class") or ""
-      # print(textarea)
+
+      print(classes)
       self.message, counts1 = self.get_user_message(self.counts)
       if classes1 != classes:
        classes1=classes

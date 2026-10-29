@@ -1121,15 +1121,15 @@ ytd-browse[page-subtype="subscriptions"] ytd-rich-grid-renderer[is-default-grid]
   display: none !important;
 }
 
-html.efyt-videos-per-row ytd-browse[page-subtype="home"] ytd-rich-item-renderer[rendered-from-rich-grid]:not([is-shorts-grid]),
-html.efyt-videos-per-row ytd-browse[page-subtype="subscriptions"] ytd-rich-item-renderer[rendered-from-rich-grid]:not([is-shorts-grid]),
-html.efyt-videos-per-row ytd-browse[page-subtype="music"] ytd-rich-item-renderer,
-html.efyt-videos-per-row ytd-browse[page-subtype="live"] ytd-rich-item-renderer,
-html.efyt-videos-per-row ytd-browse[page-subtype="news"] ytd-rich-item-renderer:not([is-post]),
-html.efyt-videos-per-row ytd-browse[page-subtype="sports"] ytd-rich-item-renderer,
-html.efyt-videos-per-row ytd-browse[page-subtype="learning"] ytd-rich-item-renderer,
-html.efyt-videos-per-row ytd-browse[page-subtype="fashion"] ytd-rich-item-renderer,
-html.efyt-videos-per-row ytd-browse:has(#header img[src*="/podcasts/"]) ytd-rich-item-renderer {
+html.efyt-videos-per-row ytd-browse[page-subtype="home"] ytd-rich-item-renderer:not(.ytdRichItemRendererIsShortsGrid):not(.ytdRichItemRendererIsSlimMedia):not(.ytdRichItemRendererIsShortsGridSlimMedia),
+html.efyt-videos-per-row ytd-browse[page-subtype="subscriptions"] ytd-rich-item-renderer:not(.ytdRichItemRendererIsShortsGrid):not(.ytdRichItemRendererIsSlimMedia):not(.ytdRichItemRendererIsShortsGridSlimMedia),
+html.efyt-videos-per-row ytd-browse[page-subtype="music"] ytd-rich-item-renderer:not(.ytdRichItemRendererIsShortsGrid):not(.ytdRichItemRendererIsSlimMedia):not(.ytdRichItemRendererIsShortsGridSlimMedia),
+html.efyt-videos-per-row ytd-browse[page-subtype="live"] ytd-rich-item-renderer:not(.ytdRichItemRendererIsShortsGrid):not(.ytdRichItemRendererIsSlimMedia):not(.ytdRichItemRendererIsShortsGridSlimMedia),
+html.efyt-videos-per-row ytd-browse[page-subtype="news"] ytd-rich-item-renderer:not(.ytdRichItemRendererIsPost):not(.ytdRichItemRendererIsShortsGrid):not(.ytdRichItemRendererIsSlimMedia):not(.ytdRichItemRendererIsShortsGridSlimMedia),
+html.efyt-videos-per-row ytd-browse[page-subtype="sports"] ytd-rich-item-renderer:not(.ytdRichItemRendererIsShortsGrid):not(.ytdRichItemRendererIsSlimMedia):not(.ytdRichItemRendererIsShortsGridSlimMedia),
+html.efyt-videos-per-row ytd-browse[page-subtype="learning"] ytd-rich-item-renderer:not(.ytdRichItemRendererIsShortsGrid):not(.ytdRichItemRendererIsSlimMedia):not(.ytdRichItemRendererIsShortsGridSlimMedia),
+html.efyt-videos-per-row ytd-browse[page-subtype="fashion"] ytd-rich-item-renderer:not(.ytdRichItemRendererIsShortsGrid):not(.ytdRichItemRendererIsSlimMedia):not(.ytdRichItemRendererIsShortsGridSlimMedia),
+html.efyt-videos-per-row ytd-browse:has(#header img[src*="/podcasts/"]) ytd-rich-item-renderer:not(.ytdRichItemRendererIsShortsGrid):not(.ytdRichItemRendererIsSlimMedia):not(.ytdRichItemRendererIsShortsGridSlimMedia) {
   --ytd-rich-grid-items-per-row: var(--efyt-videos-per-row) !important;
 }
 
@@ -1141,31 +1141,32 @@ html.efyt-videos-per-row body[dir="rtl"] ytd-rich-grid-renderer[is-default-grid]
   padding-right: calc(var(--ytd-rich-grid-item-margin, 16px) / 2 + var(--ytd-rich-grid-gutter-margin, 16px)) !important;
 }
 
-html.efyt-videos-per-row body[dir="ltr"] ytd-browse[page-subtype="home"] ytd-rich-item-renderer[rendered-from-rich-grid][is-in-first-column],
-html.efyt-videos-per-row body[dir="ltr"] ytd-browse[page-subtype="subscriptions"] ytd-rich-item-renderer[rendered-from-rich-grid][is-in-first-column] {
+html.efyt-videos-per-row body[dir="ltr"] ytd-browse[page-subtype="home"] ytd-rich-item-renderer.ytdRichItemRendererNoFirstColumnMargin,
+html.efyt-videos-per-row body[dir="ltr"] ytd-browse[page-subtype="subscriptions"] ytd-rich-item-renderer.ytdRichItemRendererNoFirstColumnMargin {
   margin-left: calc(var(--ytd-rich-grid-item-margin, 16px) / 2) !important;
 }
 
-html.efyt-videos-per-row body[dir="rtl"] ytd-browse[page-subtype="home"] ytd-rich-item-renderer[rendered-from-rich-grid][is-in-first-column],
-html.efyt-videos-per-row body[dir="rtl"] ytd-browse[page-subtype="subscriptions"] ytd-rich-item-renderer[rendered-from-rich-grid][is-in-first-column] {
+html.efyt-videos-per-row body[dir="rtl"] ytd-browse[page-subtype="home"] ytd-rich-item-renderer.ytdRichItemRendererNoFirstColumnMargin,
+html.efyt-videos-per-row body[dir="rtl"] ytd-browse[page-subtype="subscriptions"] ytd-rich-item-renderer.ytdRichItemRendererNoFirstColumnMargin {
   margin-right: calc(var(--ytd-rich-grid-item-margin, 16px) / 2) !important;
 }
 
-html.efyt-shorts-per-row ytd-browse[page-subtype="home"] ytd-rich-shelf-renderer[is-shorts] ytd-rich-item-renderer[is-slim-media],
-html.efyt-shorts-per-row ytd-browse[page-subtype="subscriptions"] ytd-rich-shelf-renderer[is-shorts] ytd-rich-item-renderer[is-slim-media] {
+html.efyt-shorts-per-row ytd-browse[page-subtype="home"] ytd-rich-item-renderer.ytdRichItemRendererIsSlimMedia,
+html.efyt-shorts-per-row ytd-browse[page-subtype="subscriptions"] ytd-rich-item-renderer.ytdRichItemRendererIsSlimMedia {
   --ytd-rich-grid-items-per-row: var(--efyt-shorts-per-row) !important;
   --ytd-rich-grid-slim-items-per-row: var(--efyt-shorts-per-row) !important;
 }
 
-html.efyt-posts-per-row ytd-browse[page-subtype="news"] ytd-rich-item-renderer[is-post] {
+html.efyt-posts-per-row ytd-browse[page-subtype="news"] ytd-rich-item-renderer.ytdRichItemRendererIsPost {
   --ytd-rich-grid-items-per-row: var(--efyt-posts-per-row) !important;
 }
 
-html.efyt-channel-videos-per-row ytd-browse[page-subtype="channels"] ytd-rich-item-renderer:not([is-slim-media]) {
+html.efyt-channel-videos-per-row ytd-browse[page-subtype="channels"] ytd-rich-item-renderer:not(.ytdRichItemRendererIsShortsGrid):not(.ytdRichItemRendererIsSlimMedia):not(.ytdRichItemRendererIsShortsGridSlimMedia) {
   --ytd-rich-grid-items-per-row: var(--efyt-channel-videos-per-row) !important;
 }
 
-html.efyt-channel-shorts-per-row ytd-browse[page-subtype="channels"] ytd-rich-item-renderer[is-shorts-grid][is-slim-media] {
+html.efyt-channel-shorts-per-row ytd-browse[page-subtype="channels"] ytd-rich-item-renderer.ytdRichItemRendererIsShortsGridSlimMedia,
+html.efyt-channel-shorts-per-row ytd-browse[page-subtype="channels"] ytd-rich-item-renderer.ytdRichItemRendererIsShortsGrid.ytdRichItemRendererIsSlimMedia {
   --ytd-rich-grid-slim-items-per-row: var(--efyt-channel-shorts-per-row) !important;
 }
 
