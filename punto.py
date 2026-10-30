@@ -16,6 +16,49 @@ SEARCH_LABEL_KEYWORDS = ("поиск файлов", "содержит", "search 
 DEBOUNCE_MS = 500  # Уменьшили с 1500 мс для более отзывчивого поиска в Nemo
 COOLDOWN_SEC = 0.3  # Уменьшили с 1.0 сек для быстрой реакции
 
+# СТИК-УДЕРЖАНИЕ модификаторов (Shift/Ctrl/Alt левые+правые): при нажатии
+# клавиша удерживается «нажатой» через UInput MOD_HOLD_SEC секунд; каждое
+# последующее нажатие ЛЮБОЙ клавиши из списка (или той же после отпуска)
+# добавляет MOD_HOLD_SEC к общему дедлайну; по его истечении ВСЕ нажатые
+# в этом окне клавиши отпускаются разом. Коды — evdev (не X11-keysym'ы):
+# так надёжно покрываются и нестандартные keysym'ы пользовательской
+# клавиатуры (например «<65032>»/«<65512>» из старых логов pynput).
+MOD_HOLD_SEC = 5.0
+# ЗАЛИПАЮЩИЕ модификаторы: оба Shift, ПРАВЫЙ Ctrl, оба Alt.
+# Левый Ctrl ВНЕ списка намеренно (см. MOD_NEUTRAL) — он ненадёжен.
+MOD_HOLD = ({ecodes.KEY_LEFTSHIFT: 'ShiftL', ecodes.KEY_RIGHTSHIFT: 'ShiftR',
+             ecodes.KEY_RIGHTCTRL: 'CtrlR',
+             ecodes.KEY_LEFTALT: 'AltL', ecodes.KEY_RIGHTALT: 'AltR'}
+            if HAVE_EVDEV else {})
+# Левый Ctrl (X keycode 37) периодически перемапится на ISO_Next_Group
+# фоновыми процессами — в это время он НЕ модификатор. Он НЕ заводит и не
+# отключает залипание (нейтрален для sticky-механизма), но продолжает
+# ходить в _on_press как раньше (SPECIAL -> Key.ctrl_l).
+MOD_NEUTRAL = ({ecodes.KEY_LEFTCTRL} if HAVE_EVDEV else set())
+#
+# КРИТИЧНО: «липкое» удержание НЕ должно идти через код той же физической
+# клавиши: X хранит нажатые клавиши в общем битовом векторе, и отпускание
+# ФИЗИЧЕСКОЙ клавиши с тем же кодом сбрасывает модификатор, удержанный
+# UInput'ом. Поэтому залипание идёт через ДРУГОЙ keycode:
+#  - Shift/Alt — через ПРотивоположную физическую клавишу (левый Shift ->
+#    держим правый Shift). Это гарантированные модификаторы X, не зависят
+#    от xmodmap -> надёжно.
+#  - Ctrl — только ПРАВЫЙ Ctrl надёжен (левый периодически перемапится на
+#    ISO_Next_Group и перестаёт быть модификатором). Для правого Ctrl
+#    «противоположная» клавиша (левая) ненадёжна, поэтому залипание идёт
+#    через ВЫДЕЛЕННЫЙ виртуальный evdev-код MOD_STICKY_CTRL (X keycode 254),
+#    которому xmodmap назначает Control_R (см. EvdevTyper.setup_sticky_keymap
+#    и периодический повторный _mod_hold_reapply_keymap — фоновые процессы
+#    сбивают xmodmap-маппинг).
+MOD_STICKY_CTRL = 246   # evdev 246 -> X keycode 254 -> Control_R (через xmodmap)
+MOD_HOLD_NAME = {MOD_STICKY_CTRL: 'StickyCtrl'}
+MOD_HOLD_CODE = ({ecodes.KEY_LEFTSHIFT: ecodes.KEY_RIGHTSHIFT,
+                  ecodes.KEY_RIGHTSHIFT: ecodes.KEY_LEFTSHIFT,
+                  ecodes.KEY_RIGHTCTRL: MOD_STICKY_CTRL,
+                  ecodes.KEY_LEFTALT: ecodes.KEY_RIGHTALT,
+                  ecodes.KEY_RIGHTALT: ecodes.KEY_LEFTALT}
+                 if HAVE_EVDEV else {})
+
 # Сопоставление evdev-кодов клавиш (QWERTY) -> РУССКАЯ буква (раскладка ЙЦУКЕН).
 # Значения русские, т.к. словарь подсказок (words.txt) и аббревиатуры — русские:
 # current_word обязан собираться кириллицей, иначе подсказки всегда «счёт=0».
@@ -129,6 +172,8 @@ class EvdevTyper:
   self.layout_getter = layout_getter
   self.ui = None
   self._orig_layout = 'ru'
+  self._sticky = set()  # evdev-коды, сейчас «залипшие» (удержаны) через UInput
+  self._ui_lock = threading.Lock()  # одна и та же UInput-fd читается/пишется из разных потоков
   self._init_uinput()
 
  def _init_uinput(self):
@@ -138,8 +183,10 @@ class EvdevTyper:
    ecodes.KEY_K, ecodes.KEY_L, ecodes.KEY_M, ecodes.KEY_N, ecodes.KEY_O,
    ecodes.KEY_P, ecodes.KEY_Q, ecodes.KEY_R, ecodes.KEY_S, ecodes.KEY_T,
    ecodes.KEY_U, ecodes.KEY_V, ecodes.KEY_W, ecodes.KEY_X, ecodes.KEY_Y,
-   ecodes.KEY_Z, ecodes.KEY_SPACE, ecodes.KEY_LEFTSHIFT, ecodes.KEY_RIGHTSHIFT,
-   ecodes.KEY_COMMA, ecodes.KEY_DOT, ecodes.KEY_ENTER, ecodes.KEY_TAB,
+    ecodes.KEY_Z, ecodes.KEY_SPACE, ecodes.KEY_LEFTSHIFT, ecodes.KEY_RIGHTSHIFT,
+    ecodes.KEY_LEFTCTRL, ecodes.KEY_RIGHTCTRL,
+    ecodes.KEY_LEFTALT, ecodes.KEY_RIGHTALT,
+    ecodes.KEY_COMMA, ecodes.KEY_DOT, ecodes.KEY_ENTER, ecodes.KEY_TAB,
    ecodes.KEY_1, ecodes.KEY_2, ecodes.KEY_3, ecodes.KEY_4, ecodes.KEY_5,
    ecodes.KEY_6, ecodes.KEY_7, ecodes.KEY_8, ecodes.KEY_9, ecodes.KEY_0,
    ecodes.KEY_SEMICOLON, ecodes.KEY_APOSTROPHE, ecodes.KEY_GRAVE,
@@ -149,7 +196,9 @@ class EvdevTyper:
     ecodes.KEY_KP3, ecodes.KEY_KP4, ecodes.KEY_KP5, ecodes.KEY_KP6,
     ecodes.KEY_KP7, ecodes.KEY_KP8, ecodes.KEY_KP9, ecodes.KEY_KPDOT,
     ecodes.KEY_KPSLASH, ecodes.KEY_KPASTERISK, ecodes.KEY_KPMINUS,
-    ecodes.KEY_KPPLUS, ecodes.KEY_KPENTER
+    ecodes.KEY_KPPLUS, ecodes.KEY_KPENTER,
+    # Виртуальный код для залипания правого Ctrl (см. MOD_HOLD_CODE)
+    MOD_STICKY_CTRL
    ]
   try:
    self.ui = UInput(
@@ -162,6 +211,40 @@ class EvdevTyper:
   except Exception as e:
    print(f"[WARN] UInput не доступен ({e}), печать через него невозможна.")
    self.ui = None
+
+ def setup_sticky_keymap(self):
+  '''Назначает виртуальному коду 254 (evdev 246) роль Control_R и добавляет
+  его в группу control. Нужно ТОЛЬКО для залипания правого Ctrl (Shift/Alt
+  залипают через противоположную физическую клавишу и не зависят от xmodmap).
+  Без этого X при нажатии кода 254 не выставляет бит Control.'''
+  cmds = [
+   'keycode 254 = Control_R', 'add control = Control_R',
+  ]
+  self.sticky_keymap_ok = False
+  for c in cmds:
+   try:
+    r = subprocess.run(['xmodmap', '-e', c], capture_output=True, text=True, timeout=3)
+    if r.returncode != 0:
+     print(f"[WARN] xmodmap '{c}': {r.stderr.strip()}", flush=True)
+   except Exception as e:
+    print(f"[WARN] xmodmap '{c}' не выполнен: {e}", flush=True)
+  self.sticky_keymap_ok = self._verify_ctrl_keymap()
+  if not self.sticky_keymap_ok:
+   print("[MOD-HOLD] WARNING: keycode 254 не в группе control — залипание Ctrl может не работать", flush=True)
+  return self.sticky_keymap_ok
+
+ def _verify_ctrl_keymap(self):
+  '''Живая проверка: действительно ли keycode 254 (0xfe) сейчас в группе
+  control. Фоновые процессы могут сбивать xmodmap-маппинг (см. ISO_Next_Group),
+  поэтому проверяем и повторно применяем (см. SmartTyper._mod_hold_reapply_keymap).'''
+  try:
+   out = subprocess.run(['xmodmap', '-pm'], capture_output=True, text=True, timeout=3).stdout
+   for line in out.splitlines():
+    if line.lower().startswith('control'):
+     return '0xfe' in line.lower()
+  except Exception:
+   return False
+  return False
 
  def _detect_us(self):
   try:
@@ -216,17 +299,23 @@ class EvdevTyper:
  def _press(self, keycode, with_shift=False):
   if not self.ui:
    return False
-  if with_shift:
-   self.ui.write(ecodes.EV_KEY, ecodes.KEY_LEFTSHIFT, 1)
+  with self._ui_lock:
+   if with_shift:
+    # Если левый Shift «залип» (sticky-удержание) — жмём ПРАВЫЙ,
+    # чтобы собственное печатание не отпустило чужой залипший Shift
+    shift_code = (ecodes.KEY_RIGHTSHIFT
+                  if ecodes.KEY_LEFTSHIFT in self._sticky
+                  else ecodes.KEY_LEFTSHIFT)
+    self.ui.write(ecodes.EV_KEY, shift_code, 1)
+    self.ui.syn()
+   self.ui.write(ecodes.EV_KEY, keycode, 1)
    self.ui.syn()
-  self.ui.write(ecodes.EV_KEY, keycode, 1)
-  self.ui.syn()
-  time.sleep(0.008)
-  self.ui.write(ecodes.EV_KEY, keycode, 0)
-  self.ui.syn()
-  if with_shift:
-   self.ui.write(ecodes.EV_KEY, ecodes.KEY_LEFTSHIFT, 0)
+   time.sleep(0.008)
+   self.ui.write(ecodes.EV_KEY, keycode, 0)
    self.ui.syn()
+   if with_shift:
+    self.ui.write(ecodes.EV_KEY, shift_code, 0)
+    self.ui.syn()
   return True
 
  def type_char(self, ch):
@@ -291,6 +380,35 @@ class EvdevTyper:
    time.sleep(0.02)
   return True
 
+ def key_down(self, code):
+  '''«Зажать» клавишу (EV_KEY value=1 через UInput) до sticky-отпуска.
+  Требует, чтобы code был объявлен в capabilities устройства.'''
+  if not self.ui:
+   return False
+  try:
+   with self._ui_lock:
+    self.ui.write(ecodes.EV_KEY, code, 1)
+    self.ui.syn()
+  except Exception:
+   return False
+  self._sticky.add(code)
+  return True
+
+ def key_up(self, code):
+  '''Отпустить удержанную клавишу (EV_KEY value=0 через UInput).'''
+  if not self.ui:
+   return False
+  with self._ui_lock:
+   self.ui.write(ecodes.EV_KEY, code, 0)
+   self.ui.syn()
+  self._sticky.discard(code)
+  return True
+
+ def release_sticky(self, codes):
+  '''Отпустить все переданные «залипшие» коды (для sticky-окна).'''
+  for code in codes:
+   self.key_up(code)
+
 class SmartTyper: # Основной класс для автозамены и подсказок
  def __init__(self, abbreviations_path, words_path):
   self.abbreviations_path = abbreviations_path
@@ -342,6 +460,8 @@ class SmartTyper: # Основной класс для автозамены и �
   if HAVE_EVDEV:
    try:
     self.py_typer = EvdevTyper(layout_getter=self._get_keyboard_layout)
+    if self.py_typer.ui:
+     self.py_typer.setup_sticky_keymap()
    except Exception as e:
     print(f"[WARN] Не удалось инициализировать EvdevTyper: {e}")
   self._setup_ui() # Настраиваем интерфейс
@@ -349,6 +469,10 @@ class SmartTyper: # Основной класс для автозамены и �
   self.state_lock = threading.Lock()
   # Состояние shift'а из evdev-событий (для передачи регистра буквы)
   self._evdev_shift = False
+  # Sticky-удержание модификаторов: {evdev code: True} — клавиши,
+  # сейчас «залипшие» через UInput; общий дедлайн отпуска (time.time())
+  self._mod_hold = {}
+  self._mod_hold_deadline = 0.0
 
  def _load_data(self): # Загружает данные из файлов аббревиатур и словаря
   if os.path.exists(self.abbreviations_path):
@@ -1009,6 +1133,10 @@ class SmartTyper: # Основной класс для автозамены и �
          # Запоминаем состояние shift ДО фильтра значений: ловим и
          # отпускание (value=0), иначе флаг регистра «залипнет» в True.
          self._evdev_shift = bool(event.value)
+         # Sticky-удержание: при ПЕРВОМ нажатии (value=1) shift
+         # остаётся «нажатым» ещё MOD_HOLD_SEC (см. _mod_hold_press)
+         if event.value == 1:
+          self._mod_hold_press(code)
          continue
         if event.value not in (1, 2):
          continue
@@ -1019,6 +1147,25 @@ class SmartTyper: # Основной класс для автозамены и �
         # для удаления нескольких символов должно работать).
         if event.value == 2 and code != ecodes.KEY_BACKSPACE:
          continue
+        # Sticky-удержание модификаторов (Shift/Ctrl/Alt, оба бока):
+        # - нажатие клавиши ИЗ списка MOD_HOLD: «залипает» на MOD_HOLD_SEC;
+        #   каждое следующее нажатие ЛЮБОЙ клавиши из списка (в т.ч. той же
+        #   после отпускания) добавляет ещё MOD_HOLD_SEC к общему дедлайну —
+        #   все нажатые в этом окне модификаторы остаются зажатыми, пока
+        #   дедлайн не истечёт (снимает _mod_hold_tick). Вся логика в
+        #   _mod_hold_press — вызывать его ровно ОДИН раз на событие,
+        #   иначе один Ctrl даст 10 секунд вместо 5.
+         # - обычная клавиша (буква/цифра/Insert/V…) совмещается с залипшим
+         #   модификатором (Ctrl+V, Shift+Insert) и ПОСЛЕ этого нажатия
+         #   отключает залип (_mod_hold_consume).
+         # - НЕЙТРАЛЬНАЯ клавиша (левый Ctrl, см. MOD_NEUTRAL) ни не
+         #   заводит залипание, ни не отключает чужое — она только ходит
+         #   в _on_press.
+        if event.value == 1:
+         if code in MOD_HOLD:
+          self._mod_hold_press(code)
+         elif code not in MOD_NEUTRAL:
+          self._mod_hold_consume()
         if code in SPECIAL:
          self._on_press(SPECIAL[code])
         elif code in KP_NUM:
@@ -1059,12 +1206,101 @@ class SmartTyper: # Основной класс для автозамены и �
     pass
    time.sleep(0.001)
 
+ # --- Sticky-удержание модификаторов (Shift/Ctrl/Alt) ---
+ def _mod_hold_press(self, code):
+  """Модификатор нажат: «залипает» через UInput на MOD_HOLD_SEC.
+  Первое нажатие в группе = now + MOD_HOLD_SEC; каждое следующее
+  нажатие (любой клавиши из списка, включая повтор той же после
+  отпуска) добавляет ещё MOD_HOLD_SEC к общему дедлайну. По дедлайну
+  ВСЕ нажатые в этом окне клавиши отпускаются разом (_mod_hold_tick).
+  Код УДЕРЖАНИЯ берётся из MOD_HOLD_CODE: для Shift/Alt это противоположная
+  физическая клавиша (отпускание нажатой не сбивает залипание), для правого
+  Ctrl — виртуальный код MOD_STICKY_CTRL (через xmodmap)."""
+  if not (self.py_typer and self.py_typer.ui):
+   return
+  hold_code = MOD_HOLD_CODE.get(code, code)
+  # Виртуальный код залипания Ctrl зависит от xmodmap; если маппинг слит,
+  # залипание не сработает — пробуем самовосстановить (см. _verify_ctrl_keymap).
+  if hold_code == MOD_STICKY_CTRL and not getattr(self.py_typer, 'sticky_keymap_ok', False):
+   self.py_typer.setup_sticky_keymap()
+  # Сначала «зажали» через UInput; состояние записываем только
+  # если запись прошла (иначе дедлайн бы «держал» не зажатую клавишу)
+  if not self.py_typer.key_down(hold_code):
+   return
+  now = time.time()
+  with self.state_lock:
+   if self._mod_hold:
+    self._mod_hold_deadline += MOD_HOLD_SEC
+   else:
+    self._mod_hold_deadline = now + MOD_HOLD_SEC
+   self._mod_hold[hold_code] = True
+   remaining = self._mod_hold_deadline - now
+  print(f"[MOD-HOLD] нажал {MOD_HOLD.get(code, MOD_HOLD_NAME.get(code, code))}, залип {MOD_HOLD.get(hold_code, MOD_HOLD_NAME.get(hold_code, hold_code))}, удерживать {remaining:.1f} c", flush=True)
+
+ def _mod_hold_consume(self):
+  """Нажата клавиша, НЕ входящая в MOD_HOLD (буква/цифра/пробел/стрелка…).
+  КЛАВИША СОВМЕЩАЕТСЯ с залипшим модификатором (Ctrl+V = вставить,
+  Ctrl+S = сохранить и т.п.), а ПОСЛЕ этого залип отключается —
+  «липкие клавиши» в стандартном смысле.
+  Отпускание делаем с ЗАДЕРЖКОЙ 50 мс в отдельном потоке: X должен
+  успеть обработать нажатие, пока UInput ещё держит модификатор —
+  иначе в state события не будет бита Ctrl/Alt и комбинация не
+  соберётся. (Проверено E2E через xev: когда Ctrl держит UInput,
+  KeyPress «v» приходит со state 0x14 — с битом Ctrl.)"""
+  with self.state_lock:
+   if not self._mod_hold:
+    return
+   held = list(self._mod_hold)
+   self._mod_hold.clear()
+   self._mod_hold_deadline = 0.0
+  names = sorted(MOD_HOLD.get(c, str(c)) for c in held)
+  print(f"[MOD-HOLD] обычная клавиша — комбинация прошла, отпускаю {names} через 50 мс", flush=True)
+  def _rel():
+   time.sleep(0.05)
+   if self.py_typer:
+    self.py_typer.release_sticky(held)
+  threading.Thread(target=_rel, daemon=True).start()
+
+ def _mod_hold_tick(self):
+  """GLib-таймер (200 мс): по истечении общего дедлайна отпускает все
+  «залипшие» клавиши. Бегает в mainloop; состояние под state_lock."""
+  try:
+   now = time.time()
+   with self.state_lock:
+    if not self._mod_hold or now < self._mod_hold_deadline:
+     return True
+    held = list(self._mod_hold)
+    self._mod_hold.clear()
+    self._mod_hold_deadline = 0.0
+   if held:
+    names = sorted(MOD_HOLD.get(c, MOD_HOLD_NAME.get(c, str(c))) for c in held)
+    print(f"[MOD-HOLD] дедлайн прошёл — отпускаю {names}", flush=True)
+    if self.py_typer:
+     self.py_typer.release_sticky(held)
+  except Exception:
+   pass
+  return True
+
+ def _mod_hold_reapply_keymap(self):
+  """GLib-таймер (3 с): живая проверка xmodmap-маппинга залипания правого
+  Ctrl (keycode 254 в группе control). Если фоновый процесс сбил маппинг —
+  повторно применяем его. Shift/Alt не нужны (они залипают через физическую
+  клавишу). Возвращает True, чтобы таймер продолжал работать."""
+  try:
+   if self.py_typer and self.py_typer.ui:
+    if not self.py_typer._verify_ctrl_keymap():
+     print("[MOD-HOLD] keycode 254 не в группе control — повторно применяю xmodmap", flush=True)
+     self.py_typer.setup_sticky_keymap()
+  except Exception:
+   pass
+  return True
+
  def _on_press(self, key): # Обрабатывает нажатия клавиш
   if self.replacing:
    return True
   if self.disabled:
    return True
-
+  print(key)
   key_str = str(key).replace("'", "").replace(" ", "")
 
   if any(k in key_str for k in ["down", "right", "up", "left", "Key.tab", "Key.caps_lock", "Key.shift", "<65032>", "<65512>", "Key.ctrl_r"]):
@@ -1161,6 +1397,15 @@ class SmartTyper: # Основной класс для автозамены и �
    return True
 
   GLib.timeout_add(50, _pump_tkinter)
+
+  # --- Sticky-удержание модификаторов: раз в 200 мс проверяем общий
+  # дедлайн и по истечении отпускаем все «залипшие» Shift/Ctrl/Alt ---
+  GLib.timeout_add(200, self._mod_hold_tick)
+
+  # --- Контроль xmodmap-маппинга залипания правого Ctrl: раз в 3 с
+  # проверяем, что keycode 254 всё ещё в группе control, иначе повторно
+  # применяем маппинг (фоновые процессы могут его сбивать) ---
+  GLib.timeout_add(3000, self._mod_hold_reapply_keymap)
 
   # --- Фоновые потоки ---
   window_checker_thread = threading.Thread(target=self._check_active_window_loop, daemon=True)
