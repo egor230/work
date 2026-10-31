@@ -4,6 +4,40 @@ from tkinter import Tk, Toplevel, Label, Frame
 from pynput import mouse, keyboard
 from gi.repository import GLib
 
+# =====================================================================
+#  ЗАЛИПАНИЕ КЛАВИШ — ЗДЕСЬ ДВЕ ПЕРЕМЕННЫЕ, ПРАВЬТЕ ТОЛЬКО ИХ
+# =====================================================================
+# (1) СПИСОК КЛАВИШ, КОТОРЫЕ БУДУТ ЗАЛИПАТЬ — имена через запятую.
+#     Доступны ТОЛЬКО эти шесть имён:
+#       "shift_l" — Shift левый      "shift_r" — Shift правый
+#       "ctrl_l"  — Ctrl левый       "ctrl_r"  — Ctrl правый
+#       "alt_l"   — Alt левый        "alt_r"   — Alt правый
+#     Добавить залипающую клавишу -> допишите имя в кортеж (напр. "ctrl_l").
+#     Убрать залипающую клавишу   -> сотрите имя вместе с запятой.
+#     Выключить залипание совсем  -> пустой кортеж:  STICKY_KEYS = ()
+#     Другие имена не сработают: при запуске скрипт напишет [WARN] и пропустит.
+#     Левый Ctrl по умолчанию НЕ в списке: на этой системе X периодически
+#     перемапит keycode 37 (см. КАК_РАБОТАЕТ_punto.md §3.6) — он ненадёжен.
+STICKY_KEYS = ("shift_l", "shift_r", "ctrl_r", "alt_l", "alt_r")
+
+# (2) СКОЛЬКО СЕКУНД залипают клавиши из списка (1) после отпускания.
+#     Каждое новое нажатие клавиши из списка добавляет ещё столько же секунд
+#     к общему дедлайну. Число может быть дробным: 2.5, 10, 0.5 и т.д.
+STICKY_HOLD_SEC = 5.0
+# =====================================================================
+# Настройка закончилась. Ниже — служебный код: имена из STICKY_KEYS
+# автоматически переводятся в evdev-коды (ищите STICKY_KEYS_CODES).
+# =====================================================================
+MOD_HOLD_SEC = STICKY_HOLD_SEC          # алиас для остального кода (не трогать)
+
+ENTRY_NAMES = ("file_search_entry", "content_search_entry")
+SEARCH_LABEL_KEYWORDS = ("поиск файлов", "содержит", "search files", "contains", "поиск", "search", "find")
+DEBOUNCE_MS = 500  # Уменьшили с 1500 мс для более отзывчивого поиска в Nemo
+COOLDOWN_SEC = 0.3  # Уменьшили с 1.0 сек для быстрой реакции
+# Механика залипания — в КАК_РАБОТАЕТ_punto.md §3.6 / Баг №7. При нажатии
+# клавиши из STICKY_KEYS она «остаётся нажатой» ещё STICKY_HOLD_SEC секунд
+# (через UInput); по дедлайну все нажатые в этом окне модификаторы
+# отпускаются разом.
 HAVE_EVDEV = False
 try:
  from evdev import ecodes, UInput, InputDevice, list_devices
@@ -11,53 +45,61 @@ try:
 except Exception:
  pass
 
-ENTRY_NAMES = ("file_search_entry", "content_search_entry")
-SEARCH_LABEL_KEYWORDS = ("поиск файлов", "содержит", "search files", "contains", "поиск", "search", "find")
-DEBOUNCE_MS = 500  # Уменьшили с 1500 мс для более отзывчивого поиска в Nemo
-COOLDOWN_SEC = 0.3  # Уменьшили с 1.0 сек для быстрой реакции
-
-# СТИК-УДЕРЖАНИЕ модификаторов (Shift/Ctrl/Alt левые+правые): при нажатии
-# клавиша удерживается «нажатой» через UInput MOD_HOLD_SEC секунд; каждое
-# последующее нажатие ЛЮБОЙ клавиши из списка (или той же после отпуска)
-# добавляет MOD_HOLD_SEC к общему дедлайну; по его истечении ВСЕ нажатые
-# в этом окне клавиши отпускаются разом. Коды — evdev (не X11-keysym'ы):
-# так надёжно покрываются и нестандартные keysym'ы пользовательской
-# клавиатуры (например «<65032>»/«<65512>» из старых логов pynput).
-MOD_HOLD_SEC = 5.0
-# ЗАЛИПАЮЩИЕ модификаторы: оба Shift, ПРАВЫЙ Ctrl, оба Alt.
-# Левый Ctrl ВНЕ списка намеренно (см. MOD_NEUTRAL) — он ненадёжен.
-MOD_HOLD = ({ecodes.KEY_LEFTSHIFT: 'ShiftL', ecodes.KEY_RIGHTSHIFT: 'ShiftR',
-             ecodes.KEY_RIGHTCTRL: 'CtrlR',
-             ecodes.KEY_LEFTALT: 'AltL', ecodes.KEY_RIGHTALT: 'AltR'}
-            if HAVE_EVDEV else {})
-# Левый Ctrl (X keycode 37) периодически перемапится на ISO_Next_Group
-# фоновыми процессами — в это время он НЕ модификатор. Он НЕ заводит и не
-# отключает залипание (нейтрален для sticky-механизма), но продолжает
-# ходить в _on_press как раньше (SPECIAL -> Key.ctrl_l).
-MOD_NEUTRAL = ({ecodes.KEY_LEFTCTRL} if HAVE_EVDEV else set())
-#
-# КРИТИЧНО: «липкое» удержание НЕ должно идти через код той же физической
-# клавиши: X хранит нажатые клавиши в общем битовом векторе, и отпускание
-# ФИЗИЧЕСКОЙ клавиши с тем же кодом сбрасывает модификатор, удержанный
-# UInput'ом. Поэтому залипание идёт через ДРУГОЙ keycode:
-#  - Shift/Alt — через ПРотивоположную физическую клавишу (левый Shift ->
-#    держим правый Shift). Это гарантированные модификаторы X, не зависят
-#    от xmodmap -> надёжно.
-#  - Ctrl — только ПРАВЫЙ Ctrl надёжен (левый периодически перемапится на
-#    ISO_Next_Group и перестаёт быть модификатором). Для правого Ctrl
-#    «противоположная» клавиша (левая) ненадёжна, поэтому залипание идёт
-#    через ВЫДЕЛЕННЫЙ виртуальный evdev-код MOD_STICKY_CTRL (X keycode 254),
-#    которому xmodmap назначает Control_R (см. EvdevTyper.setup_sticky_keymap
-#    и периодический повторный _mod_hold_reapply_keymap — фоновые процессы
-#    сбивают xmodmap-маппинг).
-MOD_STICKY_CTRL = 246   # evdev 246 -> X keycode 254 -> Control_R (через xmodmap)
-MOD_HOLD_NAME = {MOD_STICKY_CTRL: 'StickyCtrl'}
-MOD_HOLD_CODE = ({ecodes.KEY_LEFTSHIFT: ecodes.KEY_RIGHTSHIFT,
-                  ecodes.KEY_RIGHTSHIFT: ecodes.KEY_LEFTSHIFT,
-                  ecodes.KEY_RIGHTCTRL: MOD_STICKY_CTRL,
-                  ecodes.KEY_LEFTALT: ecodes.KEY_RIGHTALT,
-                  ecodes.KEY_RIGHTALT: ecodes.KEY_LEFTALT}
-                 if HAVE_EVDEV else {})
+if HAVE_EVDEV:
+  # --- Служебное: переводим имена клавиш из STICKY_KEYS (НАЧАЛО ФАЙЛА)
+  # --- в evdev-коды. Здесь править ничего не нужно.
+  _STICKY_NAME_TO_CODE = {
+   "shift_l": ecodes.KEY_LEFTSHIFT,  "shift_r": ecodes.KEY_RIGHTSHIFT,
+   "ctrl_l":  ecodes.KEY_LEFTCTRL,   "ctrl_r":  ecodes.KEY_RIGHTCTRL,
+   "alt_l":   ecodes.KEY_LEFTALT,    "alt_r":   ecodes.KEY_RIGHTALT,
+  }
+  _unknown_sticky = [n for n in STICKY_KEYS if str(n).strip().lower() not in _STICKY_NAME_TO_CODE]
+  if _unknown_sticky:
+   print(f"[WARN] ЗАЛИПАНИЕ: неизвестные имена в STICKY_KEYS: {_unknown_sticky} — пропущены. "
+         f"Доступны: {', '.join(sorted(_STICKY_NAME_TO_CODE))}", flush=True)
+  STICKY_KEYS_CODES = tuple(
+   _STICKY_NAME_TO_CODE[str(n).strip().lower()]
+   for n in STICKY_KEYS if str(n).strip().lower() in _STICKY_NAME_TO_CODE
+  )
+  print(f"[STICKY] залипающие клавиши: {list(STICKY_KEYS)} | удержание: {STICKY_HOLD_SEC} сек", flush=True)
+  # НЕЙТРАЛЬНЫЕ: НЕ залипают и НЕ гасят чужое залипание (служебное).
+  STICKY_NEUTRAL = (
+   ecodes.KEY_LEFTCTRL,     # левый Ctrl нестабилен — не трогаем залипание
+  )
+  # Виртуальный evdev-код для залипания Ctrl (X keycode 254 -> Control_R,
+  # его назначает xmodmap: EvdevTyper.setup_sticky_keymap).
+  MOD_STICKY_CTRL = 246
+  # Какую клавишу ДЕРЖИМ через UInput (НЕ та, что нажали физически — иначе
+  # физ. отпускание сбьёт залипание, Баг №7): Shift/Alt -> противоположная,
+  # Ctrl -> виртуальный MOD_STICKY_CTRL. Все шесть модификаторов уже здесь.
+  _STICKY_HOLD_OF = {
+   ecodes.KEY_LEFTSHIFT:  ecodes.KEY_RIGHTSHIFT,
+   ecodes.KEY_RIGHTSHIFT: ecodes.KEY_LEFTSHIFT,
+   ecodes.KEY_LEFTALT:    ecodes.KEY_RIGHTALT,
+   ecodes.KEY_RIGHTALT:   ecodes.KEY_LEFTALT,
+   ecodes.KEY_LEFTCTRL:   MOD_STICKY_CTRL,
+   ecodes.KEY_RIGHTCTRL:  MOD_STICKY_CTRL,
+  }
+  # Имена для логов [MOD-HOLD].
+  MOD_HOLD_NAME = {
+   ecodes.KEY_LEFTSHIFT: 'ShiftL', ecodes.KEY_RIGHTSHIFT: 'ShiftR',
+   ecodes.KEY_LEFTCTRL: 'CtrlL', ecodes.KEY_RIGHTCTRL: 'CtrlR',
+   ecodes.KEY_LEFTALT: 'AltL', ecodes.KEY_RIGHTALT: 'AltR',
+   MOD_STICKY_CTRL: 'StickyCtrl',
+  }
+  # --- Ниже автопроизводится из STICKY_KEYS (начало файла); не трогать ---
+  MOD_HOLD      = {k: MOD_HOLD_NAME.get(k, str(k)) for k in STICKY_KEYS_CODES}
+  MOD_HOLD_CODE = {k: _STICKY_HOLD_OF.get(k, k) for k in STICKY_KEYS_CODES}
+  MOD_NEUTRAL   = set(STICKY_NEUTRAL)
+else:
+  STICKY_KEYS_CODES = ()
+  STICKY_NEUTRAL = ()
+  MOD_STICKY_CTRL = 0
+  _STICKY_HOLD_OF = {}
+  MOD_HOLD_NAME = {}
+  MOD_HOLD = {}
+  MOD_HOLD_CODE = {}
+  MOD_NEUTRAL = set()
 
 # Сопоставление evdev-кодов клавиш (QWERTY) -> РУССКАЯ буква (раскладка ЙЦУКЕН).
 # Значения русские, т.к. словарь подсказок (words.txt) и аббревиатуры — русские:
@@ -1133,9 +1175,11 @@ class SmartTyper: # Основной класс для автозамены и �
          # Запоминаем состояние shift ДО фильтра значений: ловим и
          # отпускание (value=0), иначе флаг регистра «залипнет» в True.
          self._evdev_shift = bool(event.value)
-         # Sticky-удержание: при ПЕРВОМ нажатии (value=1) shift
-         # остаётся «нажатым» ещё MOD_HOLD_SEC (см. _mod_hold_press)
-         if event.value == 1:
+         # Sticky-удержание: при ПЕРВОМ нажатии (value=1) shift залипает,
+         # но только если он в MOD_HOLD (список залипающих — STICKY_KEYS
+         # в начале файла). Трекинг _evdev_shift
+         # идёт всегда (для регистра букв).
+         if event.value == 1 and code in MOD_HOLD:
           self._mod_hold_press(code)
          continue
         if event.value not in (1, 2):
@@ -1254,9 +1298,9 @@ class SmartTyper: # Основной класс для автозамены и �
    self._mod_hold.clear()
    self._mod_hold_deadline = 0.0
   names = sorted(MOD_HOLD.get(c, str(c)) for c in held)
-  print(f"[MOD-HOLD] обычная клавиша — комбинация прошла, отпускаю {names} через 50 мс", flush=True)
+  print(f"[MOD-HOLD] обычная клавиша — комбинация прошла, отпускаю {names} через 150 мс", flush=True)
   def _rel():
-   time.sleep(0.05)
+   time.sleep(0.15)
    if self.py_typer:
     self.py_typer.release_sticky(held)
   threading.Thread(target=_rel, daemon=True).start()
@@ -1300,7 +1344,7 @@ class SmartTyper: # Основной класс для автозамены и �
    return True
   if self.disabled:
    return True
-  print(key)
+  # print(key)
   key_str = str(key).replace("'", "").replace(" ", "")
 
   if any(k in key_str for k in ["down", "right", "up", "left", "Key.tab", "Key.caps_lock", "Key.shift", "<65032>", "<65512>", "Key.ctrl_r"]):
