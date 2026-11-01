@@ -67,11 +67,13 @@ if HAVE_EVDEV:
    ecodes.KEY_LEFTCTRL,     # левый Ctrl нестабилен — не трогаем залипание
   )
   # Виртуальный evdev-код для залипания Ctrl (X keycode 254 -> Control_R,
-  # его назначает xmodmap: EvdevTyper.setup_sticky_keymap).
+  # назначает xmodmap в EvdevTyper.setup_sticky_keymap; КАК_РАБОТАЕТ §3.6).
   MOD_STICKY_CTRL = 246
   # Какую клавишу ДЕРЖИМ через UInput (НЕ та, что нажали физически — иначе
-  # физ. отпускание сбьёт залипание, Баг №7): Shift/Alt -> противоположная,
-  # Ctrl -> виртуальный MOD_STICKY_CTRL. Все шесть модификаторов уже здесь.
+  # физ. отпускание сбьёт залипание, Баг №7): Shift/Alt -> противоположная
+  # физ. клавиша (надежно, без xmodmap); Ctrl -> виртуальный MOD_STICKY_CTRL
+  # (97/левый-Ctrl ненадёжны на этой системе: левый перемапится на
+  # ISO_Next_Group, а тот же keycode слетает при физ. отпускании).
   _STICKY_HOLD_OF = {
    ecodes.KEY_LEFTSHIFT:  ecodes.KEY_RIGHTSHIFT,
    ecodes.KEY_RIGHTSHIFT: ecodes.KEY_LEFTSHIFT,
