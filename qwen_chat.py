@@ -26,11 +26,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 # --- модели -------------------------------------------------------------
 # Рабочая модель (полный файл, гарантированно грузится)
-DEFAULT_MODEL = "/mnt/807EB5FA7EB5E954/Program Files/ai models/lmstudio-community/Qwen2.5-Coder-1.5B-Instruct-GGUF/Qwen2.5-Coder-1.5B-Instruct-Q8_0.gguf"
-
-# Qwen3.8-27B: в этой папке только MTP-модуль (0.9 ГБ) и vision-модуль,
-# ГЛАВНЫЙ файл модели ~15 ГБ отсутствует - загрузка невозможна до его скачивания
-QWEN38_MTP = "/mnt/807EB5FA7EB5E954/Program Files/ai models/HauhauCS/Qwen3.8-27B-Uncensored-HauhauCS-Aggressive-MTP-GGUF/Qwen3.8-27B-Uncensored-HauhauCS-Aggressive-FastMTP-32K.gguf"
+DEFAULT_MODEL = "/mnt/807EB5FA7EB5E954/Program Files/ai models/Anand1711/qwen_8b_quantized_model/qwen35-4b-Q4_K_M.gguf"
 
 WEB_PAGE = """<!DOCTYPE html>
 <html lang="ru"><head><meta charset="utf-8">

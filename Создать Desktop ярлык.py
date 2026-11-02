@@ -417,8 +417,9 @@ def find_best_icon(image_list: list[str], search_name: str) -> str | None:
 
  Приоритеты:
  1. Точное совпадение имени (без учета регистра и расширения)
- 2. Имя + суффикс 'icon', 'logo', 'cover'
- 3. Частичное совпадение (подстрока)
+ 2. icon-<имя> / <имя>-icon и похожие варианты
+ 3. Имя + суффикс 'icon', 'logo', 'cover'
+ 4. Частичное совпадение (подстрока)
 
  Внутри каждой категории предпочтение отдается форматам: svg > png > jpg > bmp
  """
@@ -432,7 +433,8 @@ def find_best_icon(image_list: list[str], search_name: str) -> str | None:
  candidates = []
  
  for image in image_list:
-  name_part, ext = os.path.splitext(image)
+  # Работаем с именем файла, но возвращаем полный путь (важно для подпапок)
+  name_part, ext = os.path.splitext(os.path.basename(image))
   name_lower = name_part.lower()
   ext_lower = ext.lower()
   
@@ -444,13 +446,16 @@ def find_best_icon(image_list: list[str], search_name: str) -> str | None:
   # Категория 0: Точное совпадение имени файла
   if name_lower == search_lower:
    score = 0
-  # Категория 1: Имя + стандартные суффиксы для иконок
+  # Категория 1: icon-<имя> / logo-<имя> / cover-<имя>
+  elif re.match(rf'^(icon|logo|cover|art)[-_]?{re.escape(search_lower)}$', name_lower):
+   score = 5
+  # Категория 2: Имя + стандартные суффиксы для иконок
   elif re.match(rf'^{re.escape(search_lower)}[-_]?(icon|logo|cover|art)$', name_lower):
    score = 10
-  # Категория 2: Имя является началом строки (префикс)
+  # Категория 3: Имя является началом строки (префикс)
   elif name_lower.startswith(search_lower):
    score = 20 + len(name_lower) - len(search_lower)
-  # Категория 3: Подстрока (наименее желательный вариант)
+  # Категория 4: Подстрока (наименее желательный вариант)
   elif search_lower in name_lower:
    score = 100 + len(name_lower) - len(search_lower)
   else:
@@ -469,7 +474,7 @@ def find_best_icon(image_list: list[str], search_name: str) -> str | None:
 
 
 def get_files_with_extensions(folder_path):
- """Рекурсивно собирает все изображения в папке."""
+ """Рекурсивно собирает все изображения в папке (полные пути)."""
  image_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg'}
  image_files = []
  
@@ -477,69 +482,116 @@ def get_files_with_extensions(folder_path):
   for file in files:
    _, ext = os.path.splitext(file)
    if ext.lower() in image_extensions:
-    image_files.append(file)
+    # Возвращаем полный путь, иначе иконки из подпапок не находятся
+    image_files.append(os.path.join(root, file))
  
  return image_files
 
 
+def find_existing_icon(target_dir, base_name):
+ """
+ Ищет уже готовую иконку icon-<base_name>.<ext> рядом с файлом.
+ Это экономит время (не распаковывает AppImage заново) и сохраняет
+ иконку, которую пользователь положил вручную.
+ """
+ prefix = "icon-{0}".format(base_name).lower()
+ try:
+  for name in os.listdir(target_dir):
+   stem, ext = os.path.splitext(name)
+   if stem.lower() == prefix and ext.lower() in ICON_EXTENSIONS:
+    return os.path.join(target_dir, name)
+ except Exception:
+  pass
+ return None
+
+
+def quote_exec_arg(path):
+ """
+ Экранирует путь для ключа Exec в .desktop-файле.
+ Пробелы и спецсимволы не должны ломать запуск.
+ """
+ escaped = path.replace('\\', '\\\\').replace('"', '\\"')
+ escaped = escaped.replace('`', '\\`').replace('$', '\\$')
+ escaped = escaped.replace('%', '%%')
+ return '"{0}"'.format(escaped)
+
+
 def get_paths_file():
- """Парсит аргументы командной строки и возвращает пути."""
- # Объединяем аргументы (на случай если путь содержит пробелы и передан частями)
- url = " ".join(str(arg) for arg in sys.argv[1:]).strip()
- # url = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/opencode-desktop-linux-x86_64.AppImage"
- if not url:
+ """Возвращает список путей из аргументов командной строки."""
+ raw = [str(arg) for arg in sys.argv[1:]]
+ if not raw:
   print("Ошибка: Не передан путь к файлу.")
   sys.exit(1)
  
- full_path = url
- directory = os.path.dirname(full_path)
+ # Если путь с пробелами передали без кавычек, аргументы склеиваем обратно.
+ # Но несколько реально выделенных файлов Nemo передаёт отдельными аргументами.
+ if len(raw) > 1 and not all(os.path.exists(p) for p in raw):
+  raw = [" ".join(raw)]
+ 
+ return [p for p in raw if p.strip()]
+
+
+def create_shortcut(full_path):
+ """Создаёт .desktop-ярлык для одного файла."""
+ directory = os.path.dirname(full_path) or "."
  filename = os.path.basename(full_path)
- 
  filename_without_extension = os.path.splitext(filename)[0]
- 
- return directory, filename_without_extension, filename, full_path
+
+ # Сначала берём готовую иконку icon-<имя>, затем пробуем извлечь её из файла,
+ # и только потом ищем подходящую картинку рядом (find_best_icon).
+ icon_path = find_existing_icon(directory, filename_without_extension) or ""
+ if not icon_path and os.path.isfile(full_path):
+  icon_path = extract_icon_from_file(full_path, directory, filename_without_extension) or ""
+
+ if not icon_path:
+  # Получаем список картинок и ищем лучшую иконку
+  image_list = get_files_with_extensions(directory)
+  icon_path = find_best_icon(image_list, filename_without_extension) or ""
+
+ if not icon_path:
+  print(f"Предупреждение: Иконка для '{filename_without_extension}' не найдена.")
+  icon_path = "application-x-executable"  # системная иконка-заглушка
+
+ # Генерация .desktop файла (имя ярлыка — с расширением .desktop).
+ # Первая строка — shebang: позволяет запускать ярлык и через ./имя.desktop.
+ desktop_content = f"""#!/usr/bin/env -S gio launch
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name={filename_without_extension}.desktop
+Exec={quote_exec_arg(full_path)}
+Path={directory}
+Icon={icon_path}
+Terminal=false
+Categories=Game;
+StartupNotify=true
+"""
+
+ output_file = os.path.join(directory, filename_without_extension + ".desktop")
+ print(f"Создание файла: {output_file}")
+
+ with open(output_file, 'w') as f:
+  f.write(desktop_content)
+
+ # Права на исполнение (без shell — кавычки в пути ломали команду)
+ subprocess.run(['chmod', '+x', output_file])
+
+ # Помечаем ярлык доверенным: без этого Nemo/рабочий стол не запускает .desktop
+ try:
+  subprocess.run(['gio', 'set', output_file, 'metadata::trusted', 'true'],
+   capture_output=True, timeout=15)
+ except Exception:
+  pass
+
+ return output_file
 
 
 # === Основная логика ===
-directory, filename_without_extension, filename, full_path = get_paths_file()
-
-# Сначала пробуем извлечь иконку из самого файла — универсально, по типу:
-# AppImage, PE (exe/dll), deb/архивы; обычные картинки и всё остальное
-# подберёт поиск по папке рядом (find_best_icon).
-# Имя сохранённой иконки НЕ начинается с точки (icon-<имя>.<ext>).
-icon_path = ""
-if os.path.isfile(full_path):
-    icon_path = extract_icon_from_file(full_path, directory, filename_without_extension) or ""
-
-if not icon_path:
-    # Получаем список картинок и ищем лучшую иконку
-    image_list = get_files_with_extensions(directory)
-    best_icon_name = find_best_icon(image_list, filename_without_extension)
-    if best_icon_name:
-        icon_path = os.path.join(directory, best_icon_name)
-
-if not icon_path:
-    print(f"Предупреждение: Иконка для '{filename_without_extension}' не найдена.")
-
-# Генерация .desktop файла
-desktop_content = f"""[Desktop Entry]
-Name={filename_without_extension+str(".desktop")}
-Exec="{full_path}"
-Icon={icon_path}
-Terminal=false
-Categories=Game
-Type=Application
-"""
-
-output_file = os.path.join(directory, filename_without_extension+str(".desktop"))
-print(f"Создание файла: {output_file}")
-
-with open(output_file, 'w') as f:
- f.write(desktop_content)
-
-# Установка прав на исполнение (напрямую, без shell — bash -c здесь был лишним:
-# кавычки в пути ломали бы команду; на NTFS chmod всё равно молча ничего не сделает)
-subprocess.run(['chmod', '+x', output_file])
+for path in get_paths_file():
+ if os.path.isdir(path):
+  print(f"Предупреждение: '{path}' — папка, ярлык не создан.")
+  continue
+ create_shortcut(path)
 
 
 

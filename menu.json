@@ -155,7 +155,8 @@
             "Preferences",
             "favorite_files",
             "places",
-            "recents"
+            "recents",
+            "/home/egor"
         ]
     },
     "custom-menu-width": {
@@ -172,18 +173,39 @@
         "type": "generic",
         "default": [],
         "value": [
-            "hermes.desktop"
+            "alacarte-made-c615362d-d666-11f1-b8d7-10ffe0293379.desktop",
+            "alacarte-made-6d9a7cd5-d666-11f1-8c7c-10ffe0293379.desktop",
+            "alacarte-made-006bd1ea-b71b-11f1-bbdf-10ffe0293379.desktop",
+            "yandex-browser.desktop",
+            "google-chrome.desktop",
+            null,
+            "cinnamon-settings-startup.desktop",
+            "alacarte-made-67ebfe5b-089b-11f1-8267-10ffe0293379.desktop",
+            "com.cloudflare.WarpTaskbar.desktop",
+            "alacarte-made-ae28dbfb-08a5-11f1-980c-10ffe0293379.desktop",
+            null,
+            "alacarte-made-d694b5d6-b09b-11f1-b22b-10ffe0293379.desktop",
+            "com.obsproject.Studio.desktop",
+            "Launch GTAIV.desktop",
+            null,
+            "Far Cry.desktop",
+            null,
+            "alacarte-made-15a3f15a-fd4a-11f0-822d-10ffe0293379.desktop",
+            "timeshift-gtk.desktop",
+            "alacarte-made-892e7095-0894-11f1-8ed9-10ffe0293379.desktop"
         ]
     },
     "search-start-folder": {
         "type": "generic",
         "default": "",
-        "value": ""
+        "value": "/home/egor"
     },
     "folder-categories": {
         "type": "generic",
         "default": [],
-        "value": []
+        "value": [
+            "/home/egor"
+        ]
     },
     "all-apps-old-style": {
         "type": "generic",
@@ -337,7 +359,7 @@
         "default": true,
         "description": "Activate categories on click",
         "tooltip": "Activate categories on click instead of on hover",
-        "value": true
+        "value": false
     },
     "open-on-category": {
         "dependency": "show-categories",
@@ -648,7 +670,7 @@
         "units": "",
         "description": "Applications grid icon size (pixels)",
         "tooltip": "Applications grid icon size (pixels)",
-        "value": 30
+        "value": 28
     },
     "sidebar-icon-size": {
         "dependency": "show-sidebar",
@@ -660,7 +682,7 @@
         "units": "",
         "description": "Sidebar icon size (pixels)",
         "tooltip": "Sidebar icon size (pixels)",
-        "value": 32
+        "value": 30
     },
     "use-box-style": {
         "dependency": "show-sidebar",
