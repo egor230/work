@@ -125,6 +125,8 @@ class VoiceThread(QThread):
   self._running = True  # флаг живости для quit_app
   self._mode_lock = threading.Lock()  # защита смены режима
   self._stop_recording_flag = False  # флаг для корректной остановки записи
+  self._talk_running = False  # True, пока идёт сессия talk() (защита от параллельных сессий)
+  self.last_user_window = ""  # X-окно пользователя для возврата фокуса перед печатью
  
  def stop(self):
   self._running = False
@@ -332,6 +334,34 @@ class VoiceThread(QThread):
    pass
    return None
  
+ def _capture_active_window(self):  # Запоминает активное X-окно пользователя (не Chrome).
+  try:
+   wid = subprocess.check_output(["xdotool", "getactivewindow"], timeout=3).decode().strip()
+   if not wid:
+    self.last_user_window = ""
+    return
+   name = subprocess.check_output(["xdotool", "getwindowname", wid], timeout=3).decode(errors="ignore").lower()
+   if "chrome" in name or "chromium" in name:
+    self.last_user_window = ""
+   else:
+    self.last_user_window = wid
+  except Exception:
+   pass
+
+ def _restore_focus_before_typing(self):  # Возвращает фокус окну пользователя, если его украл Chrome.
+  if not self.last_user_window:
+   return
+  try:
+   cur = subprocess.check_output(["xdotool", "getactivewindow"], timeout=3).decode().strip()
+   if cur == self.last_user_window:
+    return
+   name = subprocess.check_output(["xdotool", "getwindowname", cur], timeout=3).decode(errors="ignore").lower()
+   if "chrome" in name or "chromium" in name:
+    subprocess.check_call(["xdotool", "windowactivate", self.last_user_window], timeout=5)
+    time.sleep(0.15)
+  except Exception:
+   pass
+
  def _ON(self):
   if self.mode == "record":
    self.icon_signal.emit(self.icon_record)
@@ -366,10 +396,11 @@ class VoiceThread(QThread):
         if button and self.click_element(button):
          time.sleep(0.3)
          text = self.get_recognized_text()
+         self._restore_focus_before_typing()
+         self.clear_input_field()
          if text:
           thread = threading.Thread(target=press_keys, args=(text,))
           thread.start()
-          self.clear_input_field()
           thread.join()
        
         print("Тишина дольше 2.3 сек, остановка записи")
@@ -384,20 +415,29 @@ class VoiceThread(QThread):
    print(f"Ошибка записи: {e}")
 
  def toggle(self):
-  self.first_start = True
+  with self._mode_lock:
+   if self._talk_running:
+    return
+   self._talk_running = True
   try:
-   self.icon_signal.emit(self.icon_record)
-   time.sleep(0.82)
-   aria_label = self.button.get_attribute(self.alisa) or ""
-   oknyx_core = self.button.find_element(By.CSS_SELECTOR, f".{self.OKNYX_CORE_CLASS}")
-   classes = oknyx_core.get_attribute("class") or ""
-   if "li" or "Out" in classes or "сл" in aria_label.lower():
-    self.driver.execute_script("arguments[0].click();", self.button)
-   self.show_message(None, False)
-  except Exception as e:
-   pass
-  print("0")
-  self.talk()
+   self.first_start = True
+   try:
+    self.icon_signal.emit(self.icon_record)
+    time.sleep(0.82)
+    aria_label = self.button.get_attribute(self.alisa) or ""
+    oknyx_core = self.button.find_element(By.CSS_SELECTOR, f".{self.OKNYX_CORE_CLASS}")
+    classes = oknyx_core.get_attribute("class") or ""
+    if "li" or "Out" in classes or "сл" in aria_label.lower():
+     self.driver.execute_script("arguments[0].click();", self.button)
+    self.show_message(None, False)
+   except Exception as e:
+    pass
+   print("0")
+   self._capture_active_window()
+   self.talk()
+  finally:
+   with self._mode_lock:
+    self._talk_running = False
  def run(self):
   self.start_selenium()
   if self.mode == "auto":
@@ -424,7 +464,7 @@ class VoiceThread(QThread):
      current_mode = self.mode
 
     self.mic = get_mute_status(self.source_id)
-    if current_mode == "record" and not self._stop_recording_flag:
+    if current_mode == "record" and not self._stop_recording_flag and not self._talk_running:
       print(self._stop_recording_flag)
       print(current_mode)
       self.toggle()
@@ -442,11 +482,11 @@ class VoiceThread(QThread):
       filter_elem = oknyx_core.get_attribute("data-testid") or ""
       classes = oknyx_core.get_attribute("class") or ""
 
-      print(classes)
+      # print(classes)
       self.message, counts1 = self.get_user_message(self.counts)
       if classes1 != classes:
        classes1=classes
-       # print(classes)
+       print(classes)
        circles = oknyx_core.find_elements(By.CSS_SELECTOR, ".StandaloneOknyxCore-ListeningCircle")
        circles1 = any(c.value_of_css_property("display") != "none" for c in circles)
 
@@ -519,7 +559,7 @@ class VoiceThread(QThread):
        if event.type == _evdev.ecodes.EV_KEY and event.code == _evdev.ecodes.KEY_END \
           and event.value == 1:
         with self._mode_lock:
-         self._stop_recording_flag = False
+         self._stop_recording_flag = self._talk_running
         self.toggle()
         time.sleep(0.5)
      except OSError:
@@ -590,8 +630,8 @@ class VoiceThread(QThread):
   if not button:
    return False
   for action in [
-   lambda: ActionChains(self.driver).move_to_element(button).pause(0.1).click().perform(),
    lambda: self.driver.execute_script("arguments[0].click();", button),
+   lambda: ActionChains(self.driver).move_to_element(button).pause(0.1).click().perform(),
    lambda: button.click()
   ]:
    try:
@@ -662,9 +702,10 @@ class MyWindow(QWidget):
    if self.thread.mode == "record" and mode == "auto":
      self.thread._stop_recording_flag = True
    self.thread.mode = mode
+   need_wait = self.thread._stop_recording_flag
 
   # ИСПРАВЛЕНО: sleep вынесен из блока блокировки во избежание deadlock-ов
-  if mode == "auto" and self.thread._stop_recording_flag:
+  if mode == "auto" and need_wait:
    time.sleep(0.3)  # даем время завершить запись
   
   set_mute("0", self.thread.source_id)
@@ -701,7 +742,7 @@ class MyWindow(QWidget):
     
     with self.thread._mode_lock:
      print("1111111111111111111111")
-     self.thread._stop_recording_flag = False
+     self.thread._stop_recording_flag = self.thread._talk_running
     
  def start_mute_timer(self):
   pass
