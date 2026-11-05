@@ -481,17 +481,17 @@ class VoiceThread(QThread):
       aria_label = self.button.get_attribute(self.alisa) or ""
       filter_elem = oknyx_core.get_attribute("data-testid") or ""
       classes = oknyx_core.get_attribute("class") or ""
-
+      print(filter_elem)
       # print(classes)
       self.message, counts1 = self.get_user_message(self.counts)
       if classes1 != classes:
        classes1=classes
-       print(classes)
+       # print(classes)
        circles = oknyx_core.find_elements(By.CSS_SELECTOR, ".StandaloneOknyxCore-ListeningCircle")
        circles1 = any(c.value_of_css_property("display") != "none" for c in circles)
 
-      if "spea" in filter_elem and "th" in classes:#  and circles1:# and "стоп" in aria_label and "th" in classes:
-       # print(filter_elem)
+      if "spea" in filter_elem and "spea" in classes:#  and circles1:# and "стоп" in aria_label and "th" in classes:
+
        # print(classes)
        print(aria_label)
        time.sleep(3)

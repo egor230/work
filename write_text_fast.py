@@ -1,4 +1,4 @@
-import sys, os, subprocess, json, threading, re, time, evdev, glob, math, logging, socket
+import sys, os, subprocess, json, threading, re, time, evdev, glob, math, logging, socket, fcntl
 from evdev import UInput, ecodes
 from PyQt6 import QtCore, QtWidgets, QtGui
 from PyQt6.QtCore import QTimer, QObject, pyqtSignal, Qt, QThread
@@ -17,6 +17,86 @@ from selenium.webdriver.common.action_chains import ActionChains
 from webdriver_manager.chrome import ChromeDriverManager
 import numpy as np
 import sounddevice as sd
+
+# ---------------------------------------------------------------------
+# КООРДИНАЦИЯ С PUNTO (без отдельного модуля — общие файлы в /tmp)
+# ---------------------------------------------------------------------
+# punto.py тоже печатает через СВОЮ UInput-клавиатуру и тоже переключает
+# раскладку (ISO_Next_Group). Две виртуальные клавиатуры в X сами по себе
+# не конфликтуют (X работает с ними как с двумя физическими), мешают две
+# вещи:
+#   - чужое переключение раскладки посреди печати -> буквы не на том
+#     языке;
+#   - «залипшие» модификаторы punto (Shift/Ctrl/Alt, липкие клавиши):
+#     чужой Shift меняет регистр наших букв, чужой Ctrl превращает букву
+#     в хоткей (Ctrl+S вместо 's').
+# Согласование — через два файла в /tmp (имена согласованы с punto.py):
+#   /tmp/kb_scripts_typing.lock — flock-блокировка печати (flock
+#     освобождается ядром при смерти процесса — зависнуть не может);
+#   /tmp/kb_sticky_mods.json   — punto публикует свои залипшие
+#     модификаторы, мы ждём их отпускания.
+# ---------------------------------------------------------------------
+_COORD_LOCK = "/tmp/kb_scripts_typing.lock"
+_COORD_STICKY = "/tmp/kb_sticky_mods.json"
+
+
+def _typing_lock_acquire(timeout=5.0):
+ """Взять межпроцессную блокировку печати (flock). Возвращает fd;
+ по таймауту печатает предупреждение и возвращает fd БЕЗ блокировки
+ (печать важнее идеальной сериализации)."""
+ fd = open(_COORD_LOCK, "a+")
+ deadline = time.time() + timeout
+ while True:
+  try:
+   fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+   break
+  except OSError:
+   if time.time() >= deadline:
+    print(f"[kb-coord] блокировка печати не получена за {timeout:.1f} с "
+     "(punto ещё печатает?) — продолжаю без неё")
+    break
+   time.sleep(0.05)
+ try:
+  fd.seek(0)
+  fd.write(str(os.getpid()))
+  fd.truncate()
+  fd.flush()
+ except Exception:
+  pass
+ return fd
+
+
+def _typing_lock_release(fd):
+ """Отпустить блокировку печати."""
+ try:
+  fcntl.flock(fd, fcntl.LOCK_UN)
+ except Exception:
+  pass
+ try:
+  fd.close()
+ except Exception:
+  pass
+
+
+def _wait_sticky_clear(timeout=6.0):
+ """Ждать, пока punto держит залипшие модификаторы (липкие клавиши):
+ чужой Shift портит регистр, чужой Ctrl/Alt превращает клавиши в хоткеи.
+ False, если так и не дождались — печатаем всё равно: дедлайн залипания
+ punto истекает максимум за STICKY_HOLD_SEC секунд."""
+ deadline = time.time() + timeout
+ while True:
+  try:
+   with open(_COORD_STICKY) as f:
+    st = json.load(f)
+   codes = st.get("codes") or []
+   dl = float(st.get("deadline") or 0.0)
+  except Exception:
+   return True
+  if not codes or dl <= time.time() or dl > time.time() + 30:
+   return True
+  if time.time() >= deadline:
+   return False
+  time.sleep(0.1)
 
 # Исключенные фразы
 excluded_phrases = ["С чего начнём?Нарисовать картинку", "Для звонков телефон как-то удобнее, давайте попробую там.",
@@ -424,21 +504,47 @@ class SmartTyper:
   # self.ensure_numlock_on()
 
  def find_keyboard(self):
+  # Выбираем НОВУЮ (самую «полную») физическую клавиатуру: из устройств,
+  # прошедших фильтр по имени, берём те, у которых реально есть буквы
+  # (KEY_A/KEY_ENTER/KEY_SPACE), и сортируем по числу клавиш EV_KEY.
+  # Было (баг, исправлено 2026-11-04): «первое совпадение в порядке
+  # glob» — на этой системе это «USB OPTICAL MOUSE  Keyboard»
+  # (/dev/input/event7, клавиатурный интерфейс МЫШИ без букв и без
+  # NumLock-LED): логика NumLock/LED работала не на той клавиатуре.
+  candidates = []
   for path in glob.glob("/dev/input/event*"):
    try:
     dev = evdev.InputDevice(path)
     name = (dev.name or "").lower()
     if ("keyboard" in name or "корпус" in name or "logitech" in name
         or "at translate" in name or "virtual core" in name) and "smart" not in name \
-        and "mouse setting" not in name:
-     print(f"[INFO] Физическая клавиатура найдена: {dev.name} ({path})")
-     return dev
+        and "mouse" not in name and "virtual" not in name:
+     # "mouse" отсекает и "Mouse Setting Control" (наш же UInput), и
+     # клавиатурные интерфейсы мышей ("USB OPTICAL MOUSE  Keyboard"),
+     # у которых EV_KEY длиннее, чем у настоящей клавиатуры.
+     # "virtual" отсекает ЛЮБЫЕ виртуальные клавиатуры: нашу
+     # "Smart-Virtual-Keyboard", punto "Punto-Virtual-Keyboard" и
+     # мышиного скрипта "Mouse Setting Control Virtual ...". Раньше
+     # фильтр опирался только на "smart"/"mouse", и после появления
+     # у punto устройства с другим именем оно считалось бы физической
+     # клавиатурой: его синтетический Shift ставил бы наш флаг регистра.
+     try:
+      caps = dev.capabilities().get(ecodes.EV_KEY, [])
+     except Exception:
+      continue
+     if ecodes.KEY_A in caps or ecodes.KEY_ENTER in caps or ecodes.KEY_SPACE in caps:
+      candidates.append((len(caps), dev))
    except PermissionError:
     continue
    except Exception:
     continue
-  print("[WARN] Физическая клавиатура не найдена (keyboard-only режим).")
-  return None
+  if not candidates:
+   print("[WARN] Физическая клавиатура не найдена (keyboard-only режим).")
+   return None
+  candidates.sort(key=lambda t: t[0], reverse=True)
+  dev = candidates[0][1]
+  print(f"[INFO] Физическая клавиатура найдена: {dev.name} ({dev.path})")
+  return dev
 
  def create_virtual_keyboard(self):
    capabilities = {
@@ -522,6 +628,16 @@ ecodes.KEY_MINUS, ecodes.KEY_EQUAL, ecodes.KEY_SLASH,
    return before, self._current_xkb_group()
 
  def warmup_xkb(self, timeout=4.0):
+  """Обёртка с координацией: не дёргать смену раскладки, пока другой
+  скрипт (punto) печатает — иначе его замена уйдёт не на том языке.
+  Таймаут: старт скрипта не должен зависнуть."""
+  fd = _typing_lock_acquire(timeout=3.0)
+  try:
+   return self._warmup_xkb_impl(timeout=timeout)
+  finally:
+   _typing_lock_release(fd)
+
+ def _warmup_xkb_impl(self, timeout=4.0):
    """Ждёт, пока X-сервер начнёт обрабатывать нашу виртуальную клавиатуру.
 
    Новая uinput-клавиатура подхватывается X'ом не мгновенно: первые
@@ -995,6 +1111,25 @@ ecodes.KEY_MINUS, ecodes.KEY_EQUAL, ecodes.KEY_SLASH,
   return False
 
  def type_text(self, text, delay=0.02):
+  """Печать с координацией с punto.py (см. шапку файла).
+
+  1. Ждём, пока punto отпустит «залипшие» модификаторы (липкие клавиши):
+     чужой Shift меняет регистр наших букв, чужой Ctrl/Alt превращает
+     клавиши в хоткеи (Ctrl+S вместо 's').
+  2. Берём межпроцессную блокировку печати (flock на
+     /tmp/kb_scripts_typing.lock): пока печатаем мы, punto не
+     переключает раскладку и не печатает свою замену, и наоборот.
+     flock освобождается ядром при смерти процесса, поэтому зависнуть
+     навсегда не может (см. Отчет §5).
+  """
+  _wait_sticky_clear(timeout=6.0)
+  fd = _typing_lock_acquire(timeout=5.0)
+  try:
+   return self._type_text_impl(text, delay=delay)
+  finally:
+   _typing_lock_release(fd)
+
+ def _type_text_impl(self, text, delay=0.02):
   """
   Печать текста, где русские и английские слова идут вперемешку.
 
@@ -1035,6 +1170,8 @@ ecodes.KEY_MINUS, ecodes.KEY_EQUAL, ecodes.KEY_SLASH,
   # иначе начало второго сообщения печаталось бы по устаревшей
   # раскладке (симптом «первые буквы иногда не на своём языке»).
   self._last_layout_check = 0.0
+  # Момент последней проверки чужих залипших модификаторов (/tmp/kb_sticky_mods.json).
+  self._last_sticky_check = 0.0
 
   warned = set()
   # Символы, которые нельзя напечатать текущей раскладкой: копятся и
@@ -1118,6 +1255,15 @@ ecodes.KEY_MINUS, ecodes.KEY_EQUAL, ecodes.KEY_SLASH,
 
    if keycode is None:
     continue
+
+   # Залипшие модификаторы ДРУГОГО скрипта (punto) могли появиться уже
+   # во время нашей печати: чужой Shift портит регистр, чужой Ctrl/Alt
+   # превращает клавишу в хоткей. Не чаще раза в 0.3 с переспрашиваем
+   # общее состояние (/tmp/kb_sticky_mods.json) и ждём отпускания
+   # (макс. ~5.5 с — дедлайн залипания punto всё равно истечёт).
+   if time.time() - getattr(self, "_last_sticky_check", 0) > 0.3:
+    self._last_sticky_check = time.time()
+    _wait_sticky_clear(timeout=5.5)
 
    # Перед любым нажатием сначала дописываем отложенные символы —
    # иначе они окажутся ПОЗЖЕ пробела/enter'а, который печатается
@@ -1287,7 +1433,7 @@ def _find_all_keyboards():
      # Отсекаем виртуальные клавиатуры (это и есть наши Selenium/мышь) и не-клавиатуры
      if ("keyboard" in name or "корпус" in name or "logitech" in name
          or "at translate" in name or "virtual core" in name) and "smart" not in name \
-         and "mouse setting" not in name:
+         and "mouse setting" not in name and "virtual" not in name:
       _list.append(dev)
     except PermissionError:
      continue

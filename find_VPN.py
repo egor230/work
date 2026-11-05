@@ -30,6 +30,11 @@ EXTRA_REPOS = [
     "https://raw.githubusercontent.com/ALIILAPRO/v2rayNG-Config/main/server.txt",
     "https://raw.githubusercontent.com/mfuu/v2ray/master/sub",          # base64-подписка, декодируется автоматически
     "https://raw.githubusercontent.com/pawdroid/Free-servers/main/sub", # base64-подписка, декодируется автоматически
+    # новые источники (добавлены 2026-11-05)
+    "https://raw.githubusercontent.com/hans-thomas/v2ray-subscription/main/servers.txt",
+    "https://raw.githubusercontent.com/3inker/v2ray-subscription/main/subs/all_ru.txt",
+    "https://raw.githubusercontent.com/idtheo/V2Ray-CleanIPs-Servers/main/clean.txt",  # только чистые IP
+    "https://raw.githubusercontent.com/roosterkid/openproxylist/main/V2RAY_RAW.txt",   # большой агрегатор
 ]
 # Зеркало на jsdelivr — используется автоматически, если raw.githubusercontent.com недоступен
 MIRROR_REWRITE = [
@@ -112,8 +117,12 @@ CACHE_FILE = os.path.join(LOGS_DIR, "cache.json")
 CACHE_TTL_GOOD = 24 * 3600
 CACHE_TTL_DEAD = 6 * 3600
 
-SPEED_BYTES = 4000000
+SPEED_BYTES = 10000000
 SPEED_TIMEOUT = 7
+SPEED_MIN_MBPS = 5.0          # финалисты медленнее этого отбрасываются (с фолбэком)
+MAX_PING = 350                # ICMP-пинг финалиста, больше — мягкий отказ
+MAX_ASN_DIVERGENCE = 3        # не больше разных провайдеров (ASNs) среди финалистов
+NET_TTL = {"ping": CACHE_TTL_DEAD, "asn": 30 * CACHE_TTL_GOOD, "speed": CACHE_TTL_DEAD}
 
 # ==================== ПОСТОЯННЫЙ VPN ====================
 RUN_BEST = True          # по умолчанию скрипт САМ включает VPN (xray + системный прокси)
@@ -141,6 +150,9 @@ tcp_cache = {}
 server_lock = threading.Lock()
 persist_cache = {}
 cache_dirty = False
+net_lock = threading.Lock()
+net_cache = {"ping": {}, "asn": {}, "speed": {}}   # {kind: {(key): [ts, value]}}
+no_whois = False
 run_server_ok = set()
 run_server_dead = set()
 run_server_blocked = set()
@@ -576,6 +588,12 @@ def load_cache():
             data = json.load(f)
         if isinstance(data, dict):
             persist_cache = data.get("servers", {}) or {}
+            with net_lock:
+                net_in = data.get("net", {})
+                if isinstance(net_in, dict):
+                    for kind, table in net_in.items():
+                        if kind in net_cache and isinstance(table, dict):
+                            net_cache[kind] = table
     except Exception:
         persist_cache = {}
 
@@ -586,8 +604,10 @@ def save_cache():
         return
     try:
         os.makedirs(LOGS_DIR, exist_ok=True)
+        with net_lock:
+            net_dump = {k: dict(v) for k, v in net_cache.items()}
         with open(CACHE_FILE, "w", encoding="utf-8") as f:
-            json.dump({"servers": persist_cache}, f, ensure_ascii=False)
+            json.dump({"servers": persist_cache, "net": net_dump}, f, ensure_ascii=False)
         cache_dirty = False
     except Exception:
         pass
@@ -601,17 +621,91 @@ def geo_lookup(ips):
     for i in range(0, len(ips), 100):
         chunk = ips[i:i + 100]
         try:
-            req = Request("http://ip-api.com/batch?fields=status,query,countryCode",
+            req = Request("http://ip-api.com/batch?fields=status,query,countryCode,as",
                           data=json.dumps(chunk).encode("utf-8"),
                           headers={"Content-Type": "application/json"})
             with urlopen(req, timeout=10) as r:
                 data = json.loads(r.read().decode("utf-8", errors="ignore"))
             for item in data:
                 if item.get("status") == "success":
-                    result[item.get("query")] = item.get("countryCode", "")
+                    ip = item.get("query")
+                    result[ip] = item.get("countryCode", "")
+                    m = re.match(r"AS(\d+)", item.get("as") or "")
+                    if m:
+                        cache_put("asn", ip, int(m.group(1)))
         except Exception:
             pass
     return result
+
+
+# ==================== PING / ASN / КЭШ СКОРОСТИ ====================
+
+def cache_get(kind, key):
+    """Метрики: (("host:port")|"ip") → значение, с TTL. None = нет свежих данных."""
+    with net_lock:
+        item = net_cache.get(kind, {}).get(str(key))
+    if not item:
+        return None
+    try:
+        ts, value = item
+    except Exception:
+        return None
+    ttl = NET_TTL.get(kind, CACHE_TTL_DEAD)
+    if time.time() - ts > ttl:
+        return None
+    return value
+
+
+def cache_put(kind, key, value):
+    global cache_dirty
+    with net_lock:
+        net_cache.setdefault(kind, {})[str(key)] = [time.time(), value]
+    cache_dirty = True
+
+
+def ping_ms(ip):
+    """ICMP-пинг (мс). None = нет данных / ICMP заблокирован."""
+    if not ip:
+        return None
+    cached = cache_get("ping", ip)
+    if cached is not None:
+        return cached
+    try:
+        r = subprocess.run(["ping", "-c", "1", "-W", "2", ip],
+                           capture_output=True, text=True, timeout=4)
+    except Exception:
+        return None          # нет утилиты/сети — не пачкаем кэш неудачей
+    m = re.search(r"time[=<](\d+(?:\.\d+)?)\s*ms", r.stdout or "")
+    if not m:
+        return None          # нет ответа/ICMP заблокирован — метрика неизвестна
+    value = float(m.group(1))
+    cache_put("ping", ip, value)
+    return value
+
+
+def get_asn(ip):
+    """Номер AS хоста через Team Cymru; 0 = не удалось определить."""
+    global no_whois
+    if not ip:
+        return 0
+    cached = cache_get("asn", ip)
+    if cached is not None:
+        return cached
+    if no_whois:
+        return cache_get("asn", ip) or 0     # заполняется из geo_lookup (ip-api)
+    try:
+        r = subprocess.run(["whois", "-h", "v4.whois.cymru.com", ip],
+                           capture_output=True, text=True, timeout=6)
+    except FileNotFoundError:
+        no_whois = True
+        return 0
+    except Exception:
+        return 0
+    m = re.search(r"\|\s*(\d+)\s*\|", r.stdout or "")
+    asn = int(m.group(1)) if m else 0
+    if asn > 0:
+        cache_put("asn", ip, asn)
+    return asn
 
 
 # ==================== ЗАПУСК XRAY И ТЕСТЫ ====================
@@ -882,6 +976,20 @@ def probe_with_speed(link, timeout=SPEED_TIMEOUT):
             xray_pids[:] = [p for p in xray_pids if p != proc.pid]
 
 
+def speed_for(link, timeout=SPEED_TIMEOUT):
+    """Скорость финалиста (МБ/с) с кэшем 6ч по адресу:порту сервера."""
+    skey = link_server(link)
+    key = f"{skey[0]}:{skey[1]}" if skey else link[:32]
+    cached = cache_get("speed", key)
+    if cached is not None:
+        return cached
+    res = probe_with_speed(link, timeout=timeout)
+    if res is not None and res[1] is not None:
+        cache_put("speed", key, res[1])
+        return res[1]
+    return None
+
+
 def probe_candidates(candidates, probed_map, times):
     top = sorted(candidates, key=lambda x: x[1])[:REPROBE_TOP]
     for link, lat in top:
@@ -963,9 +1071,13 @@ def sanitize_link(link):
 
 def best_meta(e):
     lat, ok, sd, mbps, proto, country = e[1], e[2], e[3], e[4], e[5], e[6]
-    s = f"latency={lat:.0f}ms chatgpt={ok} stddev={sd:.0f}"
+    s = f"latency={lat:.0f}ms ok={ok}/{REPROBE_TIMES} stddev={sd:.0f}"
     if mbps:
         s += f" speed={mbps:.1f}MB/s"
+    if len(e) > 7 and e[7] is not None:
+        s += f" ping={e[7]:.0f}ms"
+    if len(e) > 8 and e[8]:
+        s += f" asn={e[8]}"
     s += f" proto={proto} country={country or '?'}"
     return s
 
@@ -973,7 +1085,9 @@ def best_meta(e):
 def print_summary_row(e, rank):
     lat, ok, sd, mbps, proto, country = e[1], e[2], e[3], e[4], e[5], e[6]
     m = f"{mbps:.1f}MB/s" if mbps else "—"
-    print(f"{G}{rank:<5} {lat:>6.0f}мс {m:<9} {proto:<10} {country or '?':<4} {e[0][:48]}{N}")
+    ping_s = f"{e[7]:.0f}ms" if len(e) > 7 and e[7] is not None else "—"
+    asn_s = str(e[8]) if len(e) > 8 and e[8] else "—"
+    print(f"{G}{rank:<5} {lat:>6.0f}мс {m:<9} {ping_s:<7} asn={asn_s:<9} {proto:<10} {country or '?':<4} {e[0][:44]}{N}")
 
 
 def pick_alternatives(entries, need):
@@ -1251,7 +1365,7 @@ def process_results(final_entries, need=1):
             f.write(f"# BEST {best_meta(best)}\n{links_out[0]}\n")
             for i, a in enumerate(alternates):
                 f.write(f"# alt {i+1} {best_meta(a)}\n{sanitize_link(a[0])}\n")
-        with open(os.path.join(LOGS_DIR, "best_current.txt"), "w", encoding="utf-8") as f:
+        with open("best_current.txt", "w", encoding="utf-8") as f:
             f.write(f"# BEST {best_meta(best)}\n{links_out[0]}\n")
         print(f"{C}Отобранные конфиги: logs/selected_{ts}.txt и logs/best_current.txt{N}")
     except Exception as e:
@@ -1285,7 +1399,7 @@ def main():
 
     parser = argparse.ArgumentParser(description="Поиск ЛУЧШЕГО VPN с доступом к целевому сайту (VLESS/VMess/Trojan/Hysteria2).")
     parser.add_argument("--need", type=int, default=NEED, help="Сколько ключей выдать")
-    parser.add_argument("--max-test", type=int, default=2000, help="Макс. число тестируемых конфигов")
+    parser.add_argument("--max-test", type=int, default=8000, help="Макс. число тестируемых конфигов")
     parser.add_argument("--max-time", type=int, default=MAX_TIME, help="Общий тайм-бюджет в секундах")
     parser.add_argument("--reprobe", type=int, default=REPROBE_TIMES, help="Сколько раз прогонять кандидата")
     parser.add_argument("--countries", default=",".join(PREFERRED_COUNTRIES),
@@ -1454,19 +1568,7 @@ def main():
         probed = [kv for kv in probed if kv[0] in gated]
     kill_xrays()
 
-    # ФАЗА 3: скорость и геолокация
-    speed_map = {}
-    speed_targets = [link for link, _ in probed[:5]]
-    if speed_targets and time_left() > 10:
-        print(f"{C}Замер скорости финалистов...{N}")
-        with ThreadPoolExecutor(max_workers=min(5, len(speed_targets))) as pool:
-            futs = {pool.submit(probe_with_speed, link): link for link in speed_targets}
-            for fut in as_completed(futs):
-                res = fut.result()
-                if res is not None:
-                    speed_map[futs[fut]] = res[1]
-        kill_xrays()
-
+    # ФАЗА 3: скорость, ping, ASN и геолокация финалистов
     ips = []
     for link, _ in probed[:8]:
         ip, _ = server_ip(link)
@@ -1474,21 +1576,88 @@ def main():
             ips.append(ip)
     geo = geo_lookup(list(dict.fromkeys(ips)))
 
+    speed_map = {}
+    speed_targets = [link for link, _ in probed[:5]]
+    if speed_targets and time_left() > 10:
+        print(f"{C}Замер скорости финалистов ({len(speed_targets)})...{N}")
+        with ThreadPoolExecutor(max_workers=min(5, len(speed_targets))) as executor:
+            futs = {executor.submit(speed_for, link): link for link in speed_targets}
+            for fut in as_completed(futs):
+                mbps = fut.result()
+                if mbps is not None:
+                    speed_map[futs[fut]] = mbps
+                    print(f"{G}  скорость: {futs[fut][:44]}... → {mbps:.1f} MB/s{N}")
+                else:
+                    print(f"{Y}  скорость: {futs[fut][:44]}... → не меряется{N}")
+        kill_xrays()
+
     final = []
     for link, (med, ok, sd) in probed[:8]:
         ip, _ = server_ip(link)
         country = geo.get(ip) or extract_country(link)
-        final.append((link, med, ok, sd, speed_map.get(link), _proto_of(link), country))
+        pm = ping_ms(ip) if ip else None
+        asn = get_asn(ip) if ip else 0
+        final.append((link, med, ok, sd, speed_map.get(link), _proto_of(link), country,
+                      pm, asn))
 
-    # Итоговое ранжирование: стабильность → скорость ↓ → задержка ↑ → разброс ↑
-    final.sort(key=lambda e: (0 if e[2] >= stable_bar else 1,
-                              -(e[4] or 0.0),
-                              e[1],
-                              e[3]))
+    # Фильтр надёжности: скорость >= SPEED_MIN_MBPS и ICMP-пинг <= MAX_PING.
+    # Пунктик: если после фильтра никого не осталось — автоматический фолбэк на полный список.
+    def fit(e):
+        mbps, pm = e[4], e[7]
+        speed_ok = mbps is not None and mbps >= SPEED_MIN_MBPS
+        ping_ok = pm is None or pm > 9900 or pm <= MAX_PING   # пинг неизвестен → не рубим
+        return speed_ok and ping_ok
+
+    strong = [e for e in final if fit(e)]
+    if strong:
+        dropped = [e for e in final if not fit(e)]
+        for e in dropped:
+            why = []
+            if e[4] is not None and e[4] < SPEED_MIN_MBPS:
+                why.append(f"скорость {e[4]:.1f}MB/s < {SPEED_MIN_MBPS}")
+            elif e[4] is None:
+                why.append("скорость не меряется")
+            if e[7] is not None and e[7] > MAX_PING:
+                why.append(f"ping {e[7]:.0f}ms > {MAX_PING}")
+            print(f"{Y} отбракован ({'; '.join(why) or 'нет данных'}): {e[0][:50]}{N}")
+        pool = strong
+    else:
+        pool = final
+        print(f"{R}Ни один финалист не прошёл фильтр скорости/пинга — фолбэк на всех.{N}")
+
+    # Ранжирование: стабильность → скорость ↓ → latency ↑ → stddev ↑ → страна ↑ → ping ↑
+    pool.sort(key=lambda e: (0 if e[2] >= stable_bar else 1,
+                             -(e[4] or 0.0),
+                             e[1],
+                             e[3],
+                             0 if (e[6] or "").lower() in [c.lower() for c in PREFERRED_COUNTRIES] else 1,
+                             e[7] if e[7] is not None else 9999,
+                             e[8]))
+
+    # ASN: не больше MAX_ASN_DIVERGENCE разных провайдеров среди финалистов (победитель всегда остаётся)
+    seen_asns = set()
+    kept = []
+    for i, e in enumerate(pool):
+        a = e[8] or 0
+        if a and a not in seen_asns and len(seen_asns) >= MAX_ASN_DIVERGENCE and i > 0:
+            print(f"{Y} отброшен по ASN-разнообразию (>{MAX_ASN_DIVERGENCE}): {e[0][:50]}{N}")
+            continue
+        if a:
+            seen_asns.add(a)
+        kept.append(e)
+    pool = kept
+
+    final = pool
 
     process_results(final, NEED)
     save_cache()
-    print(f"{G}Готово!{N}")
+    if final:
+        b = final[0]
+        speed_s = f", скорость {b[4]:.1f} MB/s" if b[4] else ""
+        ping_s = f", ping {b[7]:.0f}ms" if len(b) > 7 and b[7] is not None else ""
+        print(f"{G}Готово! Самый быстрый и надёжный ключ: {b[0][:70]}...{speed_s}{ping_s}{N}")
+    else:
+        print(f"{R}Готово (ничего не найдено).{N}")
 
 
 if __name__ == "__main__":

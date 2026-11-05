@@ -1,4 +1,4 @@
-import json, os, re, subprocess, threading, time, sys, bisect, traceback, pyatspi, tkinter as tk, glob
+import fcntl, json, os, re, subprocess, threading, time, sys, bisect, traceback, pyatspi, tkinter as tk, glob
 from select import select
 from tkinter import Tk, Toplevel, Label, Frame
 from pynput import mouse, keyboard
@@ -29,6 +29,79 @@ STICKY_HOLD_SEC = 5.0
 # автоматически переводятся в evdev-коды (ищите STICKY_KEYS_CODES).
 # =====================================================================
 MOD_HOLD_SEC = STICKY_HOLD_SEC          # алиас для остального кода (не трогать)
+
+# ---------------------------------------------------------------------
+# КООРДИНАЦИЯ С ГОЛОСОВЫМ ВВОДОМ (без отдельного модуля — файлы в /tmp)
+# ---------------------------------------------------------------------
+# write_text_fast.py тоже печатает через СВОЮ UInput-клавиатуру и тоже
+# переключает раскладку (ISO_Next_Group). Две виртуальные клавиатуры в X
+# сами по себе не конфликтуют (X работает с ними как с двумя физическими
+# клавиатурами), мешают две вещи:
+#   - его переключение раскладки посреди НАШЕЙ замены слов -> буквы не
+#     на том языке;
+#   - наши «залипшие» модификаторы (STICKY_KEYS) искажают ЕГО печать:
+#     чужой Shift меняет регистр его букв, чужой Ctrl превращает букву в
+#     хоткей (Ctrl+S вместо 's').
+# Согласование — через два файла в /tmp (имена согласованы с
+# write_text_fast.py):
+#   /tmp/kb_scripts_typing.lock — flock-блокировка печати (flock
+#     освобождается ядром при смерти процесса — зависнуть не может);
+#   /tmp/kb_sticky_mods.json   — мы публикуем свои залипшие модификаторы,
+#     голосовой ввод ждёт их отпускания.
+# ---------------------------------------------------------------------
+_COORD_LOCK = "/tmp/kb_scripts_typing.lock"
+_COORD_STICKY = "/tmp/kb_sticky_mods.json"
+
+
+def _typing_lock_acquire(timeout=5.0):
+ """Взять межпроцессную блокировку печати (flock). Возвращает fd;
+ по таймауту печатает предупреждение и возвращает fd БЕЗ блокировки
+ (печать важнее идеальной сериализации)."""
+ fd = open(_COORD_LOCK, "a+")
+ deadline = time.time() + timeout
+ while True:
+  try:
+   fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+   break
+  except OSError:
+   if time.time() >= deadline:
+    print(f"[kb-coord] блокировка печати не получена за {timeout:.1f} с "
+      "(голосовой ввод ещё печатает?) — продолжаю без неё", flush=True)
+    break
+   time.sleep(0.05)
+ try:
+  fd.seek(0)
+  fd.write(str(os.getpid()))
+  fd.truncate()
+  fd.flush()
+ except Exception:
+  pass
+ return fd
+
+
+def _typing_lock_release(fd):
+ """Отпустить блокировку печати."""
+ try:
+  fcntl.flock(fd, fcntl.LOCK_UN)
+ except Exception:
+  pass
+ try:
+  fd.close()
+ except Exception:
+  pass
+
+
+def _sticky_publish(codes, deadline):
+ """Опубликовать состояние залипших модификаторов для голосового ввода:
+ список evdev-кодов и дедлайн отпускания (time.time()). Пишется атомарно
+ (tmp+replace); при ошибке молчим — координация не должна ломать печать."""
+ try:
+  tmp = _COORD_STICKY + ".tmp"
+  with open(tmp, "w") as f:
+   json.dump({"codes": list(codes or []), "deadline": float(deadline or 0.0)}, f)
+  os.replace(tmp, _COORD_STICKY)
+ except Exception:
+  pass
 
 ENTRY_NAMES = ("file_search_entry", "content_search_entry")
 SEARCH_LABEL_KEYWORDS = ("поиск файлов", "содержит", "search files", "contains", "поиск", "search", "find")
@@ -245,11 +318,18 @@ class EvdevTyper:
     MOD_STICKY_CTRL
    ]
   try:
+   # Имя и product ДОЛЖНЫ отличаться от виртуальной клавиатуры голосового
+   # ввода (write_text_fast.py): раньше оба скрипта создавали устройства
+   # с одинаковым именем "Smart-Virtual-Keyboard" и vendor/product
+   # 0x1234:0x5678 — различить их было нельзя ни в X, ни в фильтрах
+   # физических клавиатур (см. Отчет §6.2.1). Фильтры клавиатур всех
+   # скриптов отсекают имена с "virtual"/"smart"/"mouse" — любое из
+   # наших виртуальных устройств везде считается чужим.
    self.ui = UInput(
     {ecodes.EV_KEY: caps_keys},
-    vendor=0x1234, product=0x5678,
+    vendor=0x1234, product=0x5679,
     bustype=ecodes.BUS_USB,
-    name="Smart-Virtual-Keyboard"
+    name="Punto-Virtual-Keyboard"
    )
    self.ui.syn()
   except Exception as e:
@@ -655,25 +735,43 @@ class SmartTyper: # Основной класс для автозамены и �
   if self.replacing:
    return
   self.replacing = True
-  backspace_count = len(self.current_word) + extra_backspace
-  self._backspace(backspace_count)
-  t = threading.Thread(target=self._type_text_and_finish, args=(new_word,))
-  t.start()
-  self.clean()
-  t.join()
-  self.replacing = False
+  fd = None
+  try:
+   # Блокировка печати: backspace + печать замены — атомарно по
+   # отношению к печати голосового ввода. Иначе его переключение
+   # раскладки посреди нашей замены давало буквы не на том языке.
+   # Таймаут 5 с: если голосовой ввод печатает длинный текст, ждём,
+   # но не вечно (flock освобождается ядром при смерти процесса).
+   fd = _typing_lock_acquire(timeout=5.0)
+   backspace_count = len(self.current_word) + extra_backspace
+   self._backspace(backspace_count)
+   t = threading.Thread(target=self._type_text_and_finish, args=(new_word,))
+   t.start()
+   self.clean()
+   t.join()
+  finally:
+   if fd is not None:
+    _typing_lock_release(fd)
+   self.replacing = False
 
  def _do_replace_abbrev_async(self): # Асинхронно заменяет аббревиатуру
   if self.replacing or not self.abbrev_res:
    return
   self.replacing = True
-  backspace_count = len(self.current_word)+1
-  self._backspace(backspace_count)
-  t = threading.Thread(target=self._type_text_and_finish, args=(self.abbrev_res,))
-  self.clean()
-  t.start()
-  t.join()
-  self.replacing = False
+  fd = None
+  try:
+   # Блокировка печати: см. комментарий в _replace_word_async.
+   fd = _typing_lock_acquire(timeout=5.0)
+   backspace_count = len(self.current_word)+1
+   self._backspace(backspace_count)
+   t = threading.Thread(target=self._type_text_and_finish, args=(self.abbrev_res,))
+   self.clean()
+   t.start()
+   t.join()
+  finally:
+   if fd is not None:
+    _typing_lock_release(fd)
+   self.replacing = False
 
  # --- ATSPI Nemo Live Search ---
  def _panel_has_search_label(self, node): # Проверяет, есть ли среди прямых детей label'а подписи поиска
@@ -797,9 +895,14 @@ class SmartTyper: # Основной класс для автозамены и �
      # Обновляем состояние
      self.nemo_states[key] = [None, text, now + COOLDOWN_SEC]
 
-     # Эмулируем Enter (evdev, без xte/xdotool)
+     # Эмулируем Enter (evdev, без xte/xdotool). Под блокировкой печати:
+     # чужой Enter посреди печати голосового ввода разбил бы его текст.
      if self.py_typer and self.py_typer.ui:
-      self.py_typer._press(ecodes.KEY_ENTER, False)
+      fd = _typing_lock_acquire(timeout=1.0)
+      try:
+       self.py_typer._press(ecodes.KEY_ENTER, False)
+      finally:
+       _typing_lock_release(fd)
      time.sleep(0.1) # Ждём, чтобы эмулированный Enter успел дойти до _on_press
      self.replacing = False
     except Exception as e:
@@ -1282,6 +1385,11 @@ class SmartTyper: # Основной класс для автозамены и �
    self._mod_hold[hold_code] = True
    remaining = self._mod_hold_deadline - now
   print(f"[MOD-HOLD] нажал {MOD_HOLD.get(code, MOD_HOLD_NAME.get(code, code))}, залип {MOD_HOLD.get(hold_code, MOD_HOLD_NAME.get(hold_code, hold_code))}, удерживать {remaining:.1f} c", flush=True)
+  # Публикуем состояние для голосового ввода (write_text_fast.py):
+  # он ждёт отпускания наших залипших модификаторов, иначе его буквы
+  # печатаются под чужим Shift (неверный регистр) или Ctrl/Alt
+  # (превращаются в хоткеи, Ctrl+S вместо 's').
+  _sticky_publish(list(self._mod_hold), self._mod_hold_deadline)
 
  def _mod_hold_consume(self):
   """Нажата клавиша, НЕ входящая в MOD_HOLD (буква/цифра/пробел/стрелка…).
@@ -1299,6 +1407,7 @@ class SmartTyper: # Основной класс для автозамены и �
    held = list(self._mod_hold)
    self._mod_hold.clear()
    self._mod_hold_deadline = 0.0
+  _sticky_publish([], 0.0)  # залипших больше нет — сообщаем голосовому вводу
   names = sorted(MOD_HOLD.get(c, str(c)) for c in held)
   print(f"[MOD-HOLD] обычная клавиша — комбинация прошла, отпускаю {names} через 150 мс", flush=True)
   def _rel():
@@ -1323,6 +1432,7 @@ class SmartTyper: # Основной класс для автозамены и �
     print(f"[MOD-HOLD] дедлайн прошёл — отпускаю {names}", flush=True)
     if self.py_typer:
      self.py_typer.release_sticky(held)
+    _sticky_publish([], 0.0)  # дедлайн истёк — сообщаем голосовому вводу
   except Exception:
    pass
   return True
