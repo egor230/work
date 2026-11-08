@@ -110,3 +110,164 @@ chrome.contextMenus.onClicked.addListener((info) => {
     url: "https://www.youtube.com/results?search_query=" + encodeURIComponent(query)
   });
 });
+
+// === efyt-speeds-json: зеркало скоростей по каналам в JSON-файл (§12) ===
+//
+// Таблица канальных скоростей (§2/§7/§9) хранится в
+// chrome.storage.local.channelspeeds. Все писатели — channel-speed-set
+// (колесо, кнопки, нативное меню YouTube, горячие клавиши) и панель
+// скорости (channel-speed-bridge) — меняют этот один ключ, поэтому
+// достаточно слушать chrome.storage.onChanged: фиксируется любой способ
+// смены скорости.
+//
+// Зеркало на диск:
+//   1) через native messaging host com.efyt.channelspeeds
+//      (native-host/efyt-json-host.py, регистрация — install-native-host.sh)
+//      — пишет точно в channelspeeds.json в папке расширения;
+//   2) если хост не установлен — fallback через chrome.downloads:
+//      «расширения/Enhancer for YouTube/channelspeeds.json» относительно
+//      папки загрузок браузера. При стандартной папке загрузок это та же
+//      папка расширения; при изменённой — подпапка внутри неё (README §12).
+//
+// Если файл на диске новее внутреннего хранилища — его правили вручную:
+// содержимое импортируется обратно в chrome.storage (двусторонняя синхронизация).
+
+const EFYT_SPEEDS_HOST = "com.efyt.channelspeeds";
+const EFYT_SPEEDS_FALLBACK_REL = "расширения/Enhancer for YouTube/channelspeeds.json";
+const EFYT_SPEEDS_DEBOUNCE_MS = 1500;
+
+let efytSpdJsonTimer = 0, efytSpdJsonBusy = !1, efytSpdJsonDirty = !1, efytSpdJsonSig = "";
+
+/** Сигнатура таблицы (без меток времени) — чтобы не перезаписывать файл без изменений. */
+function efytSpdSignature(speeds) {
+  const keys = Object.keys(speeds).sort();
+  return JSON.stringify(keys.map(k => [k, speeds[k]]));
+}
+
+/** Собирает JSON-текст: speeds — каноническая таблица, channels — человекочитаемый вид. */
+function efytSpdJsonBuild(speeds) {
+  const now = new Date().toISOString();
+  const namesBySpeed = {};
+  for (const k in speeds) {
+    const v = speeds[k];
+    if (typeof v === "number" && Number.isFinite(v) && k.startsWith("name:")) {
+      (namesBySpeed[v] || (namesBySpeed[v] = [])).push(k.slice(5));
+    }
+  }
+  const channels = [];
+  for (const k in speeds) {
+    const v = speeds[k];
+    if (typeof v !== "number" || !Number.isFinite(v) || k.startsWith("name:")) continue;
+    const names = namesBySpeed[v] || [];
+    // Имя однозначно восстанавливается, когда у скорости один «name:»-ключ.
+    channels.push({ id: k, name: 1 === names.length ? names[0] : null, speed: v });
+  }
+  channels.sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id), "ru"));
+  return JSON.stringify({
+    _meta: {
+      about: "Скорости воспроизведения по каналам — Enhancer for YouTube™ (кастом, §12)",
+      note: "speeds — каноническая таблица: ключ = channelId либо name:<Имя канала>, значение = скорость. Файл перезаписывается расширением автоматически; если файл отредактирован вручную и стал новее внутреннего хранилища — правки импортируются в расширение.",
+      updatedAt: now,
+      channels: channels.length
+    },
+    updatedAt: now,
+    speeds: speeds,
+    channels: channels
+  }, null, 2) + "\n";
+}
+
+/** Один запрос к native host: Promise с ответом или reject (хост недоступен/таймаут). */
+function efytSpdHostRequest(msg) {
+  return new Promise((resolve, reject) => {
+    let settled = !1, port;
+    try { port = chrome.runtime.connectNative(EFYT_SPEEDS_HOST); }
+    catch (e) { reject(e); return; }
+    const t = setTimeout(() => {
+      if (settled) return;
+      settled = !0;
+      try { port.disconnect(); } catch (e) {}
+      reject(new Error("host timeout"));
+    }, 5000);
+    port.onMessage.addListener(m => {
+      if (settled) return;
+      settled = !0;
+      clearTimeout(t);
+      try { port.disconnect(); } catch (e) {}
+      resolve(m);
+    });
+    port.onDisconnect.addListener(() => {
+      if (settled) return;
+      settled = !0;
+      clearTimeout(t);
+      reject(new Error(chrome.runtime.lastError ? chrome.runtime.lastError.message : "host disconnected"));
+    });
+    port.postMessage(msg);
+  });
+}
+
+/** Импорт отредактированного вручную JSON обратно в chrome.storage.local. */
+async function efytSpdJsonImport(text, mtimeMs) {
+  const doc = JSON.parse(text);
+  const speeds = doc && doc.speeds;
+  if (!speeds || typeof speeds !== "object" || Array.isArray(speeds)) {
+    throw new Error("в JSON нет объекта speeds");
+  }
+  const clean = {};
+  for (const k in speeds) {
+    if (typeof speeds[k] === "number" && Number.isFinite(speeds[k])) clean[k] = speeds[k];
+  }
+  await chrome.storage.local.set({ channelspeeds: clean, channelspeedsUpdatedAt: mtimeMs || Date.now() });
+  efytSpdJsonSig = efytSpdSignature(clean);
+}
+
+async function efytSpdJsonSync() {
+  if (efytSpdJsonBusy) { efytSpdJsonDirty = !0; return; }
+  efytSpdJsonBusy = !0;
+  try {
+    const st = await chrome.storage.local.get({ channelspeeds: {}, channelspeedsUpdatedAt: 0 });
+    const speeds = st.channelspeeds && "object" === typeof st.channelspeeds && !Array.isArray(st.channelspeeds) ? st.channelspeeds : {};
+    const sig = efytSpdSignature(speeds);
+    try {
+      // --- 1) native host ---
+      const cur = await efytSpdHostRequest({ type: "read" });
+      if (cur && cur.ok) {
+        if (cur.data && cur.mtimeMs > st.channelspeedsUpdatedAt) {
+          // Файл на диске новее хранилища → его правили вручную: импортируем.
+          await efytSpdJsonImport(cur.data, cur.mtimeMs);
+          return;
+        }
+        if (sig !== efytSpdJsonSig) {
+          const res = await efytSpdHostRequest({ type: "write", data: efytSpdJsonBuild(speeds) });
+          if (res && res.ok) {
+            efytSpdJsonSig = sig;
+            await chrome.storage.local.set({ channelspeedsUpdatedAt: res.mtimeMs || Date.now() });
+          }
+        }
+        return;
+      }
+      // cur.ok === false (ошибка чтения) — падаем в fallback
+    } catch (e) { /* хост не установлен или не отвечает — fallback */ }
+    // --- 2) fallback: chrome.downloads, перезапись одного и того же файла ---
+    if (sig !== efytSpdJsonSig) {
+      efytSpdJsonSig = sig;
+      const url = "data:application/json;charset=utf-8," + encodeURIComponent(efytSpdJsonBuild(speeds));
+      chrome.downloads.download({ url, filename: EFYT_SPEEDS_FALLBACK_REL, conflictAction: "overwrite", saveAs: !1 },
+        () => void chrome.runtime.lastError);
+      await chrome.storage.local.set({ channelspeedsUpdatedAt: Date.now() });
+    }
+  } finally {
+    efytSpdJsonBusy = !1;
+    if (efytSpdJsonDirty) { efytSpdJsonDirty = !1; setTimeout(efytSpdJsonSync, 300); }
+  }
+}
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== "local" || !changes.channelspeeds) return;
+  // Первое изменение пишем сразу, серию слепляем дебаунсом.
+  if (!efytSpdJsonTimer) efytSpdJsonSync();
+  clearTimeout(efytSpdJsonTimer);
+  efytSpdJsonTimer = setTimeout(() => { efytSpdJsonTimer = 0; efytSpdJsonSync(); }, EFYT_SPEEDS_DEBOUNCE_MS);
+});
+
+chrome.runtime.onStartup.addListener(() => { efytSpdJsonSig = ""; setTimeout(efytSpdJsonSync, 800); });
+chrome.runtime.onInstalled.addListener(() => { efytSpdJsonSig = ""; setTimeout(efytSpdJsonSync, 800); });

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-import os, sys, json, time, threading, tempfile, subprocess, signal, socket, base64, random, argparse, re, statistics, functools, shutil
-from urllib.request import urlopen, Request
-from urllib.parse import parse_qs, quote
+import os, sys, json, time, threading, tempfile, subprocess, signal, socket, base64, random, argparse, re, statistics, functools, shutil, glob
+from urllib.request import urlopen, Request, build_opener, ProxyHandler
+from urllib.parse import parse_qs, quote, unquote
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 try:
@@ -18,29 +18,40 @@ except Exception:
 
 # ==================== НАСТРОЙКИ ====================
 
-REPO_ORIG = "https://raw.githubusercontent.com/AvenCores/goida-vpn-configs/main/githubmirror"
-FILES_ORIG = [f"{i}.txt" for i in range(1, 27)]
-EXTRA_REPOS = [
-    "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/Vless-Reality-White-Lists-Rus-Mobile.txt",
+# Источники проверены живыми 2026-11-06 (старый главный goida-vpn-configs и ряд
+# крупных агрегаторов удалены с GitHub — 404, поэтому список собран заново и
+# каждая ссылка проверена curl'ом на ответ 200 + наличие ключей внутри).
+SOURCES = [
+    "https://raw.githubusercontent.com/SoliSpirit/v2ray-configs/main/all_configs.txt",          # ~10000 ключей
+    "https://raw.githubusercontent.com/ALIILAPRO/v2rayNG-Config/main/server.txt",               # ~4300
+    "https://raw.githubusercontent.com/mahdibland/V2RayAggregator/master/sub/sub_merge.txt",    # ~2650
+    "https://raw.githubusercontent.com/MhdiTaheri/V2rayCollector/main/sub/mix",                 # ~1000
+    "https://raw.githubusercontent.com/MhdiTaheri/V2rayCollector/main/sub/vless",
+    "https://raw.githubusercontent.com/MhdiTaheri/V2rayCollector/main/sub/hysteria",
+    "https://raw.githubusercontent.com/MohammadBahemmat/V2ray-Collector/main/all_servers.txt",  # ~800
+    "https://raw.githubusercontent.com/MohammadBahemmat/V2ray-Collector/main/Tested.txt",       # проверенные
+    "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/main/kizyakbeta7.txt",         # ~420
+    "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/main/kizyakbeta6BL.txt",
+    "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/main/kizyaktestru.txt",        # ~60 hysteria2
+    "https://raw.githubusercontent.com/ermaozi/get_subscribe/main/subscribe/v2ray.txt",         # ~400, base64
+    "https://raw.githubusercontent.com/Leon406/SubCrawler/master/sub/share/v2",                 # ~340, base64
+    "https://raw.githubusercontent.com/roosterkid/openproxylist/main/V2RAY_RAW.txt",
+    "https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/top100.txt",           # отобранные топы
+    "https://raw.githubusercontent.com/sinavm/SVM/main/config.txt",
+    "https://raw.githubusercontent.com/mfuu/v2ray/master/sub",
     "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS.txt",
-    "https://raw.githubusercontent.com/Romaxa55/MegaV_Public/main/subs/vless.txt",
-    # новые источники (добавлены 2026-09-08, проверены живыми)
-    "https://raw.githubusercontent.com/Epodonios/v2ray-configs/main/All_Configs_Sub.txt",
-    "https://raw.githubusercontent.com/mahdibland/V2RayAggregator/master/sub/sub_merge.txt",
-    "https://raw.githubusercontent.com/ALIILAPRO/v2rayNG-Config/main/server.txt",
-    "https://raw.githubusercontent.com/mfuu/v2ray/master/sub",          # base64-подписка, декодируется автоматически
-    "https://raw.githubusercontent.com/pawdroid/Free-servers/main/sub", # base64-подписка, декодируется автоматически
-    # новые источники (добавлены 2026-11-05)
-    "https://raw.githubusercontent.com/hans-thomas/v2ray-subscription/main/servers.txt",
+    "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/Vless-Reality-White-Lists-Rus-Mobile.txt",
     "https://raw.githubusercontent.com/3inker/v2ray-subscription/main/subs/all_ru.txt",
-    "https://raw.githubusercontent.com/idtheo/V2Ray-CleanIPs-Servers/main/clean.txt",  # только чистые IP
-    "https://raw.githubusercontent.com/roosterkid/openproxylist/main/V2RAY_RAW.txt",   # большой агрегатор
-]
-# Зеркало на jsdelivr — используется автоматически, если raw.githubusercontent.com недоступен
-MIRROR_REWRITE = [
-    ("https://raw.githubusercontent.com/", "https://cdn.jsdelivr.net/gh/"),
-    ("@main/", "@main/"),
-    ("@master/", "@master/"),
+    "https://raw.githubusercontent.com/Romaxa55/MegaV_Public/main/subs/vless.txt",
+    "https://raw.githubusercontent.com/pawdroid/Free-servers/main/sub",                          # base64
+    "https://raw.githubusercontent.com/freefq/free/master/v2",                                   # base64
+    # добавлены 2026-11-07 (найдены поиском по GitHub, проверены живыми)
+    "https://raw.githubusercontent.com/Danialsamadi/v2go/main/AllConfigsSub.txt",                # ~340
+    "https://raw.githubusercontent.com/Danialsamadi/v2go/main/Splitted-By-Protocol/vless.txt",
+    "https://raw.githubusercontent.com/miladtahanian/Config-Collector/main/mixed_iran.txt",      # ~400
+    "https://raw.githubusercontent.com/ProblemTheCode/SylphNet-public/main/sub/sub_plain.txt",   # ~230
+    "https://raw.githubusercontent.com/zxcursedzxc0721/vless-subscriptions/main/all/vless.txt",  # ~300
+    "https://raw.githubusercontent.com/zxcursedzxc0721/vless-subscriptions/main/ru/vless.txt",   # ~180
 ]
 
 NEED = 1
@@ -51,11 +62,12 @@ MAX_DL_WORKERS = 16
 MAX_TEST_WORKERS = 80
 
 MAX_TIME = 180
-REPROBE_BUDGET = 40
+REPROBE_BUDGET = 240          # резервируем время на re-probe + финальный гейт + скорость
 REPROBE_TIMES = 3
-REPROBE_TOP = 8
+REPROBE_TOP = 12
 
-HIDDIFY_APPIMAGE = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/Hiddify-Linux-x64-AppImage.AppImage"
+HIDDIFY_DIR = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have"
+HIDDIFY_APPIMAGE = os.path.join(HIDDIFY_DIR, "Hiddify.AppImage")
 LAUNCH_HIDDIFY = True
 PREFERRED_COUNTRIES = ["nl", "gb", "de", "fr", "pl", "lt", "lv", "ee", "se", "no", "fi", "at", "ch", "be", "dk", "it", "es", "us", "cz", "ro"]
 FALLBACK_TO_ANY = True
@@ -156,6 +168,30 @@ no_whois = False
 run_server_ok = set()
 run_server_dead = set()
 run_server_blocked = set()
+ENV_PROXY_DEAD = False          # env-прокси прописан, но не отвечает → curl/urllib идут мимо него
+NO_PROXY_OPENER = None          # urllib-opener без прокси (ленивая инициализация)
+
+
+def env_proxy_dead():
+    """True, если в окружении прописан HTTP(S)-прокси и он не отвечает."""
+    url = (os.environ.get("https_proxy") or os.environ.get("HTTPS_PROXY")
+           or os.environ.get("http_proxy") or os.environ.get("HTTP_PROXY") or "")
+    m = re.match(r"(?:https?|socks5?)://([^/:@]+):(\d+)", url)
+    if not m:
+        return False
+    try:
+        with socket.create_connection((m.group(1), int(m.group(2))), timeout=2):
+            return False
+    except Exception:
+        return True
+
+
+def detect_env_proxy():
+    global ENV_PROXY_DEAD, NO_PROXY_OPENER
+    ENV_PROXY_DEAD = env_proxy_dead()
+    if ENV_PROXY_DEAD:
+        NO_PROXY_OPENER = build_opener(ProxyHandler({}))
+        print(f"{Y}⚠ Прокси из переменных окружения мёртв — загрузки пойдут напрямую {N}")
 
 
 def kill_xrays():
@@ -214,22 +250,26 @@ def mirror_url(url):
 def download_one(url):
     safe = url.split("/")[-1].split("?")[0] or "list"
     tmp = os.path.join(LOGS_DIR, f".dl_{safe}")
-    for attempt in range(4):
+    murl = mirror_url(url)
+    # лестница попыток: (ссылка, напрямую мимо env-прокси)
+    if ENV_PROXY_DEAD:
+        attempts = [(url, True), (url, False), (murl, True), (murl, False)]
+    else:
+        attempts = [(url, False), (url, True), (murl, False), (murl, True)]
+    tried = set()
+    for u, direct in attempts:
+        if not u or (u, direct) in tried:
+            continue
+        tried.add((u, direct))
+        if u != url:
+            print(f"{Y}⚠ GitHub не отвечает, пробую зеркало jsdelivr для {safe[:40]}{N}")
         try:
-            # после 2-й неудачи пробуем зеркало jsdelivr
-            if attempt == 2:
-                murl = mirror_url(url)
-                if murl != url:
-                    print(f"{Y}⚠ GitHub не отвечает, пробую зеркало jsdelivr для {safe[:40]}{N}")
-                    url = murl
-                else:
-                    continue
-            r = subprocess.run(
-                ["curl", "-sSL", "--retry", "2", "--retry-delay", "1",
-                 "--connect-timeout", "10", "-m", str(TIMEOUT_DL),
-                 "-A", "Mozilla/5.0", "-o", tmp, url],
-                capture_output=True, timeout=TIMEOUT_DL + 15
-            )
+            cmd = ["curl", "-sSL", "--retry", "2", "--retry-delay", "1",
+                   "--connect-timeout", "10", "-m", str(TIMEOUT_DL),
+                   "-A", "Mozilla/5.0", "-o", tmp, u]
+            if direct:
+                cmd[1:1] = ["--noproxy", "*"]
+            r = subprocess.run(cmd, capture_output=True, timeout=TIMEOUT_DL + 15)
             if r.returncode == 0 and os.path.getsize(tmp) > 0:
                 with open(tmp, "r", encoding="utf-8", errors="ignore") as f:
                     data = f.read()
@@ -294,19 +334,45 @@ def _normalize_country(cc):
     return ali.get(cc, cc)
 
 
+COUNTRY_NAMES = {
+    "netherlands": "nl", "holland": "nl", "germany": "de", "deutschland": "de",
+    "france": "fr", "poland": "pl", "sweden": "se", "finland": "fi",
+    "norway": "no", "england": "gb", "britain": "gb", "united kingdom": "gb",
+    "america": "us", "united states": "us", "estonia": "ee", "latvia": "lv",
+    "lithuania": "lt", "austria": "at", "switzerland": "ch", "belgium": "be",
+    "denmark": "dk", "italy": "it", "spain": "es", "czechia": "cz",
+    "czech": "cz", "romania": "ro", "canada": "ca", "japan": "jp",
+    "turkey": "tr", "russia": "ru", "belarus": "by", "kazakhstan": "kz",
+    "ukraine": "ua", "singapore": "sg", "hongkong": "hk",
+}
+_NAME_RE = re.compile(r"\b(" + "|".join(sorted(COUNTRY_NAMES, key=len, reverse=True)) + r")\b")
+_FLAG_RE = re.compile(r"[\U0001F1E6-\U0001F1FF]{2}")
+
+
+def _flag_cc(text):
+    m = _FLAG_RE.search(text)
+    if not m:
+        return ""
+    return "".join(chr(ord(c) - 0x1F1E6 + ord("a")) for c in m.group(0))
+
+
 def extract_country(link):
-    if "#" in link:
-        remark = link.split("#", 1)[1].lower()
-    else:
-        remark = ""
+    remark = link.split("#", 1)[1].lower() if "#" in link else ""
     host_part = link.split("@", 1)[-1].lower()
+    remark = unquote(remark)          # флаги и названия часто URL-закодированы
+    # 1) флаг-эмодзи (🇳🇱 и т.п.) — самый надёжный маркер
+    cc = _flag_cc(remark)
+    if cc:
+        return _normalize_country(cc)
+    # 2) название страны в remark (Netherlands, Germany...)
+    m = _NAME_RE.search(remark)
+    if m:
+        return _normalize_country(COUNTRY_NAMES[m.group(1)])
+    # 3) двухбуквенный код с разделителями
     text = f"{remark} {host_part}"
-    tokens = re.findall(r"[\[\(_\-\s\.\/]([a-z]{2})[\]\)_\-\s\.\/]", text)
+    tokens = re.findall(r"[\[\(_\-\s\.\/|]([a-z]{2})[\]\)_\-\s\.\/|]", text)
     for t in tokens:
         return _normalize_country(t)
-    m = re.search(r"\b([a-z]{2})\b", remark)
-    if m:
-        return _normalize_country(m.group(1))
     return ""
 
 
@@ -624,7 +690,9 @@ def geo_lookup(ips):
             req = Request("http://ip-api.com/batch?fields=status,query,countryCode,as",
                           data=json.dumps(chunk).encode("utf-8"),
                           headers={"Content-Type": "application/json"})
-            with urlopen(req, timeout=10) as r:
+            opener = NO_PROXY_OPENER if ENV_PROXY_DEAD else None
+            resp = opener.open(req, timeout=10) if opener else urlopen(req, timeout=10)
+            with resp as r:
                 data = json.loads(r.read().decode("utf-8", errors="ignore"))
             for item in data:
                 if item.get("status") == "success":
@@ -991,10 +1059,40 @@ def speed_for(link, timeout=SPEED_TIMEOUT):
 
 
 def probe_candidates(candidates, probed_map, times):
-    top = sorted(candidates, key=lambda x: x[1])[:REPROBE_TOP]
-    for link, lat in top:
-        if stop_event.is_set() or time_left() <= 5:
+    """Повторная проверка лучших, но с разнообразием: не больше 2 ключей на один
+    id (uuid/пароль) и одну /24-подсеть, иначе весь финал состоит из одного
+    провайдера и умирает вместе с ним."""
+    def fam(link):
+        ob = link_to_outbound(link)
+        s = link_server(link)
+        uid = ""
+        try:
+            if ob.get("protocol") in ("vless", "vmess"):
+                uid = ob["settings"]["vnext"][0]["users"][0]["id"]
+            else:
+                uid = ob["settings"]["servers"][0].get("password", "")
+        except Exception:
+            uid = ""
+        subnet = ""
+        if s and s[0]:
+            addr = s[0]
+            subnet = ".".join(addr.split(".")[:3]) if addr.count(".") == 3 else addr
+        return (uid, subnet)
+
+    picked = []
+    cnt = {}
+    for link, _ in sorted(candidates, key=lambda x: x[1]):
+        f = fam(link)
+        if cnt.get(f, 0) >= 2:
+            continue
+        cnt[f] = cnt.get(f, 0) + 1
+        picked.append(link)
+        if len(picked) >= REPROBE_TOP:
             break
+    for link in picked:
+        if stop_event.is_set() or time_left() <= 90:
+            break
+
         if link in probed_map:
             continue
         med, ok, sd = reprobe(link, times)
@@ -1033,16 +1131,36 @@ def scan_batch(links, until):
 def copy_to_clipboard(text):
     if NO_CLIPBOARD:
         return
-    for cmd in (["wl-copy"], ["xclip", "-selection", "clipboard"], ["xsel", "--clipboard", "--input"]):
-        try:
-            p = subprocess.Popen(cmd, stdin=subprocess.PIPE, text=True)
-            p.communicate(text)
-            if p.returncode == 0:
-                print(f"{G}✓ Скопировано в буфер{N}")
-                return
-        except FileNotFoundError:
-            continue
-    print(f"{Y}⚠ Не удалось скопировать автоматически{N}")
+    if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+        print(f"{Y}⚠ Нет дисплея — ключ в файлах: logs/hiddify_key.txt и logs/hiddify_subscription.txt{N}")
+        return
+    try:
+        # xclip обязан остаться жить и держать выделение: если процесс умрёт,
+        # буфер обмена окажется пустым и вставка «не сработает»
+        subprocess.Popen(["xclip", "-selection", "clipboard"], stdin=subprocess.PIPE,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         start_new_session=True).communicate(text.encode("utf-8"))
+        r = subprocess.run(["xclip", "-selection", "clipboard", "-o"],
+                           capture_output=True, text=True, timeout=3)
+        if r.stdout.strip() == text.strip():
+            print(f"{G}✓ Ключ в буфере обмена (проверено обратным чтением){N}")
+            return
+    except Exception:
+        pass
+    print(f"{Y}⚠ Буфер недоступен — ключ в файлах: logs/hiddify_key.txt и logs/hiddify_subscription.txt{N}")
+
+
+def find_hiddify_appimage():
+    """Ищет AppImage Hiddify: сначала заданный путь, потом любой Hiddify*.AppImage в папке."""
+    if os.path.isfile(HIDDIFY_APPIMAGE):
+        return HIDDIFY_APPIMAGE
+    try:
+        for cand in sorted(glob.glob(os.path.join(HIDDIFY_DIR, "Hiddify*.AppImage"))):
+            if os.path.isfile(cand) and os.path.getsize(cand) > 0:
+                return cand
+    except Exception:
+        pass
+    return HIDDIFY_APPIMAGE
 
 
 def launch_hiddify(best):
@@ -1050,20 +1168,31 @@ def launch_hiddify(best):
         sub_file = os.path.join(tempfile.gettempdir(), "vpn_subscription.txt")
         with open(sub_file, "w", encoding="utf-8") as f:
             f.write("\n".join(best))
-        print(f"{C}Запуск Hiddify...{N}")
+        app = find_hiddify_appimage()
+        print(f"{C}Запуск Hiddify ({app})...{N}")
         print(f"{C}Конфиги в буфере обмена и в файле: {sub_file}{N}")
         print(f"{C}В Hiddify: '+' → Import from Clipboard (или укажите файл подписки).{N}")
-        subprocess.Popen([HIDDIFY_APPIMAGE])
+        subprocess.Popen([app])
     except Exception as e:
         print(f"{R}Не удалось запустить Hiddify: {e}{N}")
 
 
 def sanitize_link(link):
+    """Чистит ключ для Hiddify: убирает нестандартные параметры (insecure/
+    allowInsecure), из-за которых часть парсеров падает, и не перекодирует
+    уже закодированное имя профиля."""
     try:
+        frag = ""
         if "#" in link:
-            pre, _, remark = link.partition("#")
-            if remark:
-                return f"{pre}#{quote(remark, safe='')}"
+            link, _, frag = link.partition("#")
+        pre, sep, tail = link.partition("?")
+        if sep:
+            params = [p for p in tail.split("&")
+                      if p and p.split("=", 1)[0].lower() not in ("insecure", "allowinsecure")]
+            link = pre + "?" + "&".join(params)
+        if frag:
+            link += "#" + (frag if "%" in frag else quote(frag, safe=""))
+        return link
     except Exception:
         pass
     return link
@@ -1354,6 +1483,18 @@ def process_results(final_entries, need=1):
         print(f"{R}Рабочий VPN с доступом к {TARGET.upper()} не найден за отведённое время.{N}")
         return
     best = final_entries[0]
+    # самый надёжный: максимум успешных проверок, минимум разброса и задержки
+    most_reliable = max(final_entries, key=lambda e: (e[2], -e[3], -e[1]))
+    # самый быстрый: среди тех, у кого мерялась скорость
+    fastest = max((e for e in final_entries if e[4]),
+                  key=lambda e: (e[4], -e[1]), default=None)
+    # Ключи для Hiddify: лучший + самый быстрый + самый надёжный (без повторов)
+    hiddify_links = []
+    for e in (best, fastest, most_reliable):
+        if e:
+            l = sanitize_link(e[0])
+            if l not in hiddify_links:
+                hiddify_links.append(l)
     alternates = pick_alternatives(final_entries, max(0, need - 1))
     best_link = sanitize_link(best[0])
     links_out = [best_link]
@@ -1363,22 +1504,38 @@ def process_results(final_entries, need=1):
         ts = time.strftime("%Y%m%d_%H%M%S")
         with open(os.path.join(LOGS_DIR, f"selected_{ts}.txt"), "w", encoding="utf-8") as f:
             f.write(f"# BEST {best_meta(best)}\n{links_out[0]}\n")
+            f.write(f"# MOST RELIABLE {best_meta(most_reliable)}\n{sanitize_link(most_reliable[0])}\n")
+            if fastest:
+                f.write(f"# FASTEST {best_meta(fastest)}\n{sanitize_link(fastest[0])}\n")
             for i, a in enumerate(alternates):
                 f.write(f"# alt {i+1} {best_meta(a)}\n{sanitize_link(a[0])}\n")
         with open("best_current.txt", "w", encoding="utf-8") as f:
             f.write(f"# BEST {best_meta(best)}\n{links_out[0]}\n")
-        print(f"{C}Отобранные конфиги: logs/selected_{ts}.txt и logs/best_current.txt{N}")
+        # готовые файлы для импорта в Hiddify: один ключ и подписка из трёх
+        with open(os.path.join(LOGS_DIR, "hiddify_key.txt"), "w", encoding="utf-8") as f:
+            f.write(hiddify_links[0] + "\n")
+        with open(os.path.join(LOGS_DIR, "hiddify_subscription.txt"), "w", encoding="utf-8") as f:
+            f.write("\n".join(hiddify_links) + "\n")
+        print(f"{C}Отобранные конфиги: logs/selected_{ts}.txt, logs/best_current.txt, "
+              f"logs/hiddify_key.txt, logs/hiddify_subscription.txt{N}")
     except Exception as e:
         print(f"{Y}⚠ Не удалось сохранить отобранные конфиги: {e}{N}")
+
     print(f"{G}✅ ЛУЧШИЙ VPN (доступен {TARGET.upper()}):{N}")
     print_summary_row(best, "BEST")
-    print(f"{G}✓ В буфере обмена только лучший конфиг — вставьте в Hiddify: '+' → Import from Clipboard{N}")
+    print(f"{G}🛡 САМЫЙ НАДЁЖНЫЙ (ok={most_reliable[2]}/{REPROBE_TIMES}, "
+          f"разброс {most_reliable[3]:.0f}мс):{N}")
+    print_summary_row(most_reliable, "REL")
+    if fastest:
+        print(f"{G}⚡ САМЫЙ БЫСТРЫЙ ({fastest[4]:.1f}MB/s):{N}")
+        print_summary_row(fastest, "FAST")
+    print(f"{G}✓ В буфере обмена лучший ключ — вставьте в Hiddify: '+' → Import from Clipboard{N}")
     if alternates:
         print(f"{Y}Запасные:{N}")
         for i, a in enumerate(alternates, 1):
             print_summary_row(a, f"#{i+1}")
     if LAUNCH_HIDDIFY and not RUN_BEST:
-        launch_hiddify(links_out)
+        launch_hiddify(hiddify_links)
     if RUN_BEST:
         run_best_persistent(final_entries)
 
@@ -1422,6 +1579,12 @@ def main():
                         help="Не перезапускать браузер с --proxy-server (для Mint/Cinnamon)")
     args = parser.parse_args()
 
+    # чтобы журнал при запуске через nohup/фоновом запуске писал сразу, а не блоками
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except Exception:
+        pass
+
     NEED = max(1, args.need)
     LAUNCH_HIDDIFY = not args.no_hiddify
     PREFERRED_COUNTRIES = [c.strip().lower() for c in args.countries.split(",") if c.strip()]
@@ -1460,9 +1623,8 @@ def main():
             print(f"{R}{tool} не установлен!{N}")
             sys.exit(1)
 
-    all_links = []
-    all_links.extend(download_all_parallel([f"{REPO_ORIG}/{f}" for f in FILES_ORIG]))
-    all_links.extend(download_all_parallel(EXTRA_REPOS))
+    detect_env_proxy()
+    all_links = download_all_parallel(SOURCES)
 
     seen = set()
     unique_links = []
@@ -1475,16 +1637,21 @@ def main():
 
     preferred = [l for l in all_links if link_contains_country(l, PREFERRED_COUNTRIES)]
     preferred = [l for l in preferred if not link_excluded(l, EXCLUDE_COUNTRIES)]
-    test_links = preferred
+    pref_set = set(preferred)
+    others = [l for l in all_links if l not in pref_set and not link_excluded(l, EXCLUDE_COUNTRIES)]
+
+    if FALLBACK_TO_ANY:
+        # приоритетных по стране обычно мало; добираем случайными из остальных,
+        # чтобы скан не кончался раньше времени, если приоритетные все мертвы
+        want = max(0, args.max_test - len(preferred))
+        fill = random.sample(others, min(want, len(others))) if want and others else []
+        print(f"{Y}Конфигов приоритетных стран: {len(preferred)}, добрано случайных: {len(fill)}.{N}")
+        test_links = preferred + fill
+    else:
+        test_links = preferred
 
     if not test_links:
-        if FALLBACK_TO_ANY:
-            test_links = [l for l in all_links if not link_excluded(l, EXCLUDE_COUNTRIES)]
-            if len(test_links) > 400:
-                test_links = random.sample(test_links, 400)
-            print(f"{Y}Приоритетные конфиги не найдены, фоллбэк на общий список ({len(test_links)}).{N}")
-        else:
-            print(f"{R}Приоритетных конфигов не найдено.{N}")
+        print(f"{R}Приоритетных конфигов не найдено.{N}")
 
     test_links.sort(key=order_key)
 
@@ -1560,7 +1727,9 @@ def main():
         ok_runs = sum(1 for r in runs if r)
         if ok_runs >= 1:
             gated.append(link)
-            if ok_runs == 2:
+            # ранний выход только когда стабильных уже достаточно — иначе в
+            # финале остаётся один провайдер и «самый быстрый» не с чем сравнить
+            if ok_runs == 2 and len(gated) >= NEED:
                 break
         else:
             print(f"{Y} отбракован: {link[:55]}{N}")
@@ -1655,7 +1824,7 @@ def main():
         b = final[0]
         speed_s = f", скорость {b[4]:.1f} MB/s" if b[4] else ""
         ping_s = f", ping {b[7]:.0f}ms" if len(b) > 7 and b[7] is not None else ""
-        print(f"{G}Готово! Самый быстрый и надёжный ключ: {b[0][:70]}...{speed_s}{ping_s}{N}")
+        print(f"{G}Готово! Ключ для Hiddify — в буфере обмена: {b[0][:55]}...{speed_s}{ping_s}{N}")
     else:
         print(f"{R}Готово (ничего не найдено).{N}")
 

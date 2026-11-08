@@ -1,6 +1,9 @@
 import os, subprocess, sys, re, time, shutil, tempfile
 
 
+PYTHON_EXECUTABLE = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/myvenv/bin/python"
+
+
 def extract_appimage_icon(appimage_path, target_dir, base_name):
  """
  Извлекает иконку из AppImage через --appimage-extract и сохраняет её в
@@ -488,6 +491,34 @@ def get_files_with_extensions(folder_path):
  return image_files
 
 
+def find_any_icon_in_dir(directory):
+ """
+ Запасной вариант: если иконка по имени не нашлась, ищем любую иконку
+ в собственной директории файла. Сначала предпочитаем файлы с icon/logo
+ в имени, затем более приоритетный формат (svg > png > ico > ...).
+ Возвращает путь к найденной иконке или None.
+ """
+ format_priority = {'.svg': 0, '.png': 1, '.ico': 2, '.xpm': 3,
+  '.jpg': 4, '.jpeg': 4, '.gif': 5, '.bmp': 6}
+ candidates = []
+ for root, dirs, files in os.walk(directory):
+  for file in files:
+   ext = os.path.splitext(file)[1].lower()
+   if ext in ICON_EXTENSIONS:
+    candidates.append(os.path.join(root, file))
+ if not candidates:
+  return None
+
+ def score(path):
+  stem = os.path.splitext(os.path.basename(path))[0].lower()
+  ext = os.path.splitext(path)[1].lower()
+  keyword = 0 if ('icon' in stem or 'logo' in stem) else 1
+  return (keyword, format_priority.get(ext, 9), len(stem))
+
+ candidates.sort(key=score)
+ return candidates[0]
+
+
 def find_existing_icon(target_dir, base_name):
  """
  Ищет уже готовую иконку icon-<base_name>.<ext> рядом с файлом.
@@ -537,8 +568,14 @@ def create_shortcut(full_path):
  filename = os.path.basename(full_path)
  filename_without_extension = os.path.splitext(filename)[0]
 
+ if os.path.splitext(filename)[1].lower() in {'.py', '.pyw'}:
+  exec_command = f"{quote_exec_arg(PYTHON_EXECUTABLE)} {quote_exec_arg(full_path)}"
+ else:
+  exec_command = quote_exec_arg(full_path)
+
  # Сначала берём готовую иконку icon-<имя>, затем пробуем извлечь её из файла,
- # и только потом ищем подходящую картинку рядом (find_best_icon).
+ # затем ищем подходящую картинку рядом (find_best_icon), и если не нашли —
+ # любую иконку в собственной директории файла (find_any_icon_in_dir).
  icon_path = find_existing_icon(directory, filename_without_extension) or ""
  if not icon_path and os.path.isfile(full_path):
   icon_path = extract_icon_from_file(full_path, directory, filename_without_extension) or ""
@@ -547,6 +584,10 @@ def create_shortcut(full_path):
   # Получаем список картинок и ищем лучшую иконку
   image_list = get_files_with_extensions(directory)
   icon_path = find_best_icon(image_list, filename_without_extension) or ""
+
+ if not icon_path:
+  # Запасной вариант: любая иконка в собственной директории файла
+  icon_path = find_any_icon_in_dir(directory) or ""
 
  if not icon_path:
   print(f"Предупреждение: Иконка для '{filename_without_extension}' не найдена.")
@@ -559,7 +600,7 @@ def create_shortcut(full_path):
 Type=Application
 Version=1.0
 Name={filename_without_extension}.desktop
-Exec={quote_exec_arg(full_path)}
+Exec={exec_command}
 Path={directory}
 Icon={icon_path}
 Terminal=false

@@ -18,6 +18,7 @@
 | 9 | 2026-10-05 | Починка обоих симптомов разом: звук гаснет на старте, скорость падает на 1 при переходе на эпизод | §9 |
 | 10 | 2026-10-28 | Панель скорости у шестерёнки + контекстное меню «Поиск на YouTube» | §10 |
 | 11 | 2026-11-02 | Скриншот: копия в буфер обмена + имя «Screenshot ЧЧ-ММ-СС дата», убран битый путь в downloads | §11 |
+| 12 | 2026-11-06 | Зеркало скоростей по каналам в JSON-файл `channelspeeds.json` в папке расширения | §12 |
 
 Собирается в .crx скриптом `package-crx.sh` (§5).
 
@@ -719,3 +720,131 @@ cd "/home/egor/Downloads/расширения/Enhancer for YouTube"
 cd "/home/egor/Downloads/расширения/Enhancer for YouTube"
 ./package-crx.sh
 ```
+
+---
+
+## §12 Зеркало скоростей по каналам в JSON-файл (2026-11-06)
+
+**Симптом/требование:** при смене скорости любым способом (колесо, кнопки
+Enhancer, нативное меню YouTube, панель `1×`, горячие клавиши) значение
+должно записываться в **настоящий JSON-файл в папке расширения**;
+каждый канал хранит свою скорость и возвращает её на следующих видео
+этого канала.
+
+**Файлы:**
+
+| Файл | Что |
+|---|---|
+| `js/service-worker.js` | зеркало `channelspeeds` → JSON: слушает `chrome.storage.onChanged`, пишет файл через native host (fallback — `chrome.downloads`) |
+| `native-host/efyt-json-host.py` | native messaging host `com.efyt.channelspeeds`: пишет/читает `channelspeeds.json` |
+| `install-native-host.sh` | регистрация хоста в NativeMessagingHosts всех установленных браузеров; `--uninstall` — убрать |
+| `manifest.json` | право `nativeMessaging` |
+| `package-crx.sh` | SKIP: `native-host/`, `install-native-host.sh`, `channelspeeds.json` |
+
+### Хранение — двухуровневое
+
+1. **`chrome.storage.local.channelspeeds`** — как и было (§2/§7/§9/§10):
+   `{ "<channelId>": 1.5, "name:<Имя>": 1.5 }`. Источник правды для
+   автоприменения скорости при переходах между видео. Работает в CRX.
+2. **`channelspeeds.json` в папке расширения** — зеркало на диск,
+   видимое и редактируемое вручную. **Формат:**
+
+```json
+{
+  "_meta": { "about": "…", "updatedAt": "2026-11-06T…", "channels": 1 },
+  "updatedAt": "2026-11-06T…",
+  "speeds": { "UCuAXFkgsw1L7xaCfnd5JJOw": 1.5, "name:Rick Astley": 1.5 },
+  "channels": [ { "id": "UC…", "name": "Rick Astley", "speed": 1.5 } ]
+}
+```
+
+   `speeds` — каноническая таблица (по ней импорт), `channels` —
+   человекочитаемый вид (имя восстанавливается, когда у скорости ровно
+   один `name:`-ключ).
+
+### Почему нужен native host
+
+MV3-расширение не имеет API записи в произвольную директорию
+(`chrome.downloads` пишет только относительно папки загрузок), а папка
+установленного CRX вообще не та, что рабочая копия. Поэтому пишущий
+процесс живёт вне расширения: `chrome.runtime.connectNative` запускает
+`efyt-json-host.py`, который атомарно перезаписывает
+`<папка расширения>/channelspeeds.json`. Расширение связано с хостом
+через `allowed_origins` с ID `ifojmbdceojdnhhagpmfnmjndpplcndi`
+(вычисляется из `efyt_private.pem`).
+
+**Где регистрируется** (`install-native-host.sh` находит установленные):
+`~/.config/google-chrome/NativeMessagingHosts/`,
+`~/.config/chromium/NativeMessagingHosts/`,
+`~/.config/yandex-browser/NativeMessagingHosts/`.
+
+**Нюанс Chromium:** non-branded Chromium ищет манифесты хостов в
+`<user-data-dir>/NativeMessagingHosts` — при обычном запуске это тот же
+`~/.config/chromium/NativeMessagingHosts`; если запускать chromium с
+другим `--user-data-dir`, манифест надо положить и в этот каталог.
+Google Chrome читает `~/.config/google-chrome/NativeMessagingHosts`.
+
+**Куда хост пишет файл:** `native-host/path.txt` (первая строка —
+абсолютный путь; записывается установщиком). Файл конфигурации читается
+при каждом запросе — путь можно поменять без перерегистрации.
+
+### Механика зеркала (`js/service-worker.js`)
+
+- Все писатели скорости (колесо/кнопки/нативное меню через
+  `channel-speed-set`, панель через `channel-speed-bridge`) меняют один
+  ключ `channelspeeds`, поэтому слушается `chrome.storage.onChanged` —
+  фиксируется **любой** способ смены скорости.
+- Дебаунс: первое изменение — сразу, серия — слепляется (1,5 с).
+  Перезапись без изменения содержимого не происходит (сигнатура таблицы
+  без меток времени).
+- **Двусторонняя синхронизация:** перед записью хост отдаёт `mtimeMs`
+  файла; если файл **новее** внутреннего хранилища
+  (`chrome.storage.local.channelspeedsUpdatedAt`), его правили вручную —
+  содержимое импортируется обратно в расширение (`speeds` →
+  `channelspeeds`). После записи хранилище помечается тем же `mtimeMs`,
+  поэтому собственные записи никогда не выглядят «чужими правками».
+  Правка файла применяется при следующей смене скорости, при старте
+  браузера (`onStartup`) или обновлении расширения (`onInstalled`).
+- **Fallback без хоста:** если `connectNative` не находит хост — тот же
+  JSON пишется через `chrome.downloads.download` с
+  `conflictAction:"overwrite"` в
+  `расширения/Enhancer for YouTube/channelspeeds.json` **относительно
+  папки загрузок браузера**. При стандартной папке загрузок `~/Downloads`
+  это ровно папка расширения; если назначение загрузок менялось в
+  `chrome://settings/downloads`, файл окажется в подпапке внутри неё.
+  Импорт ручных правок в fallback-режиме не работает (файл недоступен
+  для чтения из CRX) — только запись.
+
+### Установка и проверка
+
+```bash
+cd "/home/egor/Downloads/расширения/Enhancer for YouTube"
+./install-native-host.sh     # зарегистрировать (перезапустить браузер после)
+./install-native-host.sh --uninstall   # убрать манифесты
+```
+
+Проверка: сменить скорость на видео → рядом с рабочей копией появляется/
+обновляется `channelspeeds.json`. Панель скорости и таблица по каналам
+работают как раньше (§10, §2/§7/§9) — зеркало ничего у них не отбирает.
+
+### Проверено (E2E, chromium 149 headless + CDP)
+
+| Сценарий | Результат |
+|---|---|
+| `channelspeeds` → JSON через хост | файл записан, `channels` содержит имя канала |
+| повторный sync без изменений | файл не тронут (mtime совпадает) |
+| хост жив, fallback не должен работать | скачиваний через `chrome.downloads` нет |
+| файл правится вручную (новее хранилища) | правки импортированы в `chrome.storage` (1.5 из файла, а не 1.1 из хранилища) |
+| хост удалён | тот же JSON через `chrome.downloads` → `загрузки/расширения/Enhancer for YouTube/channelspeeds.json` |
+
+Протокол хоста проверен отдельно (пайп-тест: ping/read/write/rewrite).
+`node --check`, `py_compile`, `bash -n` — без ошибок.
+
+### Сборка
+
+```bash
+cd "/home/egor/Downloads/расширения/Enhancer for YouTube"
+./package-crx.sh
+```
+
+Результат: `../Enhancer_for_YouTube.crx`, ID `ifojmbdceojdnhhagpmfnmjndpplcndi`.

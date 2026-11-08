@@ -127,9 +127,10 @@ else:
     print('[*] manifest.json: "key" уже совпадает с SPKI')
 
 # ---------- 3. zip ----------
-SKIP_DIRS = {"_metadata", ".git", "__MACOSX"}
+SKIP_DIRS = {"_metadata", ".git", "__MACOSX", "native-host"}
 SKIP_FILES = {"package-crx.sh", "efyt_private.pem", "README-CUSTOM.md", ".DS_Store",
-              "config-backup.json", "save-config.sh", "restore-config.sh"}
+              "config-backup.json", "save-config.sh", "restore-config.sh",
+              "install-native-host.sh", "channelspeeds.json", "channelspeeds.json.tmp"}
 buf = io.BytesIO()
 with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
     for root, dirs, files in os.walk(ext_dir):
