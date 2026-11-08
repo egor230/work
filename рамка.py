@@ -8,9 +8,53 @@ from PyQt6.QtGui import QPainter, QPen, QMouseEvent
 from PyQt6.QtWidgets import QApplication, QMainWindow
 
 '''
-Эта программа позволяет выбрать область экрана, делает её скриншот, 
+Эта программа позволяет выбрать область экрана, делает её скриншот,
 копирует в буфер обмена и сохраняет параметры выбора области экрана в JSON-файл.
 '''
+def recognize_text(image_path):
+ # Один запуск tesseract: TSV даёт текст и уверенность по каждому слову.
+ # Пороги отсекают мусор: на картинках без текста OCR выдаёт обрывки
+ # символов с уверенностью ниже 60 (или короткие обрывки ниже 70).
+ try:
+  result = subprocess.run(
+   ['tesseract', image_path, 'stdout', '-l', 'rus+eng', '--psm', '11', 'tsv'],
+   capture_output=True, encoding='utf-8', timeout=10)
+ except (subprocess.TimeoutExpired, FileNotFoundError):
+  return None
+
+ lines = []
+ words = []
+ current_key = None
+ strong_words = 0
+ short_words = 0
+ for row in result.stdout.splitlines()[1:]:
+  fields = row.split('\t', 11)
+  if len(fields) < 12 or fields[0] != '5':
+   continue
+  word = fields[11].strip()
+  if not word:
+   continue
+  conf = float(fields[10])
+  alnum = sum(c.isalnum() for c in word)
+  if conf >= 60 and alnum >= 3:
+   strong_words += 1
+  if conf >= 70 and alnum >= 2:
+   short_words += 1
+  if conf >= 50:
+   key = (fields[2], fields[3], fields[4])
+   if key != current_key:
+    if words:
+     lines.append(' '.join(words))
+    words = []
+    current_key = key
+   words.append(word)
+ if words:
+  lines.append(' '.join(words))
+
+ if not strong_words and short_words < 2:
+  return None
+ return '\n'.join(lines) or None
+
 def screenshot(left, top, width, height):
  time.sleep(0.6)
  # Делаем скриншот с заданными размерами и координатами
@@ -28,6 +72,14 @@ def screenshot(left, top, width, height):
  # Сохраняем изображение во временный файл
  screenshot.save(file_name_path, format="PNG")
  time.sleep(0.1)
+
+ # Если на скриншоте есть текст — добавляем его в историю до основной команды:
+ # картинка будет первой строкой, текст — второй.
+ # Нужен именно add: copy меняет буфер, но в историю не сохраняет.
+ text = recognize_text(file_name_path)
+ if text:
+  subprocess.run(['copyq', 'add', text])
+  print("Текст добавлен в буфер обмена")
 
  # Скрипт для помещения изображения в буфер обмена через copyq
  show_list_id = '''#!/bin/bash
