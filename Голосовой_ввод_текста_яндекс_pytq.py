@@ -490,7 +490,7 @@ class VoiceThread(QThread):
        circles = oknyx_core.find_elements(By.CSS_SELECTOR, ".StandaloneOknyxCore-ListeningCircle")
        circles1 = any(c.value_of_css_property("display") != "none" for c in circles)
 
-      if "spea" in filter_elem and "spea" in classes:#  and circles1:# and "стоп" in aria_label and "th" in classes:
+      if "spea" in filter_elem and "spea" in classes or "th" in classes:#  and circles1:# and "стоп" in aria_label and "th" in classes:
 
        # print(classes)
        print(aria_label)

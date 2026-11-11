@@ -562,8 +562,329 @@ def get_paths_file():
  return [p for p in raw if p.strip()]
 
 
-def create_shortcut(full_path):
- """Создаёт .desktop-ярлык для одного файла."""
+DEFAULT_CATEGORY = "Game"
+
+MENU_FILE = "/etc/xdg/menus/cinnamon-applications.menu"
+DIRECTORY_DIRS = [
+ "/usr/share/desktop-directories",
+ "/usr/local/share/desktop-directories",
+ os.path.join(os.path.expanduser("~"), ".local", "share", "desktop-directories"),
+]
+
+
+def _directory_label(directory):
+ """Локализованное название раздела меню из .directory-файла."""
+ for base in DIRECTORY_DIRS:
+  path = os.path.join(base, directory)
+  if not os.path.exists(path):
+   continue
+  fallback = None
+  try:
+   with open(path, encoding="utf-8", errors="replace") as f:
+    for line in f:
+     line = line.strip()
+     if line.startswith("Name[ru]="):
+      return line.split("=", 1)[1]
+     if line.startswith("Name=") and fallback is None:
+      fallback = line.split("=", 1)[1]
+  except Exception:
+   continue
+  if fallback:
+   return fallback
+ return None
+
+
+def _installed_categories():
+ """Категории, которые реально встречаются в установленных .desktop."""
+ cats = set()
+ apps = applications_dir()
+ for base in (apps, "/usr/share/applications"):
+  try:
+   names = os.listdir(base)
+  except Exception:
+   continue
+  for name in names:
+   if not name.endswith(".desktop"):
+    continue
+   try:
+    with open(os.path.join(base, name), encoding="utf-8",
+     errors="replace") as f:
+     for line in f:
+      if line.startswith("Categories="):
+       for c in line.split("=", 1)[1].strip().strip(";").split(";"):
+        if c:
+         cats.add(c)
+       break
+   except Exception:
+    continue
+ return cats
+
+
+def get_menu_categories():
+ """
+ Собирает категории из настоящего меню Cinnamon (cinnamon-applications.menu).
+ Возвращает список (подпись, значение Categories), только для разделов,
+ в которых уже есть хотя бы одно приложение.
+ """
+ import xml.etree.ElementTree as ET
+ result = []
+ try:
+  tree = ET.parse(MENU_FILE)
+ except Exception:
+  return [("Игры", "Game"), ("Другое", "")]
+ root = tree.getroot()
+ installed = _installed_categories()
+ seen = set()
+ for menu in root.findall("Menu"):
+  name_el = menu.find("Name")
+  dir_el = menu.find("Directory")
+  if name_el is None or dir_el is None:
+   continue
+  label = _directory_label(dir_el.text.strip())
+  if not label:
+   continue
+  include = menu.find("Include")
+  if include is None:
+   continue
+  and_el = include.find("And")
+  if and_el is None:
+   continue
+  cats = [c.text.strip() for c in and_el.findall("Category") if c.text]
+  if not cats:
+   continue
+  value = ";".join(cats)
+  if value in seen:
+   continue
+  if not any(c in installed for c in cats):
+   continue
+  seen.add(value)
+  result.append((label, value))
+ if ("Другое", "") not in result:
+  result.append(("Другое", ""))
+ return result
+
+
+NO_GUI = "NO_GUI"
+CANCELLED = "CANCELLED"
+
+
+def _ask_category_gtk(files, choices):
+ """
+ Окно выбора категории в системном стиле (GTK3 — родной для Cinnamon).
+ choices — список (подпись, значение Categories).
+ Возвращает кортеж результата или NO_GUI, если GTK недоступен.
+ """
+ try:
+  import gi
+  gi.require_version('Gtk', '3.0')
+  from gi.repository import Gtk
+ except Exception:
+  return NO_GUI
+
+ try:
+  dialog = Gtk.Dialog(title="Создать ярлык")
+  dialog.set_resizable(False)
+  dialog.set_modal(True)
+  dialog.set_keep_above(True)
+  dialog.set_position(Gtk.WindowPosition.CENTER)
+  dialog.set_default_size(460, -1)
+
+  header = Gtk.HeaderBar()
+  header.set_show_close_button(True)
+  header.props.title = "Создать ярлык"
+  header.props.subtitle = "Ярлык .desktop"
+  dialog.set_titlebar(header)
+
+  area = dialog.get_content_area()
+  area.set_border_width(18)
+  area.set_spacing(14)
+
+  title = Gtk.Label(xalign=0)
+  title.set_markup("<b>Куда добавить ярлык</b>")
+  area.add(title)
+
+  subtitle = Gtk.Label(xalign=0, label="Категория меню приложений:")
+  subtitle.get_style_context().add_class("dim-label")
+  area.add(subtitle)
+
+  combo = Gtk.ComboBoxText()
+  for label, _value in choices:
+   combo.append_text(label)
+  combo.set_active(0)
+  area.add(combo)
+
+  if len(files) == 1:
+   info = os.path.basename(files[0])
+  else:
+   info = "Выбрано файлов: {0}".format(len(files))
+  file_label = Gtk.Label(xalign=0, label=info)
+  file_label.set_ellipsize(3)
+  file_label.get_style_context().add_class("dim-label")
+  area.add(file_label)
+
+  separator = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
+  area.add(separator)
+
+  install_check = Gtk.CheckButton(
+   label="Добавить ярлык в меню приложений")
+  install_check.set_active(True)
+  area.add(install_check)
+
+  dialog.add_button("Отмена", Gtk.ResponseType.CANCEL)
+  ok_button = dialog.add_button("Создать", Gtk.ResponseType.OK)
+  ok_button.get_style_context().add_class("suggested-action")
+  dialog.set_default_response(Gtk.ResponseType.OK)
+
+  dialog.show_all()
+  response = dialog.run()
+
+  if response == Gtk.ResponseType.OK:
+   idx = combo.get_active()
+   if idx < 0:
+    idx = 0
+   value = (choices[idx][1], bool(install_check.get_active()))
+  else:
+   value = CANCELLED
+  dialog.destroy()
+  return value
+ except Exception:
+  try:
+   dialog.destroy()
+  except Exception:
+   pass
+  return NO_GUI
+
+
+def _ask_category_tk(files, choices):
+ """Резервное окно на Tkinter, если GTK недоступен."""
+ try:
+  import tkinter as tk
+  from tkinter import ttk
+ except Exception:
+  return NO_GUI
+ try:
+  root = tk.Tk()
+ except Exception:
+  return NO_GUI
+
+ root.title("Создать ярлык")
+ root.resizable(False, False)
+ try:
+  root.attributes("-topmost", True)
+ except Exception:
+  pass
+
+ result = {"value": None}
+
+ frame = ttk.Frame(root, padding=16)
+ frame.grid(row=0, column=0, sticky="nsew")
+ frame.columnconfigure(0, weight=1)
+
+ ttk.Label(frame, text="Куда добавить ярлык (категория меню):",
+  font=("Sans", 11)).grid(row=0, column=0, sticky="w")
+
+ labels = [label for label, _ in choices]
+ combo = ttk.Combobox(frame, values=labels, state="readonly", width=34)
+ combo.grid(row=1, column=0, sticky="ew", pady=(8, 12))
+ combo.current(0)
+
+ if len(files) == 1:
+  info = os.path.basename(files[0])
+ else:
+  info = "Файлов выбрано: {0}".format(len(files))
+ ttk.Label(frame, text=info, foreground="#666").grid(row=2, column=0, sticky="w")
+
+ install_var = tk.BooleanVar(value=True)
+ ttk.Checkbutton(frame, text="Добавить в меню приложений",
+  variable=install_var).grid(row=3, column=0, sticky="w", pady=(10, 0))
+
+ buttons = ttk.Frame(frame)
+ buttons.grid(row=4, column=0, sticky="e", pady=(16, 0))
+
+ def on_ok(event=None):
+  idx = combo.current()
+  if idx < 0:
+   idx = 0
+  result["value"] = (choices[idx][1], bool(install_var.get()))
+  root.destroy()
+
+ def on_cancel(event=None):
+  result["value"] = CANCELLED
+  root.destroy()
+
+ ttk.Button(buttons, text="Создать", command=on_ok).grid(row=0, column=0, padx=(0, 8))
+ ttk.Button(buttons, text="Отмена", command=on_cancel).grid(row=0, column=1)
+
+ root.bind("<Return>", on_ok)
+ root.bind("<Escape>", on_cancel)
+ root.protocol("WM_DELETE_WINDOW", on_cancel)
+
+ root.update_idletasks()
+ w, h = root.winfo_width(), root.winfo_height()
+ x = (root.winfo_screenwidth() - w) // 2
+ y = (root.winfo_screenheight() - h) // 3
+ root.geometry("+{0}+{1}".format(x, y))
+
+ root.mainloop()
+ return result["value"]
+
+
+def ask_category(files):
+ """
+ Показывает окно с выпадающим списком категорий, которые реально есть
+ в меню Cinnamon. Сначала пробует системный GTK3, затем Tkinter.
+ Возвращает:
+   (category, install_menu) — пользователь подтвердил выбор;
+   CANCELLED                — окно закрыто/Отмена (ярлык не создаём);
+   NO_GUI                   — графический интерфейс недоступен (старое поведение).
+ """
+ choices = get_menu_categories()
+ result = _ask_category_gtk(files, choices)
+ if result == NO_GUI:
+  result = _ask_category_tk(files, choices)
+ return result
+
+
+def applications_dir():
+ """Каталог пользовательских .desktop-файлов (~/.local/share/applications)."""
+ data_home = os.environ.get("XDG_DATA_HOME") or os.path.join(
+  os.path.expanduser("~"), ".local", "share")
+ return os.path.join(data_home, "applications")
+
+
+def install_to_menu(desktop_content, output_file):
+ """
+ Копирует готовый .desktop в каталог приложений пользователя, чтобы ярлык
+ появился в выбранной категории меню. Возвращает путь к копии или None.
+ """
+ apps = applications_dir()
+ try:
+  os.makedirs(apps, exist_ok=True)
+  target = os.path.join(apps, os.path.basename(output_file))
+  with open(target, 'w') as f:
+   f.write(desktop_content)
+  os.chmod(target, 0o755)
+ except Exception:
+  return None
+ try:
+  subprocess.run(['update-desktop-database', apps],
+   capture_output=True, timeout=30)
+ except Exception:
+  pass
+ try:
+  subprocess.run(['gio', 'set', target, 'metadata::trusted', 'true'],
+   capture_output=True, timeout=15)
+ except Exception:
+  pass
+ return target
+
+
+def create_shortcut(full_path, category=DEFAULT_CATEGORY, install_menu=False):
+ """
+ Создаёт .desktop-ярлык для одного файла.
+ category     — значение Categories (Office, Network, Game, ...).
+ install_menu — дополнительно положить ярлык в меню приложений.
+ """
  directory = os.path.dirname(full_path) or "."
  filename = os.path.basename(full_path)
  filename_without_extension = os.path.splitext(filename)[0]
@@ -604,7 +925,7 @@ Exec={exec_command}
 Path={directory}
 Icon={icon_path}
 Terminal=false
-Categories=Game;
+Categories={category};
 StartupNotify=true
 """
 
@@ -624,15 +945,35 @@ StartupNotify=true
  except Exception:
   pass
 
+ # Копия в меню приложений — ярлык появится в выбранной категории
+ if install_menu:
+  installed = install_to_menu(desktop_content, output_file)
+  if installed:
+   print(f"Добавлено в меню: {installed}")
+
  return output_file
 
 
 # === Основная логика ===
-for path in get_paths_file():
+all_paths = get_paths_file()
+paths = []
+for path in all_paths:
  if os.path.isdir(path):
   print(f"Предупреждение: '{path}' — папка, ярлык не создан.")
-  continue
- create_shortcut(path)
+ else:
+  paths.append(path)
+
+if paths:
+ # Окно выбора категории. Если GUI нет — прежнее поведение (Game),
+ # если окно закрыли/Отмена — ярлык не создаём.
+ choice = ask_category(paths)
+ if choice == NO_GUI:
+  for path in paths:
+   create_shortcut(path)
+ elif choice != CANCELLED:
+  category, install_menu = choice
+  for path in paths:
+   create_shortcut(path, category=category, install_menu=install_menu)
 
 
 
