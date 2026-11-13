@@ -6,6 +6,8 @@ DEFAULT_MODEL_DIR = "/mnt/807EB5FA7EB5E954/Program Files/ai models/unsloth/Qwen3
 MODEL_DIR = os.environ.get("MODEL_DIR", DEFAULT_MODEL_DIR)
 
 # llama-server из llama.cpp: умеет настоящие tool calls и встроенные файловые инструменты.
+# Если отдельного бинарника нет (частая ситуация), используем llama_cpp.server
+# из виртуального окружения проекта — он тоже OpenAI-совместим и умеет tools.
 LLAMA_SERVER = os.environ.get("LLAMA_SERVER", "/home/egor/llama.cpp-b12317/llama-server")
 
 # Приоритет квантов: сначала самые удачные по качеству/скорости.
@@ -81,36 +83,69 @@ SERVER_TOOLS = os.environ.get(
     "SERVER_TOOLS",
     "read_file,file_glob_search,grep_search,write_file,edit_file",
 )
+# Формат чата для llama_cpp.server. `chatml-function-calling` — ChatML-шаблон
+# Qwen3 с поддержкой OpenAI tools (tool_calls), а не текстовый <tool_call>.
+# Для отдельного бинарника llama-server этот параметр не нужен.
+CHAT_FORMAT = os.environ.get("CHAT_FORMAT", "chatml-function-calling")
 
-if not os.path.isfile(LLAMA_SERVER):
-    raise FileNotFoundError(
-        f"Не найден llama-server: {LLAMA_SERVER}\n"
-        "Укажите путь через LLAMA_SERVER=/путь/к/llama-server"
-    )
+USE_LLAMA_SERVER_BIN = os.path.isfile(LLAMA_SERVER)
 
-args = [
-    LLAMA_SERVER,
-    "-m", MODEL_PATH,
-    "-a", MODEL_ALIAS,
-    "--host", HOST,
-    "--port", str(PORT),
-    "-ngl", str(GPU_LAYERS),
-    "-c", str(CTX),
-    "-np", "1",
-    "-t", str(THREADS),
-    "-tb", str(THREADS_BATCH),
-    "-fa", "on" if FLASH_ATTN else "off",
-    "--tools", SERVER_TOOLS,
-]
-
-if not WEBUI:
-    args.append("--no-webui")
+if USE_LLAMA_SERVER_BIN:
+    args = [
+        LLAMA_SERVER,
+        "-m", MODEL_PATH,
+        "-a", MODEL_ALIAS,
+        "--host", HOST,
+        "--port", str(PORT),
+        "-ngl", str(GPU_LAYERS),
+        "-c", str(CTX),
+        "-np", "1",
+        "-t", str(THREADS),
+        "-tb", str(THREADS_BATCH),
+        "-fa", "on" if FLASH_ATTN else "off",
+        "--tools", SERVER_TOOLS,
+    ]
+    if not WEBUI:
+        args.append("--no-webui")
+    engine = f"llama-server ({LLAMA_SERVER})"
+else:
+    # Резервный движок из venv проекта: OpenAI-совместимый llama_cpp.server.
+    try:
+        import llama_cpp.server  # noqa: F401
+        import llama_cpp
+        if not llama_cpp.llama_supports_gpu_offload():
+            GPU_LAYERS = 0
+    except Exception as exc:  # noqa: BLE001
+        raise FileNotFoundError(
+            f"Не найден llama-server: {LLAMA_SERVER}\n"
+            "И модуль llama_cpp.server недоступен в текущем Python.\n"
+            "Укажите LLAMA_SERVER=/путь/к/llama-server или установите "
+            "llama-cpp-python в это окружение.\n"
+            f"Ошибка импорта: {exc}"
+        )
+    args = [
+        sys.executable, "-m", "llama_cpp.server",
+        "--model", MODEL_PATH,
+        "--model_alias", MODEL_ALIAS,
+        "--host", HOST,
+        "--port", str(PORT),
+        "--n_ctx", str(CTX),
+        "--n_threads", str(THREADS),
+        "--n_threads_batch", str(THREADS_BATCH),
+        "--n_gpu_layers", str(GPU_LAYERS),
+        "--chat_format", CHAT_FORMAT,
+        "--verbose", "False",
+    ]
+    engine = f"llama_cpp.server ({sys.executable}, chat_format={CHAT_FORMAT})"
 
 print(f"Модель: {MODEL_PATH}")
 print(f"Алиас: {MODEL_ALIAS}")
-print(f"Движок: llama-server ({LLAMA_SERVER})")
+print(f"Движок: {engine}")
 print(f"GPU-слои: {GPU_LAYERS}, потоков: {THREADS}/{THREADS_BATCH}, контекст: {CTX}")
-print(f"Инструменты: {SERVER_TOOLS}")
+if USE_LLAMA_SERVER_BIN:
+    print(f"Инструменты: {SERVER_TOOLS}")
+else:
+    print("Инструменты: передаются клиентом в каждом запросе (OpenAI tools)")
 print(f"Сервер: http://{HOST}:{PORT} (OpenAI API: /v1/chat/completions)")
 
-os.execv(LLAMA_SERVER, args)
+os.execv(args[0], args)

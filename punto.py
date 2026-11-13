@@ -4,6 +4,24 @@ from tkinter import Tk, Toplevel, Label, Frame
 from pynput import mouse, keyboard
 from gi.repository import GLib
 
+# python-xlib подключаем один раз на уровне модуля: Display() будем создавать
+# ЕДИНЖДЫ и переиспользовать (см. SmartTyper._get_x_display). Каждый новый
+# Display() в python-xlib создаёт новые классы ресурсов, а прежние не
+# освобождает (resource_classes — общий атрибут класса, цепочка наследования
+# растёт бесконечно) -> утечка ~40-80 КБ на Display(), за час ~250-300 МБ,
+# за несколько часов — гигабайт оперативной памяти.
+try:
+ from Xlib import display as _XLIB_DISPLAY_MOD, X as _XLIB_X_MOD
+ HAVE_XLIB = True
+except Exception:
+ _XLIB_DISPLAY_MOD = None
+ _XLIB_X_MOD = None
+ HAVE_XLIB = False
+
+# Отладочный лог [SUGG]/[SUGG-NONE] печатался на КАЖДОЕ нажатие клавиши
+# (миллионы строк в stdout/логе). По умолчанию выключен. Включить: PUNTO_DEBUG=1.
+DEBUG_SUGG = os.environ.get("PUNTO_DEBUG") == "1"
+
 # =====================================================================
 #  ЗАЛИПАНИЕ КЛАВИШ — ЗДЕСЬ ДВЕ ПЕРЕМЕННЫЕ, ПРАВЬТЕ ТОЛЬКО ИХ
 # =====================================================================
@@ -395,16 +413,25 @@ class EvdevTyper:
   return 'us' if self._detect_us() else 'ru'
 
  def _capslock_on(self):
+  # Кэшируем на 0.3 с: раньше на КАЖДЫЙ печатаемый символ запускался
+  # subprocess «xset -q | grep | awk» (~5-10 мс) — при замене длинного слова
+  # это десятки лишних процессов только ради проверки CapsLock.
+  now = time.time()
+  if now - getattr(self, '_caps_cache_time', 0.0) < 0.3:
+   return getattr(self, '_caps_cache', False)
+  res = False
   try:
    result = subprocess.run("xset -q | grep -A0 'LED mask' | awk '{print $10}'", shell=True, capture_output=True, text=True, timeout=2)
    mask_str = result.stdout.strip()
    if mask_str:
     mask = int(mask_str, 16)
     if mask & 0x00000004:
-     return True
+     res = True
   except Exception:
    pass
-  return False
+  self._caps_cache = res
+  self._caps_cache_time = now
+  return res
 
  def _set_layout(self, lang):
   for _ in range(12):
@@ -597,6 +624,11 @@ class SmartTyper: # Основной класс для автозамены и �
   # сейчас «залипшие» через UInput; общий дедлайн отпуска (time.time())
   self._mod_hold = {}
   self._mod_hold_deadline = 0.0
+  # Персистентное X-подключение для _active_window_pid(). Создаётся ОДИН раз;
+  # новый Display() на каждый запрос — главный источник утечки памяти
+  # (python-xlib не освобождает классы ресурсов, см. комментарий в шапке).
+  self._x_display = None
+  self._x_display_lock = threading.Lock()
 
  def _load_data(self): # Загружает данные из файлов аббревиатур и словаря
   if os.path.exists(self.abbreviations_path):
@@ -640,24 +672,73 @@ class SmartTyper: # Основной класс для автозамены и �
   script = '#!/bin/bash\necho $(whoami)\nexit;'
   return subprocess.run(['bash'], input=script, stdout=subprocess.PIPE, text=True).stdout.strip()
 
+ def _get_x_display(self):
+  """Возвращает ПЕРСИСТЕНТНЫЙ Xlib-Display (создаётся один раз).
+  Новый Display() на каждый запрос недопустим: python-xlib при каждом
+  создании порождает новые классы ресурсов и не освобождает прежние
+  (resource_classes — атрибут класса, цепочка наследования растёт) —
+  отсюда утечка ~40-80 КБ на Display() и рост памяти до гигабайта."""
+  if not HAVE_XLIB:
+   return None
+  with self._x_display_lock:
+   if self._x_display is None:
+    try:
+     d = _XLIB_DISPLAY_MOD.Display()
+     d.screen()  # «прогрев»: ошибка соединения всплывёт здесь, а не потом
+     self._x_display = d
+    except Exception as e:
+     print(f"[WARN] Xlib-Display не создан: {e}", flush=True)
+     self._x_display = None
+   return self._x_display
+
+ def _drop_x_display(self):
+  """Сбросить X-подключение (соединение умерло) — пересоздастся при
+  следующем обращении к _get_x_display()."""
+  with self._x_display_lock:
+   d = self._x_display
+   self._x_display = None
+  if d is not None:
+   try:
+    d.close()
+   except Exception:
+    pass
+
  def _active_window_pid(self): # PID активного окна без xdotool (через python-xlib)
+  if not HAVE_XLIB:
+   return None
   try:
-   from Xlib import display, X
-   d = display.Display()
+   d = self._get_x_display()
+   if d is None:
+    return None
    root = d.screen().root
-   aw = root.get_full_property(d.intern_atom('_NET_ACTIVE_WINDOW'), X.AnyPropertyType)
+   aw = root.get_full_property(d.intern_atom('_NET_ACTIVE_WINDOW'), _XLIB_X_MOD.AnyPropertyType)
    if aw and aw.value:
     wid = aw.value[0]
     w = d.create_resource_object('window', wid)
-    pid = w.get_full_property(d.intern_atom('_NET_WM_PID'), X.AnyPropertyType)
-    d.close()
+    pid = w.get_full_property(d.intern_atom('_NET_WM_PID'), _XLIB_X_MOD.AnyPropertyType)
     if pid and pid.value:
      return pid.value[0]
-   else:
-    d.close()
   except Exception:
-   pass
+   self._drop_x_display()  # соединение могло умереть (перезапуск X и т.п.)
   return None
+
+ def _proc_cmdline(self, pid): # Аргументы процесса из /proc (без запуска ps aux)
+  try:
+   with open(f"/proc/{pid}/cmdline", "rb") as f:
+    data = f.read()
+  except Exception:
+   return ""
+  if not data:
+   return ""
+  parts = [p.decode("utf-8", "replace") for p in data.split(b"\0") if p]
+  return " ".join(parts)
+
+ def _pid_is_game(self, pid): # Wine/Proton/игра? (чтобы отключать подсказки)
+  cmd = self._proc_cmdline(pid)
+  if not cmd:
+   return False
+  low = cmd.replace("\\", "/").lower()
+  return (".exe" in low or "/portproton/data/scripts/start.sh" in low) and "winword.exe" not in low
 
  def _setup_ui(self): # Настраивает интерфейс для подсказок
   self.root = Tk()
@@ -1084,10 +1165,12 @@ class SmartTyper: # Основной класс для автозамены и �
 
    self.suggestions = self._find_word_suggestions(self.current_word)
    if self.suggestions:
-    print(f"[SUGG] word='{self.current_word}' count={len(self.suggestions)} {self.suggestions}", flush=True)
+    if DEBUG_SUGG:
+     print(f"[SUGG] word='{self.current_word}' count={len(self.suggestions)} {self.suggestions}", flush=True)
     self._update_suggestions_ui()
    else:
-    print(f"[SUGG-NONE] word='{self.current_word}' счёт=0 -> прячу окно", flush=True)
+    if DEBUG_SUGG:
+     print(f"[SUGG-NONE] word='{self.current_word}' счёт=0 -> прячу окно", flush=True)
     for label in self.suggestion_labels:
      label.config(text="")
     self._hide_suggestions_window()
@@ -1121,33 +1204,27 @@ class SmartTyper: # Основной класс для автозамены и �
  def _check_active_window_loop(self): # Проверяет активное окно в цикле
   while True:
    try:
-    found = False
     time.sleep(1)
     process_id = self._active_window_pid()
     if process_id is None:
      self.disabled = False
      continue
-    result = subprocess.run(['ps', 'aux'], stdout=subprocess.PIPE, text=True).stdout
-    lines = [line for line in result.splitlines() if self.user in line]
-    pattern = r"(\.exe|\.EXE)"
-    for line in lines:
-     dir_process_name = line.split(maxsplit=10)[10].replace('\\', '/')
-     if re.search(pattern, dir_process_name) and process_id == int(line.split()[1]):
-      file_path_lower = dir_process_name.lower()
-      if (".exe" in file_path_lower or '/portproton/data/scripts/start.sh' in file_path_lower) and "winword.exe" not in file_path_lower:
-       self.disabled = True
-       self.current_word = ""
-       self.suggestions = []
-       self.abbrev_res = ""
-       GLib.idle_add(self._do_hide_all)
-       found = True
-       break
-    if not found:
+    # Раньше здесь каждую секунду ПОЛНОСТЬЮ перечитывался «ps aux»
+    # (subprocess + fork процесса-гигабайтника, ~25 мс CPU на вызов —
+    # постоянная фоновая нагрузка). Теперь читаем cmdline только одного
+    # нужного PID из /proc — без единого subprocess.
+    if self._pid_is_game(process_id):
+     if not self.disabled:
+      self.disabled = True
+      self.current_word = ""
+      self.suggestions = []
+      self.abbrev_res = ""
+      GLib.idle_add(self._do_hide_all)
+    else:
      self.disabled = False
    except Exception as e:
-    print(e)
+    print(e, flush=True)
     self.disabled = False
-   pass
 
  def _evdev_find_keyboards(self):
   """Список физических клавиатур (отсекаем виртуальные, созданные скриптами)."""
@@ -1558,10 +1635,12 @@ class SmartTyper: # Основной класс для автозамены и �
   # дедлайн и по истечении отпускаем все «залипшие» Shift/Ctrl/Alt ---
   GLib.timeout_add(200, self._mod_hold_tick)
 
-  # --- Контроль xmodmap-маппинга залипания правого Ctrl: раз в 3 с
+  # --- Контроль xmodmap-маппинга залипания правого Ctrl: раз в 10 с
   # проверяем, что keycode 254 всё ещё в группе control, иначе повторно
-  # применяем маппинг (фоновые процессы могут его сбивать) ---
-  GLib.timeout_add(3000, self._mod_hold_reapply_keymap)
+  # применяем маппинг (фоновые процессы могут его сбивать).
+  # Было 3 с — замеры показали, что 3 с ни к чему: это лишний subprocess
+  # «xmodmap -pm» 20 раз в минуту.
+  GLib.timeout_add(10000, self._mod_hold_reapply_keymap)
 
   # --- Фоновые потоки ---
   window_checker_thread = threading.Thread(target=self._check_active_window_loop, daemon=True)

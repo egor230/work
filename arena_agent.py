@@ -108,10 +108,13 @@ LOCAL_TOOL_SYSTEM_PROMPT = (
   "instruction using your built-in tools, then report a concise result. "
   "Rules:\n"
   "1. Use the provided tools directly; do not narrate plans.\n"
-  "2. When a tool fails, try a minimal alternative, then stop.\n"
-  "3. When done, reply with a short line: DONE: <one-line summary>.\n"
-  "4. Never run destructive commands (rm -rf /, mkfs, dd to /dev/*).\n"
-  "5. Working directory: {workdir}\n"
+  "2. If the instruction contains an exact command, path or content, pass it "
+  "to the tool VERBATIM. Do not rewrite, shorten or translate it.\n"
+  "3. After a tool returns, inspect rc/output. If it failed, try one minimal "
+  "fix, then stop and report the error.\n"
+  "4. When done, reply with a short line: DONE: <one-line summary>.\n"
+  "5. Never run destructive commands (rm -rf /, mkfs, dd to /dev/*).\n"
+  "6. Working directory: {workdir}\n"
 )
 
 # Формат tool call'ов, который умная модель (Claude и др.) выводит в ответе:
@@ -239,9 +242,22 @@ SMART_MODEL_TOOL_INSTRUCTION = (
   "[{\"name\": \"<tool>\", \"arguments\": {...}}]\n"
   "```\n"
   "Available tools: exec_shell_command, read_file, write_file, edit_file, "
-  "file_glob_search, grep_search. Each call returns a [RESULT] block with "
-  "the output. You may call tools at most 4 times total for one task. "
+  "file_glob_search, grep_search, run_local_task. Each call returns a [RESULT] "
+  "block. The [RAW OUTPUT] section contains the actual stdout/stderr — trust it "
+  "and never re-run a listing/command whose output is already there. You may "
+  "call tools at most 12 times total for one task. "
+  "For more than 10 items, work in batches of 5-10, verify each batch with a "
+  "count/validation command, and make scripts idempotent so a rerun skips "
+  "already-created files. Prefer one Python script that processes a whole "
+  "batch over hundreds of tiny tool calls. Use run_local_task ({\"task\": "
+  "\"...\"}) to delegate a self-contained multi-step job to the local model. "
   "After each [RESULT], continue reasoning or give a final answer. "
+  "Never repeat the exact same tool call: the [RESULT] above already contains "
+  "its output, so use it and move to the next step. "
+  "If a request asks for material you cannot reproduce (for example, "
+  "copyrighted lyrics), do NOT stop the whole task: create the file with the "
+  "available metadata and clearly marked empty sections for the protected "
+  "parts, then continue with the remaining items. "
   "When all actions are done, give a final answer WITHOUT a ```tool block."
 )
 AGENT_FS_INSTRUCTION = (
@@ -369,9 +385,9 @@ def _exec_tool_command(cmd: str, work_dir: Path, timeout: float) -> tuple[int, s
     except Exception:  # noqa: BLE001
       pass
   output = (output or "").strip()
-  maxc = 3500
+  maxc = 6000
   if len(output) > maxc:
-    output = output[:maxc] + "\n…(вывод обрезан. Используй grep/sed/head/tail для нужного фрагмента)."
+    output = output[:maxc] + "\n…(вывод обрезан. Используй grep/sed/head/tail для нужного фрагмента, либо верни структурированную сводку из скрипта)."
   if not output:
     output = "(нет вывода)"
   if notes:
@@ -461,6 +477,13 @@ def _tool_call_to_instruction(tc: dict[str, Any], work_dir: Path) -> str:
 # моделью: поставляет задание → локальная модель вызывает встроенные
 # инструменты llama-server → скрипт исполняет (через _exec_tool_command /
 # файловые функции) → результат постит обратно (роль "tool") → до финала.
+def _strip_tool_blocks(text: str) -> str:
+  """Убирает из финального текста служебные ```tool ...``` блоки."""
+  cleaned = re.sub(r"```[ \t]*tool[ \t]*\r?\n[\s\S]*?```", "", text or "")
+  cleaned = re.sub(r"(?:^|\n)[ \t]*tool[ \t]*:?[ \t]*\r?\n[ \t]*\[[\s\S]*?\]\s*$", "", cleaned, flags=re.M)
+  return cleaned.strip()
+
+
 class LocalToolAgent:
   def __init__(
     self,
@@ -478,6 +501,8 @@ class LocalToolAgent:
     self.max_iters = max_iters
     self.request_timeout = request_timeout
     self.enabled = True
+    self.ready = False
+    self.max_instruction_chars = 1800
     self._models_cache: list[str] = []
     self._models_checked_at = 0.0
     LOG.info(
@@ -525,10 +550,12 @@ class LocalToolAgent:
     """Быстрая проверка llama-server без падения при недоступности."""
     ids = self._get_models(force=True)
     if not ids:
+      self.ready = False
       LOG.warning("[LOCAL-TOOL] llama-server недоступен: %s (работа продолжится, "
                   "tool calls будут исполняться напрямую)", self.base_url)
       return False
     self._ensure_model_alias(ids)
+    self.ready = True
     LOG.info("[LOCAL-TOOL] llama-server доступен, модели: %s", ", ".join(ids))
     return True
 
@@ -537,7 +564,7 @@ class LocalToolAgent:
       "model": self.model,
       "messages": messages,
       "temperature": 0.0,
-      "max_tokens": 1024,
+      "max_tokens": 1536,
     }
     if tools:
       payload["tools"] = tools
@@ -663,12 +690,23 @@ class LocalToolAgent:
         tool_calls = msg.get("tool_calls") or []
         content = msg.get("content") or ""
         if not tool_calls:
-          final = content or "(локальная модель не вернула текст)"
+          final = (content or "").strip()
+          if not final and tool_log:
+            # Не тратим ещё один запрос к локальной модели: отдаём сырой
+            # результат выполненного инструмента. Именно он нужен умной
+            # модели, а не пересказ.
+            last = tool_log[-1]
+            final = (
+              f"DONE: {last['name']} rc={last['rc']}\n"
+              f"{str(last.get('output') or '')[:1500]}"
+            )
+          if not final:
+            final = "(локальная модель не вернула текст)"
           break
         # Фиксируем ход модели в истории
         messages.append({
           "role": "assistant",
-          "content": content or None,
+          "content": content or "",
           "tool_calls": tool_calls,
         })
         # Исполняем каждый tool call и постим результаты (роль "tool")
@@ -685,9 +723,8 @@ class LocalToolAgent:
           rc, out = self._execute_local_tool(tname, targs)
           tool_log.append({"iter": i + 1, "name": tname, "args": targs, "rc": rc, "output": out[:500]})
           messages.append({
-            "role": "tool",
-            "tool_call_id": tc_id,
-            "content": f"rc={rc}\n{out}",
+            "role": "user",
+            "content": f"[RESULT {tc_id}] rc={rc}\n{out}",
           })
       else:
         final = "(бюджет tool-loop исчерпан)"
@@ -787,6 +824,76 @@ _TOOL_NAMES = (
 )
 
 
+def _json_unescape_lenient(text: str) -> str:
+  """Мягко раскодирует строку, которую модель вставила в JSON без экранирования."""
+  out: list[str] = []
+  i = 0
+  while i < len(text):
+    ch = text[i]
+    if ch != "\\" or i + 1 >= len(text):
+      out.append(ch)
+      i += 1
+      continue
+    nxt = text[i + 1]
+    mapping = {"n": "\n", "r": "\r", "t": "\t", '"': '"', "\\": "\\", "/": "/"}
+    if nxt in mapping:
+      out.append(mapping[nxt])
+      i += 2
+    elif nxt == "u" and i + 5 < len(text):
+      try:
+        out.append(chr(int(text[i + 2:i + 6], 16)))
+        i += 6
+      except ValueError:
+        out.append(ch)
+        i += 1
+    else:
+      out.append(ch)
+      i += 1
+  return "".join(out)
+
+
+def _parse_tool_block_lenient(body: str) -> list[dict[str, Any]]:
+  """Аварийный разбор tool call'а, если JSON битый.
+
+  Модели часто вставляют в `exec_shell_command` большой heredoc-скрипт
+  с настоящими переносами строк и неэкранированными кавычками. Строгий
+  json.loads такое не принимает. Здесь мы вытаскиваем имя и аргументы
+  эвристически, сохраняя содержимое команды как есть.
+  """
+  m_name = re.search(r'"name"\s*:\s*"([^"]+)"', body)
+  if not m_name:
+    return []
+  name = m_name.group(1)
+  args: dict[str, Any] = {}
+
+  def extract_string(key: str) -> str | None:
+    m = re.search(r'"' + re.escape(key) + r'"\s*:\s*"', body)
+    if not m:
+      return None
+    raw = body[m.end():]
+    # Закрывающая кавычка значения перед закрытием объекта/массива.
+    end = re.search(r'"\s*\}\s*\]?\s*$', raw)
+    if end:
+      value = raw[:end.start()]
+    else:
+      value = raw[:raw.rfind('"')] if '"' in raw else raw
+    return _json_unescape_lenient(value)
+
+  if name in ("exec_shell_command", "read_file", "write_file", "edit_file",
+              "file_glob_search", "grep_search"):
+    for key in ("command", "path", "content", "old_string", "new_string",
+                "pattern", "case_sensitive"):
+      value = extract_string(key)
+      if value is not None:
+        args[key] = value
+  if name == "exec_shell_command" and "command" not in args:
+    return []
+  if not args:
+    return []
+  LOG.warning("[TOOL-PARSE] JSON битый — применил мягкий разбор для '%s'", name)
+  return [{"name": name, "arguments": args}]
+
+
 def parse_tool_block(answer: str) -> list[dict[str, Any]]:
   """Извлекает список tool call'ов из ответа Arena-модели.
 
@@ -818,11 +925,14 @@ def parse_tool_block(answer: str) -> list[dict[str, Any]]:
         body = candidate.strip()
         break
   # Формат 4: tool\\n[...] без бэктиков. Не требуем конца строки/текста:
-  # модель может дописать пояснение после JSON.
+  # модель может дописать пояснение после JSON. Берём весь остаток ответа:
+  # балансировка скобок ломается на больших shell-скриптах с кавычками.
   if not body:
     m = re.search(r"(?:^|\n)[ \t]*tool[ \t]*:?[ \t]*(?:\r?\n)?[ \t]*(?=[\[{])", answer, re.M)
     if m:
-      body = _extract_balanced_json(answer[m.end():]).strip()
+      rest = answer[m.end():].strip()
+      if rest:
+        body = rest
   # Формат 5: JSON с известным инструментом, но без слова tool.
   if not body:
     positions = [answer.find(f'"{n}"') for n in _TOOL_NAMES if f'"{n}"' in answer]
@@ -844,10 +954,16 @@ def parse_tool_block(answer: str) -> list[dict[str, Any]]:
     LOG.warning("[TOOL-PARSE] invalid JSON: %s", body[:200])
     candidate = _extract_balanced_json(body)
     if not candidate:
+      lenient = _parse_tool_block_lenient(body)
+      if lenient:
+        return lenient
       return []
     try:
       data = _json.loads(candidate)
     except Exception:
+      lenient = _parse_tool_block_lenient(body)
+      if lenient:
+        return lenient
       LOG.warning("[TOOL-PARSE] cannot fix JSON: %s", candidate[:200])
       return []
   if isinstance(data, dict):
@@ -950,6 +1066,11 @@ class BrowserSettings:
   debug_artifacts: bool = False
   dump_on_start: bool = False
   launch_chrome: bool = True
+  # Какой ответ брать, если Arena показывает два варианта (A/B, Battle).
+  # auto: при двух колонках — левая (A); иначе самый длинный/первый.
+  answer_column: str = "auto"
+  # Принудительно открывать Direct-режим (одна модель) перед отправкой.
+  force_direct: bool = False
 
 
 def clean_stale_profile_lock(profile: Path) -> None:
@@ -1011,8 +1132,13 @@ def launch_visible_chrome(settings: BrowserSettings) -> subprocess.Popen | None:
     # "--use-fake-ui-for-media-stream",
     "--disable-popup-blocking",
     "--disable-dev-shm-usage",
+    # VM/нет GPU: отключаем аппаратный GPU, но НЕ отключаем софтверный
+    # растеризатор (раньше были и --disable-gpu, и --disable-software-rasterizer
+    # одновременно — в VM без GPU страница не имела НИКАКОГО растеризатора,
+    # рендерер падал, и каждый send давал "Target page ... closed" → 502).
+    # --use-gl=swiftshader даёт надёжный софтверный GL, когда GPU недоступен.
     "--disable-gpu",
-    "--disable-software-rasterizer",
+    "--use-gl=swiftshader",
     "--disable-infobars",
     "--window-size=1200,900",
     "--new-window",
@@ -1182,6 +1308,11 @@ class ArenaWorker(threading.Thread):
       )
       context = self.browser.contexts[0]
       self.page = context.pages[0] if context.pages else context.new_page()
+      # Не даём отдельным Playwright-операциям висеть по 30 секунд.
+      try:
+        self.page.set_default_timeout(10000)
+      except Exception:  # noqa: BLE001
+        pass
       # Антидетект: прячем следы автоматизации от Arena.
       context.add_init_script(
         """
@@ -1215,19 +1346,24 @@ class ArenaWorker(threading.Thread):
         self._dump_page_source()
       # Сначала подтягиваем список доступных моделей — это наполнит
       # self.available_models. Затем пытаемся выбрать запрошенную модель.
-      # Если её нет в списке, работаем с дефолтной моделью Arena.
+      # Если модель не задана, пикер вообще не открываем: это лишний
+      # UI-шаг, который может зависнуть и задержать старт worker'а.
+      requested_model = (self.settings.model or "").strip()
       self.selected_model = ""
-      try:
-        self.available_models = self._fetch_available_models()
-        LOG.info("[MODELS] available=%s", self.available_models)
-      except Exception as exc:  # noqa: BLE001
-        LOG.warning("[MODELS] fetch error: %s", exc)
-        self.available_models = []
-      try:
-        self._select_model_safe(self.settings.model)
-      except Exception as exc:  # noqa: BLE001
-        LOG.warning("[MODEL] select failed: %s", exc)
-        self.selected_model = ""
+      if requested_model:
+        try:
+          self.available_models = self._fetch_available_models()
+          LOG.info("[MODELS] available=%s", self.available_models)
+        except Exception as exc:  # noqa: BLE001
+          LOG.warning("[MODELS] fetch error: %s", exc)
+          self.available_models = []
+        try:
+          self._select_model_safe(requested_model)
+        except Exception as exc:  # noqa: BLE001
+          LOG.warning("[MODEL] select failed: %s", exc)
+          self.selected_model = ""
+      else:
+        LOG.info("[MODEL] модель не задана — работаю с текущей/дефолтной моделью Arena, пикер не открываю")
       self.last_error = None
       LOG.info("Arena готова, модель=%s (запрошена=%s)", self.selected_model or "дефолт", self.settings.model or "дефолт")
       return True
@@ -1321,9 +1457,9 @@ class ArenaWorker(threading.Thread):
       count = opts.count()
     except Exception:  # noqa: BLE001
       return out
-    for i in range(count):
+    for i in range(min(count, 400)):
       try:
-        t = opts.nth(i).inner_text().strip().split("\n")[0]
+        t = opts.nth(i).inner_text(timeout=2000).strip().split("\n")[0]
       except Exception:  # noqa: BLE001
         t = ""
       if t:
@@ -1473,11 +1609,10 @@ class ArenaWorker(threading.Thread):
     try:
       control.click(timeout=5000)
       search = self._model_search_input()
-      if search is not None:
-        try:
-          search.fill(resolved, timeout=2000)
-        except Exception as exc:  # noqa: BLE001
-          LOG.debug("[MODEL] search fill failed: %s; ищу по всему списку", exc)
+      # Основной путь — прямой клик по варианту из списка (не зависит от
+      # поисковой строки, которой у Arena может не быть: раньше fill по
+      # "Search models" ждал 30 с на отсутствующем input'е). Сначала читаем
+      # опции и ищем точное совпадение с resolved.
       self.page.wait_for_timeout(700)
       options = self._read_model_options()
       want = self._norm_model(resolved)
@@ -1485,22 +1620,30 @@ class ArenaWorker(threading.Thread):
         if self._norm_model(t) == want:
           target = (t, loc)
           break
+      # Фолбэк: частичное совпадение по тексту варианта.
       if target is None:
         for t, loc in options:
-          if want in self._norm_model(t):
+          if want and want in self._norm_model(t):
             target = (t, loc)
             break
+      # Фолбэк: поиск через search-строку (если она есть и отфильтровала список).
       if target is None and search is not None:
-        # Поиск мог отфильтровать нужное — очищаем и смотрим весь список.
         try:
-          search.fill("", timeout=2000)
-          self.page.wait_for_timeout(500)
+          search.fill(resolved, timeout=2000)
+          self.page.wait_for_timeout(700)
           for t, loc in self._read_model_options():
             if self._norm_model(t) == want:
               target = (t, loc)
               break
-        except Exception:  # noqa: BLE001
-          pass
+          if target is None:
+            search.fill("", timeout=2000)
+            self.page.wait_for_timeout(500)
+            for t, loc in self._read_model_options():
+              if self._norm_model(t) == want:
+                target = (t, loc)
+                break
+        except Exception as exc:  # noqa: BLE001
+          LOG.debug("[MODEL] search path failed: %s; продолжаю без поиска", exc)
       if target is None:
         raise RuntimeError(f"модель '{resolved}' не найдена в списке Arena")
       LOG.info("[MODEL] selecting option=%s", target[0])
@@ -1784,6 +1927,75 @@ class ArenaWorker(threading.Thread):
       ".map(e => (e.innerText||'').trim()).filter(Boolean)"
     )
 
+  def _answer_candidates_js(self, before: list[str], mode: str = "auto") -> dict[str, Any]:
+    """Возвращает все новые ответы ассистента и выбранный по режиму.
+
+    В Direct-режиме новый ответ один. В Battle / сравнении моделей Arena
+    рисует две колонки: A слева, B справа. Старый код брал первый попавшийся
+    `<ol>` и ждал стабилизации обоих вариантов, поэтому «выбор A/B» занимал
+    очень долго. Здесь мы сразу выбираем нужную колонку и следим за
+    стабильностью только её текста.
+    """
+    try:
+      return self.page.evaluate(
+        """(args) => {
+            const before = args.before || [];
+            const mode = args.mode || 'auto';
+            const all = [...document.querySelectorAll('div.prose')]
+              .filter(e => !e.closest('.bg-surface-raised'));
+            const fresh = [];
+            for (const p of all) {
+              const t = (p.innerText || '').trim();
+              if (!t || before.includes(t)) continue;
+              if (fresh.some(x => x.text === t)) continue;
+              const r = p.getBoundingClientRect();
+              let label = '';
+              let node = p;
+              for (let k = 0; k < 10 && node; k++) {
+                const cand = (node.getAttribute && (
+                  node.getAttribute('data-testid') ||
+                  node.getAttribute('aria-label') ||
+                  node.getAttribute('data-model')
+                )) || '';
+                if (cand && !label) label = cand;
+                node = node.parentElement;
+              }
+              fresh.push({
+                text: t,
+                left: Math.round(r.left + r.width / 2),
+                top: Math.round(r.top),
+                label: label,
+                len: t.length
+              });
+            }
+            const candidates = fresh.map(x => ({
+              left: x.left, top: x.top, len: x.len, label: x.label,
+              preview: x.text.slice(0, 120)
+            }));
+            if (!fresh.length) return {chosen: '', candidates: []};
+            let chosen = null;
+            if (mode === 'first') chosen = fresh[0];
+            else if (mode === 'longest') {
+              chosen = fresh.slice().sort((a, b) => b.len - a.len)[0];
+            } else if (mode === 'b') {
+              chosen = fresh.slice().sort((a, b) => b.left - a.left)[0];
+            } else if (mode === 'a') {
+              chosen = fresh.slice().sort((a, b) => a.left - b.left)[0];
+            } else {
+              const xs = fresh.map(x => x.left);
+              const spread = Math.max(...xs) - Math.min(...xs);
+              chosen = spread > 120
+                ? fresh.slice().sort((a, b) => a.left - b.left)[0]
+                : fresh.slice().sort((a, b) => b.len - a.len)[0];
+            }
+            return {chosen: chosen.text, candidates: candidates};
+        }""",
+        {"before": before, "mode": mode},
+      )
+    except Exception as exc:  # noqa: BLE001
+      LOG.debug("[ANSWER] candidates js failed: %s", exc)
+      return {"chosen": "", "candidates": []}
+
   def _extract_answer_js(self, message: str, before: list[str]) -> str:
     """Точное извлечение ответа модели по реальной структуре Arena.
 
@@ -1852,9 +2064,16 @@ class ArenaWorker(threading.Thread):
     if model and str(model).strip().lower() not in ("", "current", "arena-current", "*", "auto"):
       # Ошибка выбора модели не должна ронять запрос: остаёмся на текущей.
       self._select_model_safe(model)
+    if self.settings.force_direct and "/text/direct" not in (self.page.url or ""):
+      try:
+        LOG.info("[MODE] открываю Direct-режим вместо Battle: %s", DIRECT_URL)
+        self.page.goto(DIRECT_URL, wait_until="domcontentloaded", timeout=30000)
+        self.page.wait_for_timeout(1000)
+      except Exception as exc:  # noqa: BLE001
+        LOG.warning("[MODE] не удалось открыть Direct: %s; продолжаю на текущей странице", exc)
     self._ensure_no_login_modal()
     before = self._assistant_prose_texts_js()
-    LOG.info("[ASK] baseline assistant prose=%s", len(before))
+    LOG.info("[ASK] baseline assistant prose=%s column=%s", len(before), self.settings.answer_column)
     composer = self._wait_composer()
     LOG.info("[ASK] composer found")
     self._send_reliably(composer, message)
@@ -1881,9 +2100,25 @@ class ArenaWorker(threading.Thread):
     last = ""
     stable_since = 0.0
     appeared = False
+    logged_variants = ""
     while time.time() < deadline:
       self.page.wait_for_timeout(500)
-      candidate = self._extract_answer_js(message, before)
+      cand_info = self._answer_candidates_js(before, self.settings.answer_column)
+      candidate = cand_info.get("chosen") or ""
+      variants = cand_info.get("candidates") or []
+      if len(variants) > 1:
+        sig = json.dumps(variants, sort_keys=True, ensure_ascii=False)
+        if sig != logged_variants:
+          logged_variants = sig
+          LOG.info(
+            "[ANSWER] вариантов=%d, режим=%s; выбран %s. Колонки: %s",
+            len(variants), self.settings.answer_column,
+            "A (левая)" if self.settings.answer_column == "auto" else self.settings.answer_column,
+            json.dumps(variants, ensure_ascii=False)[:600],
+          )
+      if not candidate:
+        # Фолбэк на старую DOM-логику, если разметка нестандартная.
+        candidate = self._extract_answer_js(message, before)
       if not candidate:
         total = self.page.locator("div.prose").count()
         raised = self.page.locator("div.bg-surface-raised").count()
@@ -1936,6 +2171,18 @@ class ArenaWorker(threading.Thread):
     else:
       LOG.error("[ANSWER] таймаут; для диагностики запустите с --debug-artifacts")
     raise TimeoutError("Arena не вернула ответ")
+
+  @staticmethod
+  def _looks_like_refusal(text: str) -> bool:
+    """Грубый детектор отказа модели продолжить задачу."""
+    t = (text or "").lower()
+    markers = (
+      "не буду", "не могу", "не стану", "не воспроизвожу",
+      "авторским правом", "защищённые авторским", "защищенные авторским",
+      "copyright", "copyrighted", "cannot reproduce", "can't reproduce",
+      "i won't", "i will not",
+    )
+    return any(m in t for m in markers)
 
   def _is_looping(self, text: str) -> bool:
     """Детектирует зацикливание: хвост 120 символов повторяется ≥4 раз."""
@@ -2018,51 +2265,125 @@ class ArenaWorker(threading.Thread):
       LOG.info("[LOCAL-TOOL-LOOP] local agent disabled; returning raw answer")
       return {"model": self.selected_model, "answer": answer}
 
+    # llama-server мог подняться уже после старта агента. Проверяем ещё раз,
+    # чтобы локальная модель реально участвовала, а не только числилась.
+    if not self.local_agent.ready:
+      self.local_agent.probe()
+
     loop_deadline = time.time() + min(timeout, 900)
     total_calls: list[dict[str, Any]] = []
-    prev_tools: list[str] = []
+    prev_signature: list[str] = []
+    nudges = 0
     for i in range(self.local_max_iters):
       if time.time() > loop_deadline:
         LOG.warning("[LOCAL-TOOL-LOOP] budget exhausted after %.0fs", timeout)
         break
       tool_calls = parse_tool_block(answer)
       if not tool_calls:
-        # Умная модель не требует инструментов — задача завершена.
+        # Умная модель не требует инструментов. Но если это отказ
+        # («не могу воспроизвести текст»), даём ей пинок: задача должна
+        # быть закрыта доступным способом, а не брошена на полпути.
+        if nudges < 1 and self._looks_like_refusal(answer):
+          nudges += 1
+          LOG.warning("[LOCAL-TOOL-LOOP] похоже на отказ модели; отправляю корректирующий пинок")
+          nudge = (
+            "[SYSTEM] Не останавливай задачу из-за ограничений на текст. "
+            "Не воспроизводи защищённый авторским правом текст. Вместо этого "
+            "создай файлы с доступными данными (название песни, перевод "
+            "названия) и явно помеченными пустыми секциями для текста и "
+            "построчного перевода. Используй tool calls. Обработай все "
+            "альбомы и песни, затем ответь DONE с числом созданных файлов."
+          )
+          try:
+            answer = self._ask_raw(nudge, None, timeout)["answer"]
+          except Exception as exc:  # noqa: BLE001
+            LOG.warning("[LOCAL-TOOL-LOOP] не удалось отправить пинок: %s", exc)
+            break
+          continue
         LOG.info("[LOCAL-TOOL-LOOP] no tool block at iter %d; task complete", i)
         break
-      current_tools = [c["name"] for c in tool_calls]
-      # Защита от зацикливания: 2 итерации подряд с теми же инструментами → стоп.
-      if current_tools == prev_tools and i >= 1:
+      # Подпись вызова включает имя И аргументы: два разных shell-вызова
+      # не должны считаться повтором только из-за одинакового имени.
+      signature = [
+        f"{c.get('name', '')}::{json.dumps(c.get('arguments') or {}, sort_keys=True, ensure_ascii=False)}"
+        for c in tool_calls
+      ]
+      if signature == prev_signature:
+        # Это действительно повтор. Не обрываем задачу сразу: просим
+        # умную модель использовать уже полученный результат.
+        if nudges < 2:
+          nudges += 1
+          LOG.warning("[LOCAL-TOOL-LOOP] повторный вызов на iter %d; отправляю пинок", i)
+          nudge = (
+            "[SYSTEM] Этот tool call уже выполнен, его результат есть выше "
+            "в [RESULT]. Не повторяй его. Используй полученный результат и "
+            "переходи к следующему шагу. Если задача выполнена — ответь DONE."
+          )
+          try:
+            answer = self._ask_raw(nudge, None, timeout)["answer"]
+          except Exception as exc:  # noqa: BLE001
+            LOG.warning("[LOCAL-TOOL-LOOP] не удалось отправить пинок: %s", exc)
+            break
+          continue
         LOG.warning("[LOCAL-TOOL-LOOP] same tools repeated at iter %d; stopping to avoid ban", i)
         answer = answer + "\n\n[ЛОКАЛЬНЫЙ АГЕНТ: остановлен — повторный вызов тех же инструментов. Задача может быть неполной.]"
         break
-      prev_tools = current_tools
-      LOG.info("[LOCAL-TOOL-LOOP] iter=%d tool_calls=%s", i, current_tools)
+      prev_signature = signature
+      LOG.info("[LOCAL-TOOL-LOOP] iter=%d tool_calls=%s", i, [c.get("name") for c in tool_calls])
       # Каждый tool call — отдельное задание для локальной модели.
       # Локальная модель сама решает, какие инструменты вызвать.
       for tc in tool_calls:
-        # Формируем человеческое задание из tool call'а умной модели.
-        # Локальная модель понимает инструкции вида "выполни bash: ...",
-        # "напиши в файл ...", "найди файлы по шаблону ...".
-        instr = _tool_call_to_instruction(tc, self.work_dir)
-        LOG.info("[LOCAL-TOOL-LOOP] local task: %s", instr[:200])
-        res = self.local_agent.execute(instr)
-        if res.get("unavailable"):
-          # llama-server выключен или не отвечает. Не роняем задачу:
-          # исполняем тот же tool call напрямую на этой машине.
-          LOG.warning("[LOCAL-TOOL-LOOP] локальная модель недоступна — "
-                      "исполняю '%s' напрямую", tc.get("name", "?"))
-          res = self.local_agent.execute_direct(tc)
+        name = str(tc.get("name", "") or "")
+        args = tc.get("arguments") or {}
+        # Явная делегация сложной задачи локальной модели.
+        if name == "run_local_task":
+          task = str(args.get("task", "") or "").strip()
+          LOG.info("[LOCAL-TOOL-LOOP] delegated local task: %s", task[:300])
+          if not task:
+            res = {"answer": "FAIL: run_local_task без поля task", "tool_calls": [], "complete": False}
+          else:
+            res = self.local_agent.execute(task)
+          instr = f"локальная задача: {task[:300]}"
+        else:
+          instr = _tool_call_to_instruction(tc, self.work_dir)
+          LOG.info("[LOCAL-TOOL-LOOP] local task: %s", instr[:200])
+          # Определённые действия надёжнее и быстрее исполнять напрямую.
+          # Локальную модель зовём только для коротких инструкций, которые
+          # она способна воспроизвести без искажений. Для больших heredoc
+          # (частый случай) сразу идёт прямой путь.
+          too_big = len(instr) > self.local_agent.max_instruction_chars
+          if too_big or not self.local_agent.ready:
+            if too_big:
+              LOG.info("[LOCAL-TOOL-LOOP] инструкция %d символов > %d — исполняю '%s' напрямую",
+                       len(instr), self.local_agent.max_instruction_chars, name)
+            res = self.local_agent.execute_direct(tc)
+          else:
+            res = self.local_agent.execute(instr)
+            if (res.get("unavailable") or not res.get("tool_calls")):
+              # Локальная модель не справилась (нет tool call / сервер отвалился).
+              # Не роняем задачу: исполняем тот же tool call напрямую.
+              LOG.warning("[LOCAL-TOOL-LOOP] локальная модель не выполнила '%s' — "
+                          "исполняю напрямую", name)
+              res = self.local_agent.execute_direct(tc)
         total_calls.extend(res.get("tool_calls", []))
         rc_note = ""
         skipped = res.get("skipped")
         if skipped:
           rc_note = "(локальный агент отключён)"
+        raw_parts: list[str] = []
+        for call in res.get("tool_calls", []):
+          raw_parts.append(
+            f"[{call.get('name', '?')} rc={call.get('rc', '?')}]\n"
+            f"{str(call.get('output') or '')[:4000]}"
+          )
+        raw_output = "\n".join(raw_parts) if raw_parts else "(нет tool output)"
         feedback = (
           f"[RESULT]\n"
           f"Локальный tool-агент выполнил: {instr}\n"
           f"Результат: {res['answer']}\n"
           f"{rc_note}\n"
+          f"[RAW OUTPUT — используй это как фактический результат]\n"
+          f"{raw_output}\n"
           f"[/RESULT]"
         )
         try:
@@ -2076,7 +2397,17 @@ class ArenaWorker(threading.Thread):
       break
     if total_calls:
       LOG.info("[LOCAL-TOOL-LOOP] total local tool calls=%d", len(total_calls))
-    return {"model": self.selected_model, "answer": answer, "local_tool_calls": total_calls}
+    final_answer = answer
+    if parse_tool_block(final_answer):
+      # Бюджет исчерпан или цикл остановлен, а в ответе остался невыполненный
+      # tool block. Клиенту отдаём чистый текст и честную пометку.
+      final_answer = _strip_tool_blocks(final_answer)
+      note = ("[ЛОКАЛЬНЫЙ АГЕНТ: задача остановлена по лимиту итераций; "
+              "последний tool-блок не выполнен. Продолжите задачу новым запросом — "
+              "уже созданные файлы и чекпоинты сохранятся.]")
+      final_answer = (final_answer + "\n\n" + note).strip()
+      LOG.warning("[LOCAL-TOOL-LOOP] незавершённый tool block удалён из финального ответа")
+    return {"model": self.selected_model, "answer": final_answer, "local_tool_calls": total_calls}
 
 
 worker: ArenaWorker | None = None
@@ -2102,6 +2433,8 @@ def health() -> dict[str, Any]:
     "api_port": _api_port,
     "cdp_port": worker.settings.cdp_port if worker else None,
     "local_tools": bool(_get_local_agent() and _get_local_agent().enabled),
+    "local_tools_ready": bool(_get_local_agent() and _get_local_agent().enabled and _get_local_agent().ready),
+    "local_tool_model": (_get_local_agent().model if _get_local_agent() else None),
   }
 
 
@@ -2341,6 +2674,8 @@ def completions(req: ChatRequest) -> dict[str, Any]:
   except Exception as exc:
     raise HTTPException(502, str(exc)) from exc
   answer = result["answer"]
+  # Клиент ожидает обычный текст, а не служебный протокол инструментов.
+  answer = _strip_tool_blocks(answer) or answer
   return {
     "id": "chatcmpl-" + uuid.uuid4().hex,
     "object": "chat.completion",
@@ -2414,20 +2749,28 @@ def _port_free(host: str, port: int) -> bool:
     return False
 
 
-def _find_free_port(host: str, preferred: int, attempts: int = 20) -> int:
+def _find_free_port(host: str, preferred: int, attempts: int = 20,
+                    excluded: set[int] | None = None) -> int:
   """Ищет свободный порт около preferred; в крайнем случае — эфемерный."""
+  skip = excluded or set()
   if preferred > 0:
     candidates = [preferred] + [preferred + i for i in range(1, attempts + 1)]
     for port in candidates:
+      if port in skip:
+        continue
       if 0 < port <= 65535 and _port_free(host, port):
         return port
-  try:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-      s.settimeout(0.5)
-      s.bind((host, 0))
-      return int(s.getsockname()[1])
-  except OSError:
-    return 0
+  for _ in range(10):
+    try:
+      with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.5)
+        s.bind((host, 0))
+        port = int(s.getsockname()[1])
+      if port not in skip:
+        return port
+    except OSError:
+      return 0
+  return 0
 
 
 def _probe_existing_agent(host: str, port: int) -> dict[str, Any] | None:
@@ -2500,16 +2843,21 @@ def main() -> None:
   parser.add_argument("--self-test", action="store_true", help="Отправить автоматический тестовый вопрос сразу после старта (по умолчанию не отправляется)")
   parser.add_argument("--work-dir", default="/home/egor/Downloads", help="Рабочая директория для файловых операций агента")
   parser.add_argument("--no-agent-fs", action="store_true", help="Отключить агентские файловые функции (tool-loop и [EXEC])")
-  parser.add_argument("--tool-timeout", type=float, default=300, help="Таймаут выполнения bash-команды агента, сек")
+  parser.add_argument("--tool-timeout", type=float, default=600, help="Таймаут выполнения bash-команды агента, сек (по умолчанию 600)")
   parser.add_argument("--max-tool-iters", type=int, default=6, help="Макс. число итераций tool-loop")
+  parser.add_argument("--answer-column", default="auto",
+                      choices=("auto", "a", "b", "first", "longest"),
+                      help="Какой из двух ответов Arena брать: auto/A/B/first/longest (по умолчанию auto = левая колонка A)")
+  parser.add_argument("--force-direct", action="store_true",
+                      help="Перед отправкой принудительно открывать Direct-режим (одна модель, без A/B)")
   parser.add_argument("--tool-work-dir", default="/home/egor/Downloads",
                       help="Рабочая директория для локального tool-агента (llama-server)")
   parser.add_argument("--local-tool-url", default="http://127.0.0.1:8080/v1",
                       help="OpenAI-совместимый URL llama-server (дефолт: 8080)")
   parser.add_argument("--local-tool-model", default="qwen3-4b-instruct-2507-gguf",
                       help="Алиас модели llama-server; при несовпадении берётся реальный из /v1/models")
-  parser.add_argument("--local-tools-max-iters", type=int, default=4,
-                      help="Макс. итераций tool-loop внутри LocalToolAgent (по умолчанию 4)")
+  parser.add_argument("--local-tools-max-iters", type=int, default=12,
+                      help="Макс. итераций tool-loop внутри LocalToolAgent (по умолчанию 12)")
   parser.add_argument("--no-local-tools", action="store_true",
                       help="Полностью отключить локальный tool-агент (умная модель думает, но руки не работают)")
   parser.add_argument("--state-dir", default=str(DEFAULT_STATE_DIR),
@@ -2569,6 +2917,8 @@ def main() -> None:
     debug_artifacts=args.debug_artifacts,
     dump_on_start=args.dump_on_start,
     launch_chrome=launch_chrome,
+    answer_column=args.answer_column,
+    force_direct=args.force_direct,
   )
   worker = ArenaWorker(
     settings,
@@ -2599,19 +2949,22 @@ def main() -> None:
   api_thread: threading.Thread | None = None
   api_server: Any = None
   actual_port: int | None = None
-  for attempt in range(4):
+  tried_ports: set[int] = set()
+  for attempt in range(6):
     if attempt == 0 and args.port > 0 and _port_free(args.host, args.port):
       port = args.port
     else:
-      port = _find_free_port(args.host, args.port if args.port > 0 else 0)
+      port = _find_free_port(args.host, args.port if args.port > 0 else 0,
+                              excluded=tried_ports)
       if port <= 0:
         LOG.error("[BOOT] не удалось найти свободный порт для API")
         break
+    tried_ports.add(port)
     LOG.info("[BOOT] запускаю API на %s:%s", args.host, port)
     api_thread, api_server, actual_port = _start_api_server(args.host, port)
     if actual_port is not None:
       break
-    LOG.warning("[BOOT] порт %s не подошёл; пробую другой", port)
+    LOG.warning("[BOOT] порт %s не подошёл; больше не пробую его, беру следующий", port)
     time.sleep(0.5)
 
   _api_port = actual_port
