@@ -25,6 +25,7 @@ import re
 import shutil
 import socket
 import subprocess
+import sys
 import threading
 import time
 import urllib.error
@@ -51,6 +52,11 @@ DEFAULT_STATE_DIR = Path(
 LOG_MAX_BYTES = 5 * 1024 * 1024
 LOG_BACKUPS = 3
 LOG = logging.getLogger("arena-monolith")
+
+# Сколько символов вывода инструмента возвращать умной модели.
+# 6000 не хватало на большие листинги (155 треков) — модель получала
+# обрезанный список и просила его заново. Меняется через --max-output-chars.
+_MAX_OUTPUT_CHARS = int(os.environ.get("ARENA_MAX_OUTPUT_CHARS", "12000"))
 
 # Сетевой шум Arena: реклама, капча, rive-анимации, RSC-запросы. Раньше каждое
 # такое событие писалось как WARNING и раздувало лог до мегабайтов.
@@ -116,6 +122,109 @@ LOCAL_TOOL_SYSTEM_PROMPT = (
   "5. Never run destructive commands (rm -rf /, mkfs, dd to /dev/*).\n"
   "6. Working directory: {workdir}\n"
 )
+
+# Qwen3-4B, обученная на Hermes-стиле, предпочитает JSON вызова вида
+# {"name": "...", "arguments": {...}} или {"tool": "..."}, а не строгий
+# OpenAI tool_calls. Промпт ниже переводит локальную модель на этот формат,
+# а ответ разбирается _parse_local_tool_json(). Так «руки» работают без
+# chatml-function-calling (который на этом стеке отдаёт пустой content).
+LOCAL_TOOL_JSON_PROMPT = (
+  "\n\n=== HOW TO CALL TOOLS ===\n"
+  "Do NOT write shell commands as plain text and do NOT narrate. Answer with "
+  "ONE JSON object and nothing else:\n"
+  "{\"name\": \"<tool>\", \"arguments\": {...}}\n"
+  "Examples:\n"
+  "{\"name\": \"exec_shell_command\", \"arguments\": {\"command\": \"ls -la /tmp\"}}\n"
+  "{\"name\": \"write_file\", \"arguments\": {\"path\": \"a.md\", \"content\": \"...\"}}\n"
+  "{\"name\": \"read_file\", \"arguments\": {\"path\": \"a.md\"}}\n"
+  "After you receive [RESULT results=[...]] and the task is done, answer with "
+  "plain text: DONE: <short summary>. One tool call per message.\n"
+)
+
+# Ищем JSON tool call в свободном ответе локальной модели (в т.ч. в ```json).
+_LOCAL_TOOL_JSON_RE = re.compile(r"\{\s*\"(?:name|tool|function)\"\s*:")
+_KNOWN_LOCAL_TOOLS = {
+  "exec_shell_command", "read_file", "write_file", "edit_file",
+  "file_glob_search", "grep_search",
+}
+# Для "chatml-function-calling": functions.exec_shell_command:\n{...}
+_LOCAL_TOOL_FN_RE = re.compile(
+  r"functions\.([a-z_]+)\s*:\s*(\{[\s\S]*?\})\s*(?=functions\.|$)", re.M
+)
+
+
+def _balanced_json_at(text: str, start: int) -> str | None:
+  """Вырезает сбалансированный JSON-объект, начиная с позиции start."""
+  depth = 0
+  in_str = False
+  esc = False
+  for i in range(start, len(text)):
+    ch = text[i]
+    if in_str:
+      if esc:
+        esc = False
+      elif ch == "\\":
+        esc = True
+      elif ch == '"':
+        in_str = False
+      continue
+    if ch == '"':
+      in_str = True
+    elif ch == "{":
+      depth += 1
+    elif ch == "}":
+      depth -= 1
+      if depth == 0:
+        return text[start:i + 1]
+  return None
+
+
+def _parse_local_tool_json(text: str) -> list[dict[str, Any]]:
+  """Достаёт tool call из ответа локальной модели в свободном формате.
+
+  Понимает: {"name", "arguments"}, {"tool", "arguments"}, {"function":
+  {"name","arguments"}} (Hermes/Qwen), а также legacy
+  `functions.<name>: {...}` от chatml-function-calling. Аргументы могут быть
+  строкой JSON. Возвращает [] если вызова нет.
+  """
+  out: list[dict[str, Any]] = []
+  for m in _LOCAL_TOOL_JSON_RE.finditer(text or ""):
+    raw = _balanced_json_at(text, m.start())
+    if not raw:
+      continue
+    try:
+      obj = json.loads(raw)
+    except Exception:  # noqa: BLE001
+      continue
+    if not isinstance(obj, dict):
+      continue
+    fn = obj.get("function") if isinstance(obj.get("function"), dict) else obj
+    name = str(fn.get("name") or fn.get("tool") or "").strip()
+    if name not in _KNOWN_LOCAL_TOOLS or any(c["name"] == name for c in out):
+      # {"name": ...} внутри {"function": {...}} даёт два совпадения regex —
+      # второй раз тот же вызов просто пропускаем.
+      continue
+    args = fn.get("arguments", fn.get("parameters", {}))
+    if isinstance(args, str):
+      try:
+        args = json.loads(args)
+      except Exception:  # noqa: BLE001
+        args = {"command": args} if name == "exec_shell_command" else {}
+    if not isinstance(args, dict):
+      args = {}
+    out.append({"name": name, "arguments": args})
+  if out:
+    return out
+  for m in _LOCAL_TOOL_FN_RE.finditer((text or "").replace("```", "")):
+    name, raw = m.group(1), m.group(2)
+    if name not in _KNOWN_LOCAL_TOOLS:
+      continue
+    try:
+      args = json.loads(raw)
+    except Exception:  # noqa: BLE001
+      continue
+    out.append({"name": name, "arguments": args if isinstance(args, dict) else {}})
+  return out
 
 # Формат tool call'ов, который умная модель (Claude и др.) выводит в ответе:
 # Основной: ```tool\n[{"name": "exec_shell_command", "arguments": {...}}]\n```
@@ -385,9 +494,13 @@ def _exec_tool_command(cmd: str, work_dir: Path, timeout: float) -> tuple[int, s
     except Exception:  # noqa: BLE001
       pass
   output = (output or "").strip()
-  maxc = 6000
+  maxc = _MAX_OUTPUT_CHARS
   if len(output) > maxc:
-    output = output[:maxc] + "\n…(вывод обрезан. Используй grep/sed/head/tail для нужного фрагмента, либо верни структурированную сводку из скрипта)."
+    output = output[:maxc] + (
+      "\n…(вывод обрезан на %d символах. Не запрашивай тот же список снова: "
+      "используй grep/sed/head/tail для нужного фрагмента или верни из скрипта "
+      "готовую структурированную сводку: имена файлов + счётчики.)" % maxc
+    )
   if not output:
     output = "(нет вывода)"
   if notes:
@@ -510,13 +623,13 @@ class LocalToolAgent:
       self.base_url, self.model, work_dir, max_iters,
     )
 
-  def _get_models(self, force: bool = False) -> list[str]:
+  def _get_models(self, force: bool = False, timeout: float = 4.0) -> list[str]:
     """Возвращает список алиасов llama-server. Ошибки не пробрасывает."""
     now = time.time()
     if not force and self._models_cache and now - self._models_checked_at < 30:
       return self._models_cache
     try:
-      with urllib.request.urlopen(self.base_url + "/models", timeout=4) as r:
+      with urllib.request.urlopen(self.base_url + "/models", timeout=timeout) as r:
         data = _json.loads(r.read().decode("utf-8"))
       ids = [str(m.get("id", "")) for m in data.get("data", []) if m.get("id")]
       self._models_cache = ids
@@ -546,9 +659,14 @@ class LocalToolAgent:
     )
     return True
 
-  def probe(self) -> bool:
-    """Быстрая проверка llama-server без падения при недоступности."""
-    ids = self._get_models(force=True)
+  def probe(self, timeout: float = 4.0) -> bool:
+    """Быстрая проверка llama-server без падения при недоступности.
+
+    При автозапуске модель грузит 2.4 ГБ с диска: uvicorn уже слушает порт,
+    но /models отвечает только после загрузки. Поэтому используется
+    настраиваемый timeout (см. _autostart_local_model).
+    """
+    ids = self._get_models(force=True, timeout=timeout)
     if not ids:
       self.ready = False
       LOG.warning("[LOCAL-TOOL] llama-server недоступен: %s (работа продолжится, "
@@ -671,11 +789,50 @@ class LocalToolAgent:
         return 1, f"grep error: {e}"
     return 1, f"Неизвестный инструмент: {name}"
 
-  def execute(self, instruction: str) -> dict[str, Any]:
-    """Одно задание для локальной модели. Возвращает {answer, tool_calls, complete}."""
+  def _tool_call_to_instruction(self, name: str, args: dict[str, Any]) -> str:
+    """Точное короткое задание для локальной модели по конкретному tool call.
+
+    Важно: локальная модель не должна «выбирать» инструмент и перефразировать
+    аргументы — это приводило к тому, что Qwen3-4B писала команду текстом
+    («exec_shell_command "touch ..."») и ничего не исполнялось.
+    """
+    def q(v: Any) -> str:
+      return json.dumps(v, ensure_ascii=False)
+
+    if name == "exec_shell_command":
+      return (
+        "Run exactly this bash command with exec_shell_command.\n"
+        f"command = {q(args.get('command', ''))}\n"
+        "Do not modify, shorten or re-quote the command."
+      )
+    if name == "read_file":
+      return (
+        "Read exactly this file with read_file and return its content.\n"
+        f"path = {q(args.get('path', ''))}"
+      )
+    if name == "write_file":
+      return (
+        "Create this file with write_file, passing the content VERBATIM "
+        "(do not translate, trim or reformat it).\n"
+        f"path = {q(args.get('path', ''))}\n"
+        f"content = {q(args.get('content', ''))}"
+      )
+    if name in ("edit_file", "file_glob_search", "grep_search"):
+      return (
+        f"Call {name} with exactly these arguments (verbatim): "
+        f"{q(args)}"
+      )
+    return f"Call {name} with exactly these arguments: {q(args)}"
+
+  def execute(self, instruction: str, force_tool: str | None = None) -> dict[str, Any]:
+    """Одно задание для локальной модели. Возвращает {answer, tool_calls, complete}.
+
+    force_tool: если задан, ответ модели обязан содержать вызов именно этого
+    инструмента; иначе цикл ведёт цикл без нативных tool_calls (JSON-формат).
+    """
     if not self.enabled:
       return {"answer": instruction, "tool_calls": [], "complete": True, "skipped": True}
-    system = LOCAL_TOOL_SYSTEM_PROMPT.format(workdir=self.work_dir)
+    system = LOCAL_TOOL_SYSTEM_PROMPT.format(workdir=self.work_dir) + LOCAL_TOOL_JSON_PROMPT
     messages: list[dict[str, Any]] = [
       {"role": "system", "content": system},
       {"role": "user", "content": instruction},
@@ -689,6 +846,17 @@ class LocalToolAgent:
         msg = choice.get("message", {}) or {}
         tool_calls = msg.get("tool_calls") or []
         content = msg.get("content") or ""
+        if not tool_calls:
+          # chatml-function-calling на этом стеке не отдаёт tool_calls —
+          # пробуем вытащить JSON-вызов из текста.
+          parsed = _parse_local_tool_json(content)
+          if parsed:
+            LOG.info("[LOCAL-TOOL] JSON-вызов из текста: %s", parsed[0].get("name"))
+            tool_calls = [
+              {"id": f"call_{i}_{k}", "function": {"name": c["name"],
+                "arguments": json.dumps(c["arguments"], ensure_ascii=False)}}
+              for k, c in enumerate(parsed)
+            ]
         if not tool_calls:
           final = (content or "").strip()
           if not final and tool_log:
@@ -718,13 +886,20 @@ class LocalToolAgent:
             targs = _json.loads(raw_args) if isinstance(raw_args, str) else dict(raw_args or {})
           except Exception:
             targs = {}
+          if not isinstance(targs, dict):
+            targs = {}
           tc_id = tc.get("id") or f"call_{i}_{len(tool_log)}"
-          LOG.info("[LOCAL-TOOL] iter=%s call=%s args=%s", i + 1, tname, _json.dumps(targs, ensure_ascii=False)[:200])
-          rc, out = self._execute_local_tool(tname, targs)
+          if tname not in _KNOWN_LOCAL_TOOLS:
+            rc, out = 1, f"Неизвестный инструмент: {tname}. Доступны: {', '.join(sorted(_KNOWN_LOCAL_TOOLS))}"
+          else:
+            LOG.info("[LOCAL-TOOL] iter=%s call=%s args=%s", i + 1, tname, _json.dumps(targs, ensure_ascii=False)[:200])
+            rc, out = self._execute_local_tool(tname, targs)
           tool_log.append({"iter": i + 1, "name": tname, "args": targs, "rc": rc, "output": out[:500]})
           messages.append({
-            "role": "user",
-            "content": f"[RESULT {tc_id}] rc={rc}\n{out}",
+            "role": "tool",
+            "tool_call_id": tc_id,
+            "name": tname,
+            "content": f"rc={rc}\n{out}",
           })
       else:
         final = "(бюджет tool-loop исчерпан)"
@@ -736,7 +911,30 @@ class LocalToolAgent:
         "complete": False,
         "unavailable": True,
       }
-    return {"answer": final, "tool_calls": tool_log, "complete": True}
+    # Ответ модели без единого исполненного инструмента — это не выполнение.
+    return {"answer": final, "tool_calls": tool_log,
+            "complete": bool(tool_log) or not instruction.strip()}
+
+  def verify_artifact(self, path: str) -> dict[str, Any]:
+    """Поручает локальной модели проверить только что созданный файл.
+
+    Большие payload'ы (write_file на 10 КБ) исполняются напрямую, чтобы
+    4B-модель не исказила содержимое. Но «руки» всё равно должны
+    участвовать: локальная модель проверяет существование, размер и —
+    для .py — синтаксис. Это дешёвая короткая инструкция.
+    """
+    import shlex as _shlex
+    qpath = _shlex.quote(str(path))
+    if str(path).endswith(".py"):
+      cmd = f"test -s {qpath} && {sys.executable} -m py_compile {qpath} && wc -c {qpath}"
+    else:
+      cmd = f"test -s {qpath} && wc -c {qpath}"
+    task = (
+      "Проверь, что файл существует и непуст, выполнив ровно эту команду:\n"
+      f"command = {json.dumps(cmd)}\n"
+      "Если rc=0 — ответь строкой DONE: <размер в байтах>, иначе FAIL: <ошибка>."
+    )
+    return self.execute(task, force_tool="exec_shell_command")
 
   def execute_direct(self, tc: dict[str, Any]) -> dict[str, Any]:
     """Запасной путь: исполняет tool call умной модели без локальной LLM.
@@ -820,7 +1018,7 @@ def _normalize_json_text(text: str) -> str:
 
 _TOOL_NAMES = (
   "exec_shell_command", "read_file", "write_file", "edit_file",
-  "file_glob_search", "grep_search",
+  "file_glob_search", "grep_search", "run_local_task",
 )
 
 
@@ -871,13 +1069,27 @@ def _parse_tool_block_lenient(body: str) -> list[dict[str, Any]]:
     if not m:
       return None
     raw = body[m.end():]
-    # Закрывающая кавычка значения перед закрытием объекта/массива.
-    end = re.search(r'"\s*\}\s*\]?\s*$', raw)
-    if end:
-      value = raw[:end.start()]
-    else:
-      value = raw[:raw.rfind('"')] if '"' in raw else raw
-    return _json_unescape_lenient(value)
+    # Ищем ЗАКРЫВАЮЩУЮ кавычку значения: неэкранированная `"`, после
+    # которой идёт только пробел и `,` / `}` / `]`. Раньше код брал
+    # `rfind('"')` и в content попадал хвост из ``` и прозы после JSON.
+    escaped = False
+    i = 0
+    while i < len(raw):
+      ch = raw[i]
+      if escaped:
+        escaped = False
+      elif ch == "\\":
+        escaped = True
+      elif ch == '"':
+        j = i + 1
+        while j < len(raw) and raw[j] in " \t\r\n":
+          j += 1
+        if j >= len(raw) or raw[j] in ",}]":
+          return _json_unescape_lenient(raw[:i])
+      i += 1
+    # Закрывающей кавычки нет — JSON обрезан. Возвращаем всё, что есть:
+    # лучше показать ошибку на неполном содержимом, чем потерять payload.
+    return _json_unescape_lenient(raw)
 
   if name in ("exec_shell_command", "read_file", "write_file", "edit_file",
               "file_glob_search", "grep_search"):
@@ -890,7 +1102,7 @@ def _parse_tool_block_lenient(body: str) -> list[dict[str, Any]]:
     return []
   if not args:
     return []
-  LOG.warning("[TOOL-PARSE] JSON битый — применил мягкий разбор для '%s'", name)
+  LOG.debug("[TOOL-PARSE] JSON битый — применил мягкий разбор для '%s'", name)
   return [{"name": name, "arguments": args}]
 
 
@@ -951,21 +1163,26 @@ def parse_tool_block(answer: str) -> list[dict[str, Any]]:
   try:
     data = _json.loads(body)
   except Exception:
-    LOG.warning("[TOOL-PARSE] invalid JSON: %s", body[:200])
+    # Обычный случай: после JSON модель дописала ``` или пояснение.
+    # Пробуем вырезать сбалансированный JSON и НЕ шумим WARNING'ом,
+    # если это удалось — данные не потеряны.
     candidate = _extract_balanced_json(body)
-    if not candidate:
+    data = None
+    if candidate:
+      try:
+        data = _json.loads(candidate)
+      except Exception:
+        data = None
+    if data is None:
       lenient = _parse_tool_block_lenient(body)
       if lenient:
+        LOG.debug("[TOOL-PARSE] JSON восстановлен мягким разбором (%d символов)", len(body))
         return lenient
+      LOG.warning("[TOOL-PARSE] не удалось разобрать tool JSON (%d символов): %s",
+                  len(body), body[:160])
       return []
-    try:
-      data = _json.loads(candidate)
-    except Exception:
-      lenient = _parse_tool_block_lenient(body)
-      if lenient:
-        return lenient
-      LOG.warning("[TOOL-PARSE] cannot fix JSON: %s", candidate[:200])
-      return []
+    LOG.debug("[TOOL-PARSE] JSON восстановлен обрезкой хвоста (%d → %d символов)",
+              len(body), len(candidate))
   if isinstance(data, dict):
     data = [data]
   if not isinstance(data, list):
@@ -1753,38 +1970,77 @@ class ArenaWorker(threading.Thread):
       LOG.warning("[AUTH] detection failed: %s", exc)
       return False
 
+  def _clear_composer(self, composer: Any) -> None:
+    try:
+      composer.click(timeout=1500)
+      self.page.keyboard.press("Control+A")
+      self.page.keyboard.press("Delete")
+      self.page.wait_for_timeout(150)
+    except Exception:
+      pass
+    try:
+      composer.fill("", timeout=1500)
+      self.page.wait_for_timeout(150)
+    except Exception:
+      pass
+    try:
+      composer.evaluate(
+        """(el) => {
+          if ('value' in el) { el.value = ''; }
+          el.textContent = '';
+          el.innerText = '';
+          el.dispatchEvent(new Event('input', {bubbles: true}));
+          el.dispatchEvent(new Event('change', {bubbles: true}));
+        }"""
+      )
+    except Exception:
+      pass
+
   def _send_reliably(self, composer: Any, text: str) -> None:
     LOG.info("[SEND] begin chars=%s preview=%r", len(text), text[:120])
-    button = None
-    for selector in (
-      'button[aria-label="Send message"]',
-      'button[aria-label*="send" i]',
-      'button[aria-label*="отправ" i]',
-      'button[title*="send" i]',
-      'button[title*="отправ" i]',
-    ):
+    for attempt in range(3):
+      # Composer может пере-рендериться; пробуем взять актуальный элемент.
       try:
-        loc = self.page.locator(selector).last
-        if loc.count() and loc.is_visible():
-          button = loc
-          break
+        composer = self._wait_composer()
       except Exception:
         pass
-    for attempt in range(3):
+      button = None
+      for selector in (
+        'button[aria-label="Send message"]',
+        'button[aria-label*="send" i]',
+        'button[aria-label*="отправ" i]',
+        'button[title*="send" i]',
+        'button[title*="отправ" i]',
+      ):
+        try:
+          loc = self.page.locator(selector).last
+          if loc.count() and loc.is_visible():
+            button = loc
+            break
+        except Exception:
+          pass
       LOG.info("[SEND] attempt=%s fill", attempt + 1)
-      composer.click()
-      composer.fill(text)
+      try:
+        composer.click(timeout=3000)
+      except Exception:
+        pass
+      try:
+        composer.fill(text, timeout=5000)
+      except Exception:
+        try:
+          composer = self._wait_composer()
+          composer.fill(text, timeout=5000)
+        except Exception as exc:
+          LOG.warning("[SEND] fill failed: %s", exc)
       deadline = time.time() + 5
       while time.time() < deadline:
         try:
           val = composer.input_value(timeout=700)
         except Exception:
-          break
+          val = self._safe_input_value(composer)
         if val == text:
           break
         self.page.wait_for_timeout(100)
-      # Arena Direct имеет явную кнопку Send message. Нажимаем её
-      # первой; Enter оставляем только как fallback.
       clicked = False
       if button is not None:
         try:
@@ -1829,10 +2085,13 @@ class ArenaWorker(threading.Thread):
             LOG.warning("[SEND] DOM dispatch failed: %s", dispatch_exc)
       LOG.info("[SEND] button_result=%s; pressing Enter fallback", clicked)
       try:
-        composer.press("Enter")
+        composer.press("Enter", timeout=2000)
       except Exception:
         pass
-      self.page.keyboard.press("Enter")
+      try:
+        self.page.keyboard.press("Enter")
+      except Exception:
+        pass
       self.page.wait_for_timeout(700)
       LOG.info("[SEND] composer value after Enter=%r", self._safe_input_value(composer))
       if self._login_visible():
@@ -1842,13 +2101,14 @@ class ArenaWorker(threading.Thread):
         return
       if self._login_visible():
         raise PermissionError("Arena требует авторизацию для отправки сообщений")
-      try:
-        composer.click()
-        self.page.keyboard.press("Control+A")
-        self.page.keyboard.press("Delete")
-      except Exception:
-        pass
+      self._clear_composer(composer)
       self.page.wait_for_timeout(300)
+    # Не оставляем «грязный» composer: иначе зависает текущий и следующий запросы.
+    try:
+      composer = self._wait_composer()
+      self._clear_composer(composer)
+    except Exception:
+      pass
     raise RuntimeError("Arena не приняла сообщение: текст остался в поле ввода")
 
   @staticmethod
@@ -2100,21 +2360,34 @@ class ArenaWorker(threading.Thread):
     last = ""
     stable_since = 0.0
     appeared = False
-    logged_variants = ""
+    logged_variants: Any = None
+    last_variant_log = 0.0
+    last_stable_log = 0.0
+    last_generating: bool | None = None
     while time.time() < deadline:
       self.page.wait_for_timeout(500)
       cand_info = self._answer_candidates_js(before, self.settings.answer_column)
       candidate = cand_info.get("chosen") or ""
       variants = cand_info.get("candidates") or []
       if len(variants) > 1:
-        sig = json.dumps(variants, sort_keys=True, ensure_ascii=False)
-        if sig != logged_variants:
-          logged_variants = sig
+        # Не логируем полный JSON кандидатов каждые 500 мс: раньше это
+        # раздувало лог на мегабайты. Пишем компактную строку только при
+        # смене числа колонок и не чаще раза в 15 секунд.
+        state = (len(variants), self.settings.answer_column)
+        now = time.time()
+        if state != logged_variants or now - last_variant_log >= 15:
+          logged_variants = state
+          last_variant_log = now
+          brief = "; ".join(
+            f"{chr(65 + i)}: left={v.get('left')} len={v.get('len')} "
+            f"{str(v.get('preview') or '')[:60]!r}"
+            for i, v in enumerate(variants[:4])
+          )
           LOG.info(
-            "[ANSWER] вариантов=%d, режим=%s; выбран %s. Колонки: %s",
+            "[ANSWER] вариантов=%d, режим=%s; выбран %s. %s",
             len(variants), self.settings.answer_column,
             "A (левая)" if self.settings.answer_column == "auto" else self.settings.answer_column,
-            json.dumps(variants, ensure_ascii=False)[:600],
+            brief,
           )
       if not candidate:
         # Фолбэк на старую DOM-логику, если разметка нестандартная.
@@ -2148,7 +2421,12 @@ class ArenaWorker(threading.Thread):
         except Exception:
           pass
       stable_for = time.time() - stable_since if stable_since else 0
-      LOG.info("[ANSWER][js_dom] stable_for=%.1fs generating=%s", stable_for, generating)
+      now = time.time()
+      if (generating != last_generating or now - last_stable_log >= 5
+          or stable_for >= 1.5):
+        LOG.info("[ANSWER][js_dom] stable_for=%.1fs generating=%s", stable_for, generating)
+        last_stable_log = now
+        last_generating = generating
       if stable_for >= 1.5 and not generating:
         LOG.info("[ANSWER] FINAL (%d chars): %s", len(candidate), candidate[:600])
         return {"model": self.selected_model, "answer": candidate}
@@ -2174,13 +2452,18 @@ class ArenaWorker(threading.Thread):
 
   @staticmethod
   def _looks_like_refusal(text: str) -> bool:
-    """Грубый детектор отказа модели продолжить задачу."""
-    t = (text or "").lower()
+    """Детектор отказа/бросания задачи. Не срабатывает, если задача уже закрыта."""
+    raw = text or ""
+    t = raw.lower()
+    # Если модель уже дала итог/выполнила работу, упоминания ограничений — это
+    # объяснение, а не отказ продолжать.
+    if re.search(r"(^|\n)\s*done\b|задач[ау]\s+выполн|все\s+(файлы|действия)\s+(созданы|выполнены)|итог|отч[её]т", t):
+      return False
     markers = (
-      "не буду", "не могу", "не стану", "не воспроизвожу",
-      "авторским правом", "защищённые авторским", "защищенные авторским",
-      "copyright", "copyrighted", "cannot reproduce", "can't reproduce",
-      "i won't", "i will not",
+      "не буду", "не могу продолж", "не стану", "не воспроизвожу",
+      "не могу выполнить эту задач", "не могу создать",
+      "cannot reproduce", "can't reproduce", "won't be able to continue",
+      "i won't", "i will not continue",
     )
     return any(m in t for m in markers)
 
@@ -2345,26 +2628,49 @@ class ArenaWorker(threading.Thread):
             res = self.local_agent.execute(task)
           instr = f"локальная задача: {task[:300]}"
         else:
-          instr = _tool_call_to_instruction(tc, self.work_dir)
+          # Точное задание: тот же tool call, но без свободного толкования.
+          # Внутренний цикл LocalToolAgent ведёт Qwen3-4B и требует вызова
+          # именно этого инструмента с этими аргументами.
+          instr = self.local_agent._tool_call_to_instruction(name, args)
           LOG.info("[LOCAL-TOOL-LOOP] local task: %s", instr[:200])
           # Определённые действия надёжнее и быстрее исполнять напрямую.
           # Локальную модель зовём только для коротких инструкций, которые
           # она способна воспроизвести без искажений. Для больших heredoc
           # (частый случай) сразу идёт прямой путь.
           too_big = len(instr) > self.local_agent.max_instruction_chars
+          direct_used = False
           if too_big or not self.local_agent.ready:
             if too_big:
               LOG.info("[LOCAL-TOOL-LOOP] инструкция %d символов > %d — исполняю '%s' напрямую",
                        len(instr), self.local_agent.max_instruction_chars, name)
             res = self.local_agent.execute_direct(tc)
+            direct_used = True
           else:
-            res = self.local_agent.execute(instr)
+            res = self.local_agent.execute(instr, force_tool=name)
             if (res.get("unavailable") or not res.get("tool_calls")):
               # Локальная модель не справилась (нет tool call / сервер отвалился).
               # Не роняем задачу: исполняем тот же tool call напрямую.
               LOG.warning("[LOCAL-TOOL-LOOP] локальная модель не выполнила '%s' — "
                           "исполняю напрямую", name)
               res = self.local_agent.execute_direct(tc)
+              direct_used = True
+          # Большой write_file исполняется напрямую ради целостности данных,
+          # но локальная модель всё равно проверяет результат — руки
+          # участвуют в каждой операции, а не только в коротких командах.
+          if direct_used and name in ("write_file", "edit_file"):
+            target_path = str(args.get("path") or "").strip()
+            if target_path and self.local_agent.ready:
+              try:
+                check = self.local_agent.verify_artifact(target_path)
+                check_answer = str(check.get("answer") or "").strip()
+                if check_answer:
+                  res["answer"] = (str(res.get("answer") or "")
+                                   + "\n[ЛОКАЛЬНАЯ ПРОВЕРКА] " + check_answer[:600])
+                res.setdefault("tool_calls", []).extend(check.get("tool_calls", []))
+                LOG.info("[LOCAL-TOOL-LOOP] локальная проверка '%s': %s",
+                         target_path, check_answer[:160])
+              except Exception as exc:  # noqa: BLE001
+                LOG.debug("[LOCAL-TOOL-LOOP] проверка локальной моделью не удалась: %s", exc)
         total_calls.extend(res.get("tool_calls", []))
         rc_note = ""
         skipped = res.get("skipped")
@@ -2830,8 +3136,141 @@ def _run_self_test_when_ready(worker_obj: ArenaWorker, host: str, port: int, que
     LOG.exception("[TEST] SELF-TEST FAILED; server remains available")
 
 
+# --------------------------------------------------------------------------------------
+# Автозапуск локальной модели (Qwen3-4B / llama-server)
+# --------------------------------------------------------------------------------------
+# Пользователь часто запускает arena_agent.py напрямую, минуя arena_agent.sh.
+# Раньше в этом случае локальная модель не поднималась, и все tool calls
+# исполнялись напрямую. Теперь агент сам проверяет /v1/models и при
+# необходимости стартует лаунчер проекта, логируя всё в state-dir.
+_local_model_process: subprocess.Popen | None = None
+
+
+def _local_model_models_url(base_url: str) -> str:
+  return base_url.rstrip("/") + "/models"
+
+
+def _local_model_is_ready(base_url: str, timeout: float = 2.0) -> bool:
+  try:
+    with urllib.request.urlopen(_local_model_models_url(base_url), timeout=timeout) as r:
+      return 200 <= int(getattr(r, "status", 200)) < 300
+  except Exception:  # noqa: BLE001
+    return False
+
+
+def _url_port(base_url: str, default: int = 8080) -> int:
+  try:
+    from urllib.parse import urlparse
+    return urlparse(base_url).port or default
+  except Exception:  # noqa: BLE001
+    return default
+
+
+def _url_is_local(base_url: str) -> bool:
+  try:
+    from urllib.parse import urlparse
+    host = (urlparse(base_url).hostname or "").lower()
+    return host in ("127.0.0.1", "localhost", "::1", "0.0.0.0", "")
+  except Exception:  # noqa: BLE001
+    return True
+
+
+def _tail_file(path: Path, lines: int = 12) -> str:
+  try:
+    text = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    return "\n".join(text[-lines:])
+  except Exception:  # noqa: BLE001
+    return "(лог недоступен)"
+
+
+def _autostart_local_model(base_url: str, state_dir: Path, wait_seconds: float = 180.0) -> bool:
+  """Поднимает лаунчер локальной модели, если /v1/models не отвечает.
+
+  Возвращает True, если модель готова. Никогда не бросает исключения:
+  без локальной модели агент продолжает работу с прямым исполнением.
+  """
+  global _local_model_process
+  if _local_model_is_ready(base_url):
+    LOG.info("[LOCAL-TOOL] локальная модель уже запущена: %s", base_url)
+    return True
+  if not _url_is_local(base_url):
+    LOG.info("[LOCAL-TOOL] %s — удалённый адрес, локальный автозапуск не нужен", base_url)
+    return False
+  if _local_model_process is not None and _local_model_process.poll() is None:
+    LOG.info("[LOCAL-TOOL] локальная модель уже стартует (pid=%s), жду...", _local_model_process.pid)
+  else:
+    launcher = Path(__file__).resolve().parent / "Локальная модель, которая запускается сервер.py"
+    if not launcher.is_file():
+      LOG.warning("[LOCAL-TOOL] автозапуск невозможен: не найден лаунчер %s", launcher)
+      return False
+    port = _url_port(base_url)
+    try:
+      state_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+      pass
+    log_path = state_dir / "local_model.log"
+    env = os.environ.copy()
+    env.setdefault("PORT", str(port))
+    env.setdefault("LLM_HOST", "127.0.0.1")
+    env.setdefault("SERVER_TOOLS", "all")
+    # CPU-сборка llama-cpp-python: GPU offload недоступен.
+    env.setdefault("LLM_GPU_LAYERS", "0")
+    env.setdefault("LLM_THREADS", "8")
+    env.setdefault("LLM_THREADS_BATCH", "16")
+    env.setdefault("LLM_CTX", "8192")
+    # chatml-function-calling из llama-cpp-python 0.3.36 на этом стеке
+    # (Qwen3 + chatml-function-calling) отдаёт пустой content без tool_calls:
+    # модель не понимает синтаксис "functions.<name>:". Проверено на живом
+    # сервере. С обычным "chatml" JSON-вызов разбирает сам arena_agent.py.
+    env.setdefault("CHAT_FORMAT", "chatml")
+    try:
+      with log_path.open("ab") as logf:
+        logf.write(
+          f"\n===== {time.strftime('%F %T')} автозапуск из arena_agent.py "
+          f"(port={port}, python={sys.executable}) =====\n".encode("utf-8")
+        )
+        logf.flush()
+        proc = subprocess.Popen(
+          [sys.executable, str(launcher)],
+          cwd=str(launcher.parent),
+          env=env,
+          stdin=subprocess.DEVNULL,
+          stdout=logf,
+          stderr=subprocess.STDOUT,
+          start_new_session=True,
+        )
+    except Exception as exc:  # noqa: BLE001
+      LOG.warning("[LOCAL-TOOL] не удалось запустить локальную модель: %s", exc)
+      return False
+    _local_model_process = proc
+    try:
+      (state_dir / "local_model.pid").write_text(str(proc.pid), encoding="utf-8")
+    except OSError:
+      pass
+    LOG.info("[LOCAL-TOOL] автозапуск локальной модели: pid=%s порт=%s лог=%s",
+             proc.pid, port, log_path)
+  deadline = time.time() + max(10.0, wait_seconds)
+  # Загрузка 2.4 ГБ с диска/сетевого диска занимает 25–40 с. Быстрый проб
+  # каждую секунду (timeout=2) зря шумит, поэтому опрос идёт с паузой 2 с,
+  # а последний замер перед пробуждением local_agent получит больше времени.
+  while time.time() < deadline:
+    if _local_model_is_ready(base_url):
+      LOG.info("[LOCAL-TOOL] локальная модель готова: %s", base_url)
+      return True
+    proc = _local_model_process
+    if proc is not None and proc.poll() is not None:
+      LOG.warning("[LOCAL-TOOL] лаунчер локальной модели завершился (rc=%s). "
+                  "Последние строки лога:\n%s",
+                  proc.returncode, _tail_file(state_dir / "local_model.log"))
+      return False
+    time.sleep(2.0)
+  LOG.warning("[LOCAL-TOOL] локальная модель не ответила за %.0f с; "
+              "tool calls будут исполняться напрямую", wait_seconds)
+  return False
+
+
 def main() -> None:
-  global worker, _local_agent_ref, _api_port
+  global worker, _local_agent_ref, _api_port, _MAX_OUTPUT_CHARS
   parser = argparse.ArgumentParser()
   parser.add_argument("--host", default="127.0.0.1")
   parser.add_argument("--port", type=int, default=8000, help="Желаемый порт API; при занятости берётся свободный")
@@ -2858,6 +3297,13 @@ def main() -> None:
                       help="Алиас модели llama-server; при несовпадении берётся реальный из /v1/models")
   parser.add_argument("--local-tools-max-iters", type=int, default=12,
                       help="Макс. итераций tool-loop внутри LocalToolAgent (по умолчанию 12)")
+  parser.add_argument("--no-local-autostart", action="store_true",
+                      help="Не поднимать локальную модель автоматически (по умолчанию агент сам стартует лаунчер)")
+  parser.add_argument("--local-autostart-timeout", type=float, default=180.0,
+                      help="Сколько секунд ждать готовности локальной модели при автозапуске")
+  parser.add_argument("--max-output-chars", type=int,
+                      default=int(os.environ.get("ARENA_MAX_OUTPUT_CHARS", "12000")),
+                      help="Максимум символов вывода инструмента, возвращаемых умной модели")
   parser.add_argument("--no-local-tools", action="store_true",
                       help="Полностью отключить локальный tool-агент (умная модель думает, но руки не работают)")
   parser.add_argument("--state-dir", default=str(DEFAULT_STATE_DIR),
@@ -2870,6 +3316,7 @@ def main() -> None:
   parser.add_argument("--debug-artifacts", action="store_true",
                       help="Сохранять скриншоты и DOM при сбоях (state-dir/diagnostics)")
   args = parser.parse_args()
+  _MAX_OUTPUT_CHARS = max(1000, int(args.max_output_chars))
 
   state_dir = Path(args.state_dir).expanduser()
   log_path = _setup_logging(state_dir, args.log_level, args.log_file, args.no_log_file)
@@ -2902,8 +3349,24 @@ def main() -> None:
       tool_timeout=args.tool_timeout,
       max_iters=args.local_tools_max_iters,
     )
-    # Проверка llama-server — в фоне, чтобы не задерживать старт API.
-    threading.Thread(target=local_agent.probe, name="local-tool-probe", daemon=True).start()
+    # Автозапуск локальной модели в фоне: API и браузер не должны ждать
+    # загрузку Qwen. Если модель уже работает — просто probe().
+    autostart_env = os.environ.get(
+      "ARENA_LOCAL_AUTOSTART",
+      os.environ.get("LOCAL_MODEL_AUTOSTART", "1"),
+    ).strip().lower()
+    autostart_enabled = (not args.no_local_autostart
+                         and autostart_env not in ("0", "false", "no", "off", ""))
+
+    def _local_tool_boot() -> None:
+      if autostart_enabled:
+        _autostart_local_model(args.local_tool_url, state_dir,
+                               args.local_autostart_timeout)
+      local_agent.probe(timeout=30.0)
+
+    LOG.info("[LOCAL-TOOL] автозапуск=%s (env=%r, url=%s)",
+             "вкл" if autostart_enabled else "выкл", autostart_env, args.local_tool_url)
+    threading.Thread(target=_local_tool_boot, name="local-tool-boot", daemon=True).start()
   else:
     LOG.info("[LOCAL-TOOL] --no-local-tools: локальный tool-агент отключён")
   _local_agent_ref = local_agent
