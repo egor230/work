@@ -649,24 +649,29 @@ class SmartTyper: # Основной класс для автозамены и �
   self.words_by_first = {}
   self.words_alpha_by_first = {}
   self.suggestion_cache = {}
-  if not self.word_text_data:
+  raw = getattr(self, 'word_text_data', '')
+  if not raw:
+   self.word_text_data = ''
    return
-  words = re.findall(r'[а-яёА-ЯЁ]+', self.word_text_data)
-  unique_words = {}
-  for w in words:
-   lw = w.lower()
-   if lw and lw not in unique_words:
-    unique_words[lw] = w
-  for lw, w in unique_words.items():
+  # Строим индекс и сразу освобождаем исходный текст словаря: он может
+  # занимать заметный объём в памяти и после индексации больше не нужен.
+  seen = set()
+  for m in re.finditer(r'[а-яёА-ЯЁ]+', raw):
+   word = m.group(0)
+   lw = word.lower()
+   if not lw or lw in seen:
+    continue
+   seen.add(lw)
    first = lw[0]
    if first not in self.words_by_first:
     self.words_by_first[first] = []
     self.words_alpha_by_first[first] = []
-   self.words_by_first[first].append((len(lw), lw, w))
-   self.words_alpha_by_first[first].append((lw, w))
+   self.words_by_first[first].append((len(lw), lw, word))
+   self.words_alpha_by_first[first].append((lw, word))
   for first in self.words_by_first:
    self.words_by_first[first].sort()
    self.words_alpha_by_first[first].sort()
+  self.word_text_data = ''  # освобождаем сырой словарь из памяти
 
  def _get_current_user(self): # Получает имя текущего пользователя
   script = '#!/bin/bash\necho $(whoami)\nexit;'
