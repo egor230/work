@@ -14,5 +14,8 @@ pdf/
 vosk-model-ru-0.10/
 wine-prefix-backup/drive_c/
 
+# Исключённые файлы
+dictionary of substitutions.json
+
 # Этот скрипт (чтобы не отправлять токен на GitHub)
 /updata git.sh
