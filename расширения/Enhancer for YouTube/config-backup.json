@@ -1,7 +1,101 @@
 {
   "_meta": {
+    "browser": "Yandex Browser",
     "ext_id": "ifojmbdceojdnhhagpmfnmjndpplcndi",
-    "savedAt": "2026-09-24T02:47:55",
-    "source": "/home/egor/.config/google-chrome/Default/Local Storage/leveldb"
-  }
+    "keys": 14,
+    "note": "Настройки пользователя, сохранённые до модификации расширения. НЕ удалять.",
+    "savedAt": "2026-11-16T22:50:19",
+    "source": "/home/egor/.config/yandex-browser/Default/Local Extension Settings/ifojmbdceojdnhhagpmfnmjndpplcndi"
+  },
+  "channelspeeds": {
+    "UC0hNui8bT7yV0Xb8w8YxjHw": 1,
+    "UC0nW4-kTAhWrlSJkfS-pcjg": 1.5,
+    "UC111NXlcDs0VGfyre6EiPmA": 1.75,
+    "UC4e_XPBiiIO4fo4_CucxQeg": 1,
+    "UC74sX8oY-MVC7_3KzlnFgzQ": 1,
+    "UCGq38E3cs6LIpvtl1HBPp9Q": 1.4,
+    "UCQBJTVg6csKzQartf8gE4Ow": 1.6,
+    "UCTlTfHhcn44XdLn_arCsaig": 1.5,
+    "UCYcVUqtQ0Bjl_h9qyWu969Q": 1,
+    "UCfV2zYMU3CIAMBtTguqjYzg": 1,
+    "UCgpSieplNxXxLXYAzJLLpng": 1.5,
+    "UCj9qJBfB7dG9Ab9ldn7pXwQ": 1,
+    "UCq3PlGB0_e6jTc9Jr2Al7LQ": 2,
+    "UCq9yZoLoSfP3x_cdUmW9SvA": 1.5,
+    "UCqmxkrCmLNZfoLZsgweVF7Q": 1,
+    "UCwDF_86MbmsQp7cBtgIflJg": 1,
+    "UCwZOrfqqqY5Ku5c0gUstvwA": 1.5,
+    "UCwjhNxiTk2mSGTtmIixDXpQ": 1,
+    "UCxjs3aUQ9OnufZQZaCH-E4w": 1,
+    "UCxn_odPreZlRXtf63vtj1vw": 1,
+    "UCyRtVkSY1doj5Pu6NxnCGJA": 1.4,
+    "name:AIA Podcast": 1,
+    "name:Apostle Dmytro Karpenko": 1.5,
+    "name:Better Voice": 2,
+    "name:BuildWithAI": 1,
+    "name:Dailyhardcore": 1.5,
+    "name:DenTrave": 1.5,
+    "name:Epic Legacy Trailer Music": 1,
+    "name:IXBT Games": 1,
+    "name:Ivan Yakovina": 1.4,
+    "name:ModjoOfficial": 1,
+    "name:Poets of the Fall (Official)": 1,
+    "name:SERGiO Go": 1,
+    "name:Tymlex": 1,
+    "name:zWORMz Gaming": 1,
+    "name:ИИ Новости": 1.5,
+    "name:Киряша": 1,
+    "name:Майкл Наки": 1.5,
+    "name:Олег Жданов": 1.75,
+    "name:ФЕЙГИН SHORTS": 1.6,
+    "name:Юрий ВЕЛИКИЙ": 1,
+    "name:ЯБ ПОИГРАЛ": 1.4
+  },
+  "controlbar": {
+    "active": false,
+    "autohide": false,
+    "centered": true,
+    "position": "absolute"
+  },
+  "controls": [
+    "speed-minus",
+    "speed",
+    "speed-plus",
+    "screenshot",
+    "options"
+  ],
+  "controlsvisible": true,
+  "date": 1793590721710.0,
+  "forcevp9": true,
+  "griditemsperrow": {
+    "channel": {
+      "shorts": {
+        "apply": false,
+        "count": 5
+      },
+      "videos": {
+        "apply": true,
+        "count": 8
+      }
+    },
+    "posts": {
+      "apply": false,
+      "count": 4
+    },
+    "shorts": {
+      "apply": false,
+      "count": 8
+    },
+    "videos": {
+      "apply": true,
+      "count": 6
+    }
+  },
+  "hideshorts": true,
+  "maTheme": "dark",
+  "qualityplaylists": "hd1440",
+  "qualityvideos": "hd1440",
+  "selectquality": true,
+  "speed": 1.2,
+  "update": 1793590721710.0
 }

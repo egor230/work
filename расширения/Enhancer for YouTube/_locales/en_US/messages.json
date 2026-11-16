@@ -116,6 +116,9 @@
    "block_webm_formats": {
       "message": "Force the use of the MP4 format and the AVC codec (H.264) instead of the WebM format and the VP9 codec (maximum resolution: 1080p60 HD)"
    },
+   "force_vp9": {
+      "message": "Force VP9/AV1: avoid H.264 (works around problematic CDN formats)"
+   },
    "boost_volume": {
       "message": "Boost volume"
    },

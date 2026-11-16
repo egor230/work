@@ -1,4 +1,4 @@
-import fcntl, json, os, re, subprocess, threading, time, sys, bisect, traceback, pyatspi, tkinter as tk, glob
+import fcntl, json, os, re, socket, subprocess, threading, time, sys, bisect, traceback, pyatspi, tkinter as tk, glob
 from select import select
 from tkinter import Tk, Toplevel, Label, Frame
 from pynput import mouse, keyboard
@@ -69,6 +69,59 @@ MOD_HOLD_SEC = STICKY_HOLD_SEC          # алиас для остального
 # ---------------------------------------------------------------------
 _COORD_LOCK = "/tmp/kb_scripts_typing.lock"
 _COORD_STICKY = "/tmp/kb_sticky_mods.json"
+
+# ---------------------------------------------------------------------
+# ЗАЩИТА ОТ ВТОРОГО ЭКЗЕМПЛЯРА (2026-11-16, Отчёт §10).
+# Раньше punto.sh запускал скрипт без всякой проверки — в сессии можно
+# было получить ДВА живых процесса (две UInput-клавиатуры, два
+# независимых состояния sticky-модификаторов, двойная замена слов и
+# конфликт за общие /tmp-файлы координации). Это и давало «клавиатура
+# не работает в opencode/браузере». Две независимые проверки:
+#   1) ABSTRACT UNIX-СОКЕТ в ядре (имя \0punto_single_instance): файл на
+#      диске не создаётся, поэтому его нельзя удалить/пересоздать; ядро
+#      само закрывает сокет при смерти процесса, даже по SIGKILL;
+#      второй bind() всегда получает EADDRINUSE.
+#   2) flock на /tmp/punto_single_instance.lock — запасной путь и PID
+#      для диагностики (устойчив к гонкам запуска двух .sh).
+# Оба дескриптора держим открытыми ВСЁ время жизни процесса.
+# ---------------------------------------------------------------------
+_SINGLE_SOCKET_NAME = "\0punto_single_instance"
+_SINGLE_LOCK_PATH = "/tmp/punto_single_instance.lock"
+_single_lock_fd = None
+_single_socket = None
+
+
+def _acquire_single_instance_lock():
+  """True — мы один; False — уже работает другой экземпляр."""
+  global _single_lock_fd, _single_socket
+  # --- 1) Главная проверка: abstract UNIX-сокет (устойчив к удалению
+  #        /tmp-файлов и к гонке одновременного запуска двух обёрток).
+  s = None
+  try:
+   s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+   s.bind(_SINGLE_SOCKET_NAME)  # ведущий \0 = abstract namespace
+   _single_socket = s           # НЕ закрывать: пока сокет жив, мы один
+  except OSError as e:
+   try:
+    s.close()
+   except Exception:
+    pass
+   return False
+  # --- 2) Запасная проверка + PID-файл для диагностики. Если сокет уже
+  #        занят только нами, отказ flock не должен срывать запуск.
+  try:
+   fd = open(_SINGLE_LOCK_PATH, "a+")
+   fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+   # В append-режиме seek(0) не влияет на запись — сначала усекаем файл.
+   os.ftruncate(fd.fileno(), 0)
+   os.lseek(fd.fileno(), 0, os.SEEK_SET)
+   fd.write(str(os.getpid()))
+   fd.flush()
+   _single_lock_fd = fd
+  except (OSError, IOError) as e:
+   print(f"[PUNTO] WARN: flock-лок недоступен ({e}) — "
+     "полагаемся на abstract-сокет", flush=True)
+  return True
 
 
 def _typing_lock_acquire(timeout=5.0):
@@ -1207,10 +1260,18 @@ class SmartTyper: # Основной класс для автозамены и �
   return None
 
  def _check_active_window_loop(self): # Проверяет активное окно в цикле
+  last_pid = None
   while True:
    try:
     time.sleep(1)
     process_id = self._active_window_pid()
+    if process_id != last_pid:
+     # Смена активного окна (Отчёт §10): залипший модификатор НЕ должен
+     # переходить в новое приложение — в Chromium/Electron он превращает
+     # обычные буквы в хоткеи, и ручной набор становится невозможным.
+     if last_pid is not None:
+      self._force_release_modifiers("смена окна")
+     last_pid = process_id
     if process_id is None:
      self.disabled = False
      continue
@@ -1338,6 +1399,14 @@ class SmartTyper: # Основной класс для автозамены и �
   SHIFT_CODES = {ecodes.KEY_LEFTSHIFT, ecodes.KEY_RIGHTSHIFT}
 
   while getattr(self, '_kbd_running', True):
+   # Страховка (Отчёт §10): GLib-таймер _mod_hold_tick живёт в mainloop и
+   # может не сработать, если mainloop встала. Проверяем дедлайн здесь —
+   # в потоке слушателя, независимо от GLib. Идемпотентно.
+   try:
+    if self._mod_hold and time.time() >= self._mod_hold_deadline:
+     self._force_release_modifiers("watchdog")
+   except Exception:
+    pass
    try:
     if not devs:
      devs = self._evdev_find_keyboards()
@@ -1493,9 +1562,15 @@ class SmartTyper: # Основной класс для автозамены и �
   names = sorted(MOD_HOLD.get(c, str(c)) for c in held)
   print(f"[MOD-HOLD] обычная клавиша — комбинация прошла, отпускаю {names} через 150 мс", flush=True)
   def _rel():
+   # Гонка (Отчёт §10): пока шла задержка 150 мс, пользователь мог
+   # снова нажать тот же модификатор и создать НОВОе залипание. Старый
+   # поток отпуска не смел сбить новое удержание (иначе оно «зависало»
+   # в _mod_hold без реально нажатой клавиши).
    time.sleep(0.15)
-   if self.py_typer:
-    self.py_typer.release_sticky(held)
+   with self.state_lock:
+    fresh = [c for c in held if c not in self._mod_hold]
+   if fresh and self.py_typer:
+    self.py_typer.release_sticky(fresh)
   threading.Thread(target=_rel, daemon=True).start()
 
  def _mod_hold_tick(self):
@@ -1518,6 +1593,27 @@ class SmartTyper: # Основной класс для автозамены и �
   except Exception:
    pass
   return True
+
+ def _force_release_modifiers(self, reason=""):
+  """Немедленно снять ВСЕ залипшие модификаторы (Отчёт §10).
+  Вызывается при смене активного окна и при клике мышью: залипший
+  Ctrl/Alt не должен «переезжать» в другое приложение — иначе в
+  OpenCode/браузере каждая буква превращается в хоткей и ручной ввод
+  становится невозможным. Работает из любого потока, идемпотентна."""
+  try:
+   with self.state_lock:
+    held = list(self._mod_hold)
+    if not held:
+     return
+    self._mod_hold.clear()
+    self._mod_hold_deadline = 0.0
+   if self.py_typer:
+    self.py_typer.release_sticky(held)
+   _sticky_publish([], 0.0)
+   names = sorted(MOD_HOLD.get(c, MOD_HOLD_NAME.get(c, str(c))) for c in held)
+   print(f"[MOD-HOLD] принудительный сброс{(' (' + reason + ')') if reason else ''}: {names}", flush=True)
+  except Exception:
+   pass
 
  def _mod_hold_reapply_keymap(self):
   """GLib-таймер (3 с): живая проверка xmodmap-маппинга залипания правого
@@ -1616,6 +1712,10 @@ class SmartTyper: # Основной класс для автозамены и �
 
  def _on_click(self, x, y, button, pressed): # Обрабатывает клики мыши
   if pressed:
+   # Клик почти всегда означает смену фокуса/приложения. Залипший
+   # Ctrl/Alt не должен уехать вместе с фокусом в OpenCode/браузер
+   # (Отчёт §10) — снимаем его сразу.
+   self._force_release_modifiers("клик мыши")
    self.clean()
   return True
 
@@ -1669,6 +1769,13 @@ class SmartTyper: # Основной класс для автозамены и �
   mouse_listener.join()
 
 if __name__ == "__main__":
+ # Защита от второго экземпляра (Отчёт §10): без неё в сессии висят два
+ # punto с двумя UInput-клавиатурами и conflicting sticky-состоянием.
+ if not _acquire_single_instance_lock():
+  print("[PUNTO] Уже запущен другой экземпляр (abstract-сокет " +
+        _SINGLE_SOCKET_NAME[1:] + " / lock " + _SINGLE_LOCK_PATH +
+        "). Выходим, чтобы не ломать ввод.", flush=True)
+  sys.exit(0)
  abbreviations_file = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/dictionary of substitutions.json"
  words_file = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/words.txt"
 

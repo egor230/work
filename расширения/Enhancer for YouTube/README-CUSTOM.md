@@ -848,3 +848,53 @@ cd "/home/egor/Downloads/расширения/Enhancer for YouTube"
 ```
 
 Результат: `../Enhancer_for_YouTube.crx`, ID `ifojmbdceojdnhhagpmfnmjndpplcndi`.
+
+---
+
+## §13 Принудительный VP9/AV1 вместо H.264 (2026-11-16) — «как у helix»
+
+**Проблема.** Видео `dtDWcBdrwVk` («Serious Sam: Next Encounter») крутилось в
+Яндекс.Браузере, хотя остальные ролики шли нормально. Замер потоков с машины
+показал: локальный Google Global Cache провайдера (`46.61.168.108`) отдаёт
+`206` только для VP9/AV1-итагов (242/243/244/302/308/394/396–400) и аудио 251,
+а H.264-итаги (18/133/134/135/160 и аудио 139/140) отвечают `302` и уводят на
+удалённые узлы `173.194.x`, которые висят. Дело не в zapret и не в стратегии —
+плеер выбирает «плохой» кодек.
+
+**Решение.** НовыйCLUDE параметр `forcevp9` (по умолчанию **включён**) запрещает
+H.264 через тот же механизм, что штатный `blockwebmformats` запрещает WebM:
+
+| Файл | Изменение |
+|---|---|
+| `js/config.js` | `forcevp9:!0` в defaults + в `configEmbed` |
+| `js/youtube-main.js` | в `MediaSource.isTypeSupported` добавлено `d&&d.forcevp9&&/(avc1\|avc3)/i.test(b)` |
+| `js/embed-main.js` | то же для встроенного плеера |
+| `html/options.html` | чекбокс «Принудительно VP9/AV1» в разделе кодеков |
+| `js/options.js` | `#forcevp9` в списке биндингов чекбоксов |
+| `_locales/ru,en_US` | сообщение `force_vp9` |
+
+H.264 (`avc1`/`avc3`) блокируется, VP9/AV1 — остаются. Это заставляет YouTube
+брать рабочие итаги из локального кэша. Чекбокс можно выключить, если
+понадобится старое поведение.
+
+**Настройки пользователя сохранены ДО патча:**
+
+- `config-backup.json` в папке расширения
+- `../config-backup-Yandex-20261116-225019.json`
+- `/tmp/efyt-yandex-settings-20261116-225019.json`
+
+Источник — `~/.config/yandex-browser/Default/Local Extension Settings/ifojmbdceojdnhhagpmfnmjndpplcndi`
+(14 ключей, в т.ч. 42 скорости по каналам, тема `dark`, качество `hd1440`).
+ID расширения не менялся: `ifojmbdceojdnhhagpmfnmjndpplcndi`.
+
+**Сборка/установка:**
+
+```bash
+cd "/home/egor/Downloads/расширения/Enhancer for YouTube"
+./package-crx.sh
+# CRX: ../Enhancer_for_YouTube.crx
+```
+
+После сборки CRX распакован в установленную папку расширения Яндекс.Браузера
+`~/.config/yandex-browser/Default/Extensions/ifojmbdceojdnhhagpmfnmjndpplcndi/3.1.0_1/`
+(браузер был выключен, прежние файлы скопированы в бэкап).
