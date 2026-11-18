@@ -1,0 +1,11 @@
+#!/usr/bin/env -S gio launch
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=STDUViewer-Native-x86_64.desktop
+Exec="/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/STDUViewer-Native/STDUViewer-Native-x86_64.AppImage"
+Path=/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/STDUViewer-Native
+Icon=/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/STDUViewer-Native/icon-STDUViewer-Native-x86_64.png
+Terminal=false
+Categories=Office;
+StartupNotify=true

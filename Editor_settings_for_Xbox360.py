@@ -4,9 +4,10 @@ from collections import deque  # Для сглаживания мыши
 from select import select  # Для опроса событий
 import evdev  # Для работы с устройствами
 from evdev import UInput, AbsInfo, ecodes  # Для создания геймпада
+import keyboard  # Глобальный hotkey End (работает даже когда игра в fullscreen)
 from PyQt6.QtWidgets import QApplication, QInputDialog, QMessageBox, QFileDialog
 from PyQt6.QtGui import QKeySequence, QPalette, QColor, QAction
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
 from Ui_Editor_settings_for_Xbox360 import MainWindow, VirtualKeyboard, ZONE_DEFINITIONS, KEY_MAPPER
 
 IMAGE_PATH = os.path.join(os.getcwd(), "gamepad xbox 360.png")
@@ -537,6 +538,12 @@ class AppController:
   sc.triggered.connect(lambda: self.window.debug_cb.setChecked(not self.window.debug_cb.isChecked()))
   self.window.addAction(sc)
 
+  # Глобальная горячая клавиша End: остановить эмуляцию геймпада.
+  # Используем библиотеку keyboard (ловит клавишу даже когда окно не в фокусе,
+  # например когда Condemned 2 запущен через gamescope на весь экран).
+  # respect_all=False не нужен: End не является модификатором.
+  keyboard.on_press_key("end", lambda _e: self._stop_emulation_hotkey())
+
   # Сигналы панели триггерных режимов
   self.window.trigger_button_combo.currentIndexChanged.connect(self._on_trigger_button_changed)
   self.window.trigger_mode_combo.currentIndexChanged.connect(self._on_trigger_mode_changed)
@@ -738,6 +745,12 @@ class AppController:
   self.window.st_lbl.setStyleSheet("font-weight: 600; color: #198754; font-size: 14px;")
   self.window.btn_start.setText("■  ОСТАНОВИТЬ")
   self.window.btn_start.setStyleSheet("background:#DC3545;color:white;border:none;border-radius:4px;")
+
+ def _stop_emulation_hotkey(self):
+  """Глобальный hotkey End -> остановка эмуляции.
+  Библиотека keyboard вызывает это из своего потока, поэтому переключаем
+  выполнение в GUI-поток через QTimer (безопасно для Qt-виджетов)."""
+  QTimer.singleShot(0, self._stop_emulation)
 
  def _stop_emulation(self):
   """Остановка потока эмуляции"""
