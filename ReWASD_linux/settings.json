@@ -1,0 +1,1667 @@
+{
+  "profiles": [
+    "По умолчанию",
+    "Alien Isolation",
+    "Outlast Whistleblower",
+    "Crysis2",
+    " Entropy Zero 2",
+    "FarCry",
+    "Assassins Creed IV Black Flag",
+    "Tomb Raider",
+    "Portal 2 community edition",
+    "GTA V",
+    "Silent Downpour",
+    "Splinter Cell Blacklist",
+    "mafia 2",
+    "Portal Reloaded",
+    "Oblivion",
+    "Portal Stories Mel",
+    "Quantum Break",
+    "Serious Sam",
+    "Serious Sam Revolution",
+    "Cold Fear",
+    "Deus Ex Human Revolution",
+    "Medal of Honor Allied Assault",
+    "Dark Messiah of Might and Magic",
+    "Need for speed mw"
+  ],
+  "profile_paths": [
+    "C:/Windows/explorer.exe",
+    "/mnt/807EB5FA7EB5E954/games/Alien Isolation/AI.exe",
+    "/mnt/807EB5FA7EB5E954/games/Outlast Whistleblower/Binaries/Win64/OLGame.exe",
+    "/mnt/807EB5FA7EB5E954/games/Crysis 2/bin32/Crysis2.exe",
+    "/mnt/807EB5FA7EB5E954/games/Entropy Zero 2/hl2.exe",
+    "/mnt/807EB5FA7EB5E954/games/Far Cry/Bin32/FarCry.exe",
+    "/mnt/807EB5FA7EB5E954/games/Assassins Creed IV Black Flag/AC4BFSP.exe",
+    "/mnt/807EB5FA7EB5E954/games/Tomb Raider Game of The Year Edition/TombRaider.exe",
+    "/mnt/807EB5FA7EB5E954/games/Portal 2 community edition/portal2.exe",
+    "/mnt/807EB5FA7EB5E954/games/Grand Theft Auto V/GTAVLauncher.exe",
+    "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/total_commander.exe",
+    "/mnt/807EB5FA7EB5E954/games/Splinter Cell - Blacklist/src/SYSTEM/Blacklist_DX11_game.exe",
+    "/mnt/807EB5FA7EB5E954/games/Mafia II/pc/mafia2.exe",
+    "/mnt/807EB5FA7EB5E954/games/Portal Reloaded/Play Portal 2.exe",
+    "/mnt/807EB5FA7EB5E954/games/Oblivion Gold/Oblivion.exe",
+    "/mnt/807EB5FA7EB5E954/games/Portal Stories Mel/portal2.exe",
+    "/mnt/807EB5FA7EB5E954/games/Quantum Break/dx11/QuantumBreak.exe",
+    "/mnt/807EB5FA7EB5E954/games/Serious Sam Classic/Bin/SeriousSam_Custom.exe",
+    "/mnt/807EB5FA7EB5E954/games/Serious Sam Classics Revolution/Bin/SeriousSam.exe",
+    "/mnt/807EB5FA7EB5E954/games/Cold Fear/ColdFear_retail.exe",
+    "/mnt/807EB5FA7EB5E954/games/Deus Ex HRDC/DXHRDC.exe",
+    "/mnt/807EB5FA7EB5E954/games/Medal of Honor Allied Assault Breakthrough/MOHAA.EXE",
+    "/mnt/807EB5FA7EB5E954/games/Dark Messiah of Might and Magic/MM.EXE",
+    "/mnt/807EB5FA7EB5E954/games/Need for Speed - Most Wanted/speed.exe"
+  ],
+  "current_profile": 0,
+  "gamepad_profile_names": [
+    "Default",
+    "race",
+    "gta"
+  ],
+  "gamepad_profiles": {
+    "Default": {
+      "A": "KEY_SPACE",
+      "B": "KEY_B",
+      "X": "KEY_X",
+      "Y": "KEY_Y",
+      "LEFT_SHOULDER": "KEY_Q",
+      "RIGHT_SHOULDER": "KEY_E",
+      "LEFT_TRIGGER": "KEY_1",
+      "RIGHT_TRIGGER": "KEY_2",
+      "GUIDE": "KEY_F12",
+      "BACK": "KEY_BACKSPACE",
+      "START": "KEY_ENTER",
+      "DPAD_UP": "KEY_UP",
+      "DPAD_DOWN": "KEY_DOWN",
+      "DPAD_LEFT": "KEY_LEFT",
+      "DPAD_RIGHT": "KEY_RIGHT",
+      "LEFT_THUMB_UP": "KEY_W",
+      "LEFT_THUMB_DOWN": "KEY_S",
+      "LEFT_THUMB_LEFT": "KEY_A",
+      "LEFT_THUMB_RIGHT": "KEY_D",
+      "RIGHT_THUMB_UP": "KEY_KP8",
+      "RIGHT_THUMB_DOWN": "KEY_KP2",
+      "RIGHT_THUMB_LEFT": "KEY_KP4",
+      "RIGHT_THUMB_RIGHT": "KEY_KP6",
+      "LEFT_THUMB_PRESSED": "KEY_LEFTSHIFT",
+      "RIGHT_THUMB_PRESSED": "KEY_Z"
+    },
+    "race": {
+      "A": "KEY_UP",
+      "B": "KEY_KP3",
+      "X": "KEY_KP1",
+      "Y": "KEY_?",
+      "LEFT_SHOULDER": "KEY_Q",
+      "RIGHT_SHOULDER": "KEY_E",
+      "LEFT_TRIGGER": "KEY_DOWN",
+      "RIGHT_TRIGGER": "KEY_1",
+      "GUIDE": "KEY_INSERT",
+      "BACK": "KEY_BACKSPACE",
+      "START": "KEY_SPACE",
+      "DPAD_UP": "KEY_?",
+      "DPAD_DOWN": "KEY_DOWN",
+      "DPAD_LEFT": "KEY_LEFT",
+      "DPAD_RIGHT": "KEY_RIGHT",
+      "LEFT_THUMB_UP": "KEY_W",
+      "LEFT_THUMB_DOWN": "KEY_S",
+      "LEFT_THUMB_LEFT": "KEY_A",
+      "LEFT_THUMB_RIGHT": "KEY_D",
+      "RIGHT_THUMB_UP": "KEY_KP8",
+      "RIGHT_THUMB_DOWN": "KEY_KP2",
+      "RIGHT_THUMB_LEFT": "KEY_KP4",
+      "RIGHT_THUMB_RIGHT": "KEY_KP6",
+      "LEFT_THUMB_PRESSED": "KEY_RIGHTCTRL",
+      "RIGHT_THUMB_PRESSED": "KEY_KP5"
+    },
+    "gta": {
+      "A": "KEY_UP",
+      "B": "KEY_KP3",
+      "X": "KEY_RIGHTSHIFT",
+      "Y": "KEY_KP1",
+      "LEFT_SHOULDER": "KEY_Q",
+      "RIGHT_SHOULDER": "KEY_E",
+      "LEFT_TRIGGER": "KEY_KP7",
+      "RIGHT_TRIGGER": "KEY_KP9",
+      "GUIDE": "KEY_INSERT",
+      "BACK": "KEY_BACKSPACE",
+      "START": "KEY_SPACE",
+      "DPAD_UP": "KEY_UP",
+      "DPAD_DOWN": "KEY_DOWN",
+      "DPAD_LEFT": "KEY_LEFT",
+      "DPAD_RIGHT": "KEY_RIGHT",
+      "LEFT_THUMB_UP": "KEY_W",
+      "LEFT_THUMB_DOWN": "KEY_S",
+      "LEFT_THUMB_LEFT": "KEY_A",
+      "LEFT_THUMB_RIGHT": "KEY_D",
+      "RIGHT_THUMB_UP": "KEY_KP8",
+      "RIGHT_THUMB_DOWN": "KEY_KP2",
+      "RIGHT_THUMB_LEFT": "KEY_KP4",
+      "RIGHT_THUMB_RIGHT": "KEY_KP6",
+      "LEFT_THUMB_PRESSED": "KEY_RIGHTCTRL",
+      "RIGHT_THUMB_PRESSED": "KEY_KP5"
+    }
+  },
+  "trigger_modes": {
+    "race": {
+      "RIGHT_THUMB_RIGHT": {
+        "key": "KEY_H",
+        "mode": "hold"
+      },
+      "RIGHT_TRIGGER": {
+        "key": "KEY_H",
+        "mode": "hold"
+      }
+    },
+    "gta": {}
+  },
+  "current_gamepad_profile": "race",
+  "gamepad_map": {
+    "A": "KEY_UP",
+    "B": "KEY_KP3",
+    "X": "KEY_KP1",
+    "Y": "KEY_?",
+    "LEFT_SHOULDER": "KEY_Q",
+    "RIGHT_SHOULDER": "KEY_E",
+    "LEFT_TRIGGER": "KEY_DOWN",
+    "RIGHT_TRIGGER": "KEY_1",
+    "GUIDE": "KEY_INSERT",
+    "BACK": "KEY_BACKSPACE",
+    "START": "KEY_SPACE",
+    "DPAD_UP": "KEY_?",
+    "DPAD_DOWN": "KEY_DOWN",
+    "DPAD_LEFT": "KEY_LEFT",
+    "DPAD_RIGHT": "KEY_RIGHT",
+    "LEFT_THUMB_UP": "KEY_W",
+    "LEFT_THUMB_DOWN": "KEY_S",
+    "LEFT_THUMB_LEFT": "KEY_A",
+    "LEFT_THUMB_RIGHT": "KEY_D",
+    "RIGHT_THUMB_UP": "KEY_KP8",
+    "RIGHT_THUMB_DOWN": "KEY_KP2",
+    "RIGHT_THUMB_LEFT": "KEY_KP4",
+    "RIGHT_THUMB_RIGHT": "KEY_KP6",
+    "LEFT_THUMB_PRESSED": "KEY_RIGHTCTRL",
+    "RIGHT_THUMB_PRESSED": "KEY_KP5"
+  },
+  "mouse_map": {
+    "LBUTTON": "LBUTTON",
+    "RBUTTON": "RBUTTON",
+    "MBUTTON": "MBUTTON",
+    "SIDE_BUTTON": " ",
+    "EXTRA_BUTTON": " ",
+    "WHEEL_UP": "SCROLL_UP",
+    "WHEEL_DOWN": "SCROLL_DOWN"
+  },
+  "mouse_hold": {
+    "LBUTTON": false,
+    "RBUTTON": false,
+    "MBUTTON": false,
+    "SIDE_BUTTON": false,
+    "EXTRA_BUTTON": false,
+    "WHEEL_UP": false,
+    "WHEEL_DOWN": false
+  },
+  "mouse_repeat": {
+    "LBUTTON": false,
+    "RBUTTON": false,
+    "MBUTTON": false,
+    "SIDE_BUTTON": false,
+    "EXTRA_BUTTON": false,
+    "WHEEL_UP": false,
+    "WHEEL_DOWN": false
+  },
+  "mouse_repeat_sec": {
+    "LBUTTON": "",
+    "RBUTTON": "",
+    "MBUTTON": "",
+    "SIDE_BUTTON": "",
+    "EXTRA_BUTTON": "",
+    "WHEEL_UP": "",
+    "WHEEL_DOWN": ""
+  },
+  "mouse_splitter_sizes": [
+    279,
+    330
+  ],
+  "kb_split_sizes": [
+    330,
+    340
+  ],
+  "macro_splitter_sizes": [
+    330,
+    340
+  ],
+  "macro_data": {},
+  "macro_column_widths": [
+    454,
+    94,
+    548
+  ],
+  "kb_column_widths": [
+    560,
+    417
+  ],
+  "gamepad_split_sizes": [
+    700,
+    300
+  ],
+  "gamepad_zoom": 1.4049280000000008,
+  "gamepad_pan": [
+    18.033972320216208,
+    64.110056472736
+  ],
+  "window_size": [
+    1410,
+    756
+  ],
+  "window_geometry": [
+    361,
+    250,
+    1410,
+    756
+  ],
+  "main_splitter_sizes": [
+    261,
+    1144
+  ],
+  "profile_split_sizes": [
+    125,
+    109
+  ],
+  "profile_vertical_sizes": [
+    340,
+    420
+  ],
+  "mouse_column_widths": [
+    239,
+    247,
+    107,
+    98,
+    151,
+    254
+  ],
+  "sens_x": 7,
+  "sens_y": 7,
+  "smooth": true,
+  "grab": false,
+  "mouse_on": true,
+  "gamepad_zone_geometry": [
+    {
+      "name": "LT",
+      "logical_name": "LEFT_TRIGGER",
+      "rx": 0.27,
+      "ry": 0.18,
+      "rw": 0.06,
+      "rh": 0.05,
+      "color": "#e67e22",
+      "shape": "rect"
+    },
+    {
+      "name": "RT",
+      "logical_name": "RIGHT_TRIGGER",
+      "rx": 0.67,
+      "ry": 0.18,
+      "rw": 0.06,
+      "rh": 0.05,
+      "color": "#e67e22",
+      "shape": "rect"
+    },
+    {
+      "name": "LB",
+      "logical_name": "LEFT_SHOULDER",
+      "rx": 0.27,
+      "ry": 0.24,
+      "rw": 0.06,
+      "rh": 0.05,
+      "color": "#95a5a6",
+      "shape": "rect"
+    },
+    {
+      "name": "RB",
+      "logical_name": "RIGHT_SHOULDER",
+      "rx": 0.67,
+      "ry": 0.24,
+      "rw": 0.06,
+      "rh": 0.05,
+      "color": "#95a5a6",
+      "shape": "rect"
+    },
+    {
+      "name": "Guide",
+      "logical_name": "GUIDE",
+      "rx": 0.475,
+      "ry": 0.197,
+      "rw": 0.06,
+      "rh": 0.07,
+      "color": "#3498db",
+      "shape": "ellipse"
+    },
+    {
+      "name": "Back",
+      "logical_name": "BACK",
+      "rx": 0.428,
+      "ry": 0.304,
+      "rw": 0.04,
+      "rh": 0.05,
+      "color": "#9b59b6",
+      "shape": "ellipse"
+    },
+    {
+      "name": "Start",
+      "logical_name": "START",
+      "rx": 0.536,
+      "ry": 0.309,
+      "rw": 0.04,
+      "rh": 0.05,
+      "color": "#9b59b6",
+      "shape": "ellipse"
+    },
+    {
+      "name": "L↑",
+      "logical_name": "LEFT_THUMB_UP",
+      "rx": 0.28,
+      "ry": 0.275,
+      "rw": 0.055,
+      "rh": 0.04,
+      "color": "#5b8cff",
+      "shape": "rect"
+    },
+    {
+      "name": "L↓",
+      "logical_name": "LEFT_THUMB_DOWN",
+      "rx": 0.28,
+      "ry": 0.35,
+      "rw": 0.055,
+      "rh": 0.04,
+      "color": "#5b8cff",
+      "shape": "rect"
+    },
+    {
+      "name": "L←",
+      "logical_name": "LEFT_THUMB_LEFT",
+      "rx": 0.255,
+      "ry": 0.305,
+      "rw": 0.04,
+      "rh": 0.05,
+      "color": "#5b8cff",
+      "shape": "rect"
+    },
+    {
+      "name": "L→",
+      "logical_name": "LEFT_THUMB_RIGHT",
+      "rx": 0.32,
+      "ry": 0.305,
+      "rw": 0.04,
+      "rh": 0.05,
+      "color": "#5b8cff",
+      "shape": "rect"
+    },
+    {
+      "name": "LS",
+      "logical_name": "LEFT_THUMB_PRESSED",
+      "rx": 0.265,
+      "ry": 0.279,
+      "rw": 0.0774,
+      "rh": 0.09,
+      "color": "#1a47c4",
+      "shape": "ellipse"
+    },
+    {
+      "name": "Y",
+      "logical_name": "Y",
+      "rx": 0.667,
+      "ry": 0.241,
+      "rw": 0.04,
+      "rh": 0.05,
+      "color": "#f1c40f",
+      "shape": "ellipse"
+    },
+    {
+      "name": "X",
+      "logical_name": "X",
+      "rx": 0.6158341708542714,
+      "ry": 0.3040348727615457,
+      "rw": 0.04,
+      "rh": 0.05,
+      "color": "#3498db",
+      "shape": "ellipse"
+    },
+    {
+      "name": "B",
+      "logical_name": "B",
+      "rx": 0.717,
+      "ry": 0.321,
+      "rw": 0.04,
+      "rh": 0.05,
+      "color": "#e74c3c",
+      "shape": "ellipse"
+    },
+    {
+      "name": "A",
+      "logical_name": "A",
+      "rx": 0.6692434099831744,
+      "ry": 0.3807979797979798,
+      "rw": 0.04,
+      "rh": 0.05,
+      "color": "#2ecc71",
+      "shape": "ellipse"
+    },
+    {
+      "name": "↑",
+      "logical_name": "DPAD_UP",
+      "rx": 0.36766713581984517,
+      "ry": 0.41431362196409716,
+      "rw": 0.055,
+      "rh": 0.045,
+      "color": "#7f8c8d",
+      "shape": "rect"
+    },
+    {
+      "name": "↓",
+      "logical_name": "DPAD_DOWN",
+      "rx": 0.37321608040201004,
+      "ry": 0.5260226201696513,
+      "rw": 0.055,
+      "rh": 0.045,
+      "color": "#7f8c8d",
+      "shape": "rect"
+    },
+    {
+      "name": "←",
+      "logical_name": "DPAD_LEFT",
+      "rx": 0.3363335679099226,
+      "ry": 0.47021647307286163,
+      "rw": 0.045,
+      "rh": 0.05,
+      "color": "#7f8c8d",
+      "shape": "rect"
+    },
+    {
+      "name": "→",
+      "logical_name": "DPAD_RIGHT",
+      "rx": 0.4153342716396904,
+      "ry": 0.47127243928194296,
+      "rw": 0.045,
+      "rh": 0.05,
+      "color": "#7f8c8d",
+      "shape": "rect"
+    },
+    {
+      "name": "R↑",
+      "logical_name": "RIGHT_THUMB_UP",
+      "rx": 0.571859296482412,
+      "ry": 0.4288972667295005,
+      "rw": 0.05,
+      "rh": 0.04,
+      "color": "#5b8cff",
+      "shape": "rect"
+    },
+    {
+      "name": "R↓",
+      "logical_name": "RIGHT_THUMB_DOWN",
+      "rx": 0.575,
+      "ry": 0.54,
+      "rw": 0.05,
+      "rh": 0.04,
+      "color": "#5b8cff",
+      "shape": "rect"
+    },
+    {
+      "name": "R←",
+      "logical_name": "RIGHT_THUMB_LEFT",
+      "rx": 0.545,
+      "ry": 0.49,
+      "rw": 0.04,
+      "rh": 0.05,
+      "color": "#5b8cff",
+      "shape": "rect"
+    },
+    {
+      "name": "R→",
+      "logical_name": "RIGHT_THUMB_RIGHT",
+      "rx": 0.61,
+      "ry": 0.49,
+      "rw": 0.04,
+      "rh": 0.05,
+      "color": "#5b8cff",
+      "shape": "rect"
+    },
+    {
+      "name": "RS",
+      "logical_name": "RIGHT_THUMB_PRESSED",
+      "rx": 0.5616403949077976,
+      "ry": 0.46343269960046585,
+      "rw": 0.081,
+      "rh": 0.09,
+      "color": "#1a47c4",
+      "shape": "ellipse"
+    }
+  ],
+  "mouse_data": {
+    "games_checkmark": {
+      "C:/Windows/explorer.exe": true,
+      "/mnt/807EB5FA7EB5E954/games/Splinter Cell - Chaos Theory/System/SPLINTERCELL3.EXE": true,
+      "/mnt/807EB5FA7EB5E954/games/Alien Isolation/AI.exe": true,
+      "/mnt/807EB5FA7EB5E954/games/Outlast Whistleblower/Binaries/Win64/OLGame.exe": true,
+      "/mnt/807EB5FA7EB5E954/games/Crysis 2/bin32/Crysis2.exe": true,
+      "/mnt/807EB5FA7EB5E954/games/Portal Reloaded/Play Portal 2.exe": true,
+      "/mnt/807EB5FA7EB5E954/games/Entropy Zero 2/hl2.exe": true,
+      "/mnt/807EB5FA7EB5E954/games/Far Cry/Bin32/FarCry.exe": true,
+      "/mnt/807EB5FA7EB5E954/games/Assassins Creed IV Black Flag/AC4BFSP.exe": true,
+      "/mnt/807EB5FA7EB5E954/games/Tomb Raider Game of The Year Edition/TombRaider.exe": true,
+      "/mnt/807EB5FA7EB5E954/games/Mafia II/pc/mafia2.exe": true,
+      "/mnt/807EB5FA7EB5E954/games/Portal 2 community edition/portal2.exe": true,
+      "/mnt/807EB5FA7EB5E954/games/Grand Theft Auto V/GTAVLauncher.exe": true,
+      "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/total_commander.exe": true,
+      "/mnt/807EB5FA7EB5E954/games/Splinter Cell - Blacklist/src/SYSTEM/Blacklist_DX11_game.exe": true,
+      "/mnt/807EB5FA7EB5E954/games/Oblivion Gold/Oblivion.exe": true,
+      "/mnt/807EB5FA7EB5E954/games/Portal Stories Mel/portal2.exe": true,
+      "/mnt/807EB5FA7EB5E954/games/Quantum Break/dx11/QuantumBreak.exe": true,
+      "/mnt/807EB5FA7EB5E954/games/Serious Sam Classic/Bin/SeriousSam_Custom.exe": true,
+      "/mnt/807EB5FA7EB5E954/games/Serious Sam Classics Revolution/Bin/SeriousSam.exe": true,
+      "/mnt/807EB5FA7EB5E954/games/Cold Fear/ColdFear_retail.exe": true,
+      "/mnt/807EB5FA7EB5E954/games/Deus Ex HRDC/DXHRDC.exe": true,
+      "/mnt/807EB5FA7EB5E954/games/Medal of Honor Allied Assault Breakthrough/MOHAA.EXE": true,
+      "/mnt/807EB5FA7EB5E954/games/Dark Messiah of Might and Magic/MM.EXE": true,
+      "/mnt/807EB5FA7EB5E954/games/Need for Speed - Most Wanted/speed.exe": true
+    },
+    "paths": {
+      "C:/Windows/explorer.exe": "По умолчанию",
+      "/mnt/807EB5FA7EB5E954/games/Splinter Cell - Chaos Theory/System/SPLINTERCELL3.EXE": "Splinter Cell - Chaos Theory",
+      "/mnt/807EB5FA7EB5E954/games/Alien Isolation/AI.exe": "Alien Isolation",
+      "/mnt/807EB5FA7EB5E954/games/Outlast Whistleblower/Binaries/Win64/OLGame.exe": "Outlast Whistleblower",
+      "/mnt/807EB5FA7EB5E954/games/Crysis 2/bin32/Crysis2.exe": "Crysis2",
+      "/mnt/807EB5FA7EB5E954/games/Portal Reloaded/Play Portal 2.exe": "Portal Reloaded",
+      "/mnt/807EB5FA7EB5E954/games/Entropy Zero 2/hl2.exe": " Entropy Zero 2",
+      "/mnt/807EB5FA7EB5E954/games/Far Cry/Bin32/FarCry.exe": "FarCry",
+      "/mnt/807EB5FA7EB5E954/games/Assassins Creed IV Black Flag/AC4BFSP.exe": "Assassins Creed IV Black Flag",
+      "/mnt/807EB5FA7EB5E954/games/Tomb Raider Game of The Year Edition/TombRaider.exe": "Tomb Raider",
+      "/mnt/807EB5FA7EB5E954/games/Mafia II/pc/mafia2.exe": "mafia 2",
+      "/mnt/807EB5FA7EB5E954/games/Portal 2 community edition/portal2.exe": "Portal 2 community edition",
+      "/mnt/807EB5FA7EB5E954/games/Grand Theft Auto V/GTAVLauncher.exe": "GTA V",
+      "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/total_commander.exe": "Silent Downpour",
+      "/mnt/807EB5FA7EB5E954/games/Splinter Cell - Blacklist/src/SYSTEM/Blacklist_DX11_game.exe": "Splinter Cell Blacklist",
+      "/mnt/807EB5FA7EB5E954/games/Oblivion Gold/Oblivion.exe": "Oblivion",
+      "/mnt/807EB5FA7EB5E954/games/Portal Stories Mel/portal2.exe": "Portal Stories Mel",
+      "/mnt/807EB5FA7EB5E954/games/Quantum Break/dx11/QuantumBreak.exe": "Quantum Break",
+      "/mnt/807EB5FA7EB5E954/games/Serious Sam Classic/Bin/SeriousSam_Custom.exe": "Serious Sam",
+      "/mnt/807EB5FA7EB5E954/games/Serious Sam Classics Revolution/Bin/SeriousSam.exe": "Serious Sam Revolution",
+      "/mnt/807EB5FA7EB5E954/games/Cold Fear/ColdFear_retail.exe": "Cold Fear",
+      "/mnt/807EB5FA7EB5E954/games/Deus Ex HRDC/DXHRDC.exe": "Deus Ex Human Revolution",
+      "/mnt/807EB5FA7EB5E954/games/Medal of Honor Allied Assault Breakthrough/MOHAA.EXE": "Medal of Honor Allied Assault",
+      "/mnt/807EB5FA7EB5E954/games/Dark Messiah of Might and Magic/MM.EXE": "Dark Messiah of Might and Magic",
+      "/mnt/807EB5FA7EB5E954/games/Need for Speed - Most Wanted/speed.exe": "Need for speed mw"
+    },
+    "key_value": {
+      "C:/Windows/explorer.exe": [
+        "LBUTTON",
+        "RBUTTON",
+        "MBUTTON",
+        " ",
+        " ",
+        "SCROLL_UP",
+        "SCROLL_DOWN"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Splinter Cell - Chaos Theory/System/SPLINTERCELL3.EXE": [
+        "LBUTTON",
+        "W",
+        "RBUTTON",
+        "Q",
+        "C",
+        "SPACE",
+        "SCROLL_DOWN"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Alien Isolation/AI.exe": [
+        "LBUTTON",
+        "W",
+        "WHEEL_MOUSE_BUTTON",
+        "C",
+        " ",
+        "SCROLL_UP",
+        "SCROLL_DOWN"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Outlast Whistleblower/Binaries/Win64/OLGame.exe": [
+        "LBUTTON",
+        "W",
+        "WHEEL_MOUSE_BUTTON",
+        "F",
+        "F",
+        "RBUTTON",
+        "E"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Crysis 2/bin32/Crysis2.exe": [
+        "LBUTTON",
+        "W",
+        " ",
+        "R",
+        "Q",
+        "RBUTTON",
+        "SCROLL_DOWN"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Portal Reloaded/Play Portal 2.exe": [
+        "F",
+        "W",
+        "WHEEL_MOUSE_BUTTON",
+        "SPACE",
+        "F",
+        "RBUTTON",
+        "E"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Entropy Zero 2/hl2.exe": [
+        "LBUTTON",
+        "W",
+        "E",
+        "F",
+        "SPACE",
+        "RBUTTON",
+        "E"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Far Cry/Bin32/FarCry.exe": [
+        "LBUTTON",
+        "W",
+        " ",
+        "R",
+        "Q",
+        "RBUTTON",
+        "F"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Assassins Creed IV Black Flag/AC4BFSP.exe": [
+        "LBUTTON",
+        "W",
+        "E",
+        "F",
+        "LCONTROL",
+        "SPACE",
+        "Shift_L"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Tomb Raider Game of The Year Edition/TombRaider.exe": [
+        "LBUTTON",
+        "W",
+        "MBUTTON",
+        "E",
+        "C",
+        "RBUTTON",
+        "SPACE"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Mafia II/pc/mafia2.exe": [
+        "LBUTTON",
+        "W",
+        "E",
+        "F",
+        "SPACE",
+        "RBUTTON",
+        "SCROLL_DOWN"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Portal 2 community edition/portal2.exe": [
+        "LBUTTON",
+        "W",
+        "E",
+        "SPACE",
+        "F",
+        "RBUTTON",
+        "E"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Grand Theft Auto V/GTAVLauncher.exe": [
+        "LBUTTON",
+        "W",
+        "RBUTTON",
+        "Q",
+        "C",
+        "RBUTTON",
+        "XBUTTON2"
+      ],
+      "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/total_commander.exe": [
+        "LBUTTON",
+        "UP",
+        "WHEEL_MOUSE_BUTTON",
+        "C",
+        "SPACE",
+        "R",
+        "SCROLL_DOWN"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Splinter Cell - Blacklist/src/SYSTEM/Blacklist_DX11_game.exe": [
+        "LBUTTON",
+        "W",
+        "RBUTTON",
+        "Q",
+        "C",
+        "SPACE",
+        "SCROLL_DOWN"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Oblivion Gold/Oblivion.exe": [
+        "LBUTTON",
+        "W",
+        "F",
+        "F",
+        "RBUTTON",
+        "RBUTTON",
+        "SCROLL_DOWN"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Portal Stories Mel/portal2.exe": [
+        "LBUTTON",
+        "W",
+        "SPACE",
+        "SPACE",
+        "F",
+        "RBUTTON",
+        "E"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Quantum Break/dx11/QuantumBreak.exe": [
+        "LBUTTON",
+        "W",
+        " ",
+        "F",
+        "C",
+        "RBUTTON",
+        "SCROLL_DOWN"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Serious Sam Classic/Bin/SeriousSam_Custom.exe": [
+        "LBUTTON",
+        "W",
+        " ",
+        " ",
+        " ",
+        "RBUTTON",
+        "SPACE"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Serious Sam Classics Revolution/Bin/SeriousSam.exe": [
+        "LBUTTON",
+        "W",
+        "E",
+        "E",
+        "EXSEL",
+        "RBUTTON",
+        "SPACE"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Cold Fear/ColdFear_retail.exe": [
+        "LBUTTON",
+        "W",
+        "F",
+        "SCROLL_UP",
+        "SCROLL_DOWN",
+        "RBUTTON",
+        "Shift_L"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Deus Ex HRDC/DXHRDC.exe": [
+        "LBUTTON",
+        "W",
+        "E",
+        "F",
+        "C",
+        "RBUTTON",
+        "SCROLL_DOWN"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Medal of Honor Allied Assault Breakthrough/MOHAA.EXE": [
+        "LBUTTON",
+        "W",
+        "F",
+        "SCROLL_UP",
+        "SCROLL_DOWN",
+        "RBUTTON",
+        "Shift_L"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Dark Messiah of Might and Magic/MM.EXE": [
+        "LBUTTON",
+        "W",
+        " ",
+        "F",
+        "C",
+        "RBUTTON",
+        "SCROLL_DOWN"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Need for Speed - Most Wanted/speed.exe": [
+        "LBUTTON",
+        "RBUTTON",
+        "WHEEL_MOUSE_BUTTON",
+        " ",
+        " ",
+        "W",
+        "SCROLL_DOWN"
+      ]
+    },
+    "mouse_press": {
+      "C:/Windows/explorer.exe": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Splinter Cell - Chaos Theory/System/SPLINTERCELL3.EXE": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Alien Isolation/AI.exe": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Outlast Whistleblower/Binaries/Win64/OLGame.exe": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Crysis 2/bin32/Crysis2.exe": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        true,
+        false
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Portal Reloaded/Play Portal 2.exe": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Entropy Zero 2/hl2.exe": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Far Cry/Bin32/FarCry.exe": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Assassins Creed IV Black Flag/AC4BFSP.exe": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Tomb Raider Game of The Year Edition/TombRaider.exe": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Mafia II/pc/mafia2.exe": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Portal 2 community edition/portal2.exe": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Grand Theft Auto V/GTAVLauncher.exe": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        true,
+        false
+      ],
+      "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/total_commander.exe": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Splinter Cell - Blacklist/src/SYSTEM/Blacklist_DX11_game.exe": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Oblivion Gold/Oblivion.exe": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        true,
+        false
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Portal Stories Mel/portal2.exe": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Quantum Break/dx11/QuantumBreak.exe": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        true,
+        false
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Serious Sam Classic/Bin/SeriousSam_Custom.exe": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Serious Sam Classics Revolution/Bin/SeriousSam.exe": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Cold Fear/ColdFear_retail.exe": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Deus Ex HRDC/DXHRDC.exe": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Medal of Honor Allied Assault Breakthrough/MOHAA.EXE": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Dark Messiah of Might and Magic/MM.EXE": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Need for Speed - Most Wanted/speed.exe": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ]
+    },
+    "id": 6,
+    "current_app": "C:/Windows/explorer.exe",
+    "script_mouse": {
+      "/mnt/807EB5FA7EB5E954/games/Alien Isolation/AI.exe": {
+        "SCROLL_DOWN": "#!/bin/bash\n                      xte \"keydown E\"\n                      sleep 0.23\n                      xte \"keyup E\"\n                      xte \"keydown E\"\n                      sleep 0.23\n                      xte \"keyup E\"\n                      xte \"keydown E\"\n                      sleep 0.23\n                      xte \"keyup E\"\n                      xte \"keydown E\"\n                      sleep 0.23\n                      xte \"keyup E\"\n                      xte \"keydown E\"\n                      sleep 0.23\n                      xte \"keyup E\"\n                      xte \"keydown E\"\n                      sleep 0.23\n                      xte \"keyup E\"\n                      xte \"keydown E\"\n                      sleep 0.23\n                      xte \"keyup E\"\n                      xte \"keydown E\"\n                      sleep 0.23\n                      xte \"keyup E\"\n                      xte \"keydown E\"\n                      sleep 0.23\n                      xte \"keyup E\"\n                      xte \"keydown R\"\n                      sleep 0.23\n                      xte \"keyup R\""
+      },
+      "/mnt/807EB5FA7EB5E954/games/Outlast Whistleblower/Binaries/Win64/OLGame.exe": {
+        "SCROLL_DOWN": "#!/bin/bash\n                      xte \"keydown space\"\n                      sleep 0.1\n                      xte \"keyup space\"\n                      xte \"keydown space\"\n                      sleep 0.1\n                      xte \"keyup space\""
+      },
+      "/mnt/807EB5FA7EB5E954/games/Crysis 2/bin32/Crysis2.exe": {
+        "XBUTTON2": "#!/bin/bash\n                   xte \"keydown F\"\n                   sleep 0.5\n                   xte \"keyup F\"\n                   xte \"keydown E\"\n                   sleep 0.5\n                   xte \"keyup E\"\n                   xte \"keydown R\"\n                   sleep 0.5\n                   xte \"keyup R\""
+      },
+      "/mnt/807EB5FA7EB5E954/games/Far Cry/Bin32/FarCry.exe": {
+        "XBUTTON2": "#!/bin/bash\n                   xte \"keydown F\"\n                   sleep 0.5\n                   xte \"keyup F\"\n                   xte \"keydown R\"\n                   sleep 0.5\n                   xte \"keyup R\""
+      },
+      "/mnt/807EB5FA7EB5E954/games/Assassins Creed IV Black Flag/AC4BFSP.exe": {
+        "SCROLL_DOWN": "#!/bin/bash\n                      xte \"keyup Shift_L\"\n                      xte \"keydown E\"\n                      sleep 0.02\n                      xte \"keyup E\""
+      },
+      "/mnt/807EB5FA7EB5E954/games/Tomb Raider Game of The Year Edition/TombRaider.exe": {
+        "WHEEL_MOUSE_BUTTON": "#!/bin/bash\n                             xte \"keydown E\"\n                             sleep 10.23\n                             xte \"keyup E\"",
+        "SCROLL_DOWN": "#!/bin/bash\n                      xte \"keydown E\"\n                      sleep 0.02\n                      xte \"keyup E\"\n                      xte \"keydown E\"\n                      sleep 0.02\n                      xte \"keyup E\"\n                      xte \"keydown E\"\n                      sleep 0.02\n                      xte \"keyup E\"\n                      xte \"keydown E\"\n                      sleep 0.02\n                      xte \"keyup E\"\n                      xte \"keydown E\"\n                      sleep 0.02\n                      xte \"keyup E\n                      \"xte \"keydown E\"\n                      sleep 0.02\n                      xte \"keyup E\"\n                      xte \"keydown E\"\n                      sleep 0.02\n                      xte \"keyup E\"\n                      xte \"keydown E\"\n                      sleep 0.02\n                      xte \"keyup E\"\n                      xte \"keydown E\"\n                      sleep 0.02\n                      xte \"keyup E\"\n                      xte \"keydown E\"\n                      sleep 0.02\n                      xte \"keyup E\"\n                      xte \"keydown E\"\n                      sleep 0.02\n                      xte \"keyup E\"\n                      xte \"keydown E\"\n                      sleep 0.02\n                      xte \"keyup E\"\n                      xte \"keydown E\"\n                      sleep 0.02\n                      xte \"keyup E\"\n                      xte \"keydown E\"\n                      sleep 0.02\n                      xte \"keyup E\"\n                      xte \"keydown E\"\n                      sleep 0.02\n                      xte \"keyup E\"",
+        "SCROLL_UP": "#!/bin/bash\n                    xte \"keydown E\"\n                    sleep 10.02\n                    xte \"keyup E\""
+      },
+      "/mnt/807EB5FA7EB5E954/games/Grand Theft Auto V/GTAVLauncher.exe": {
+        "XBUTTON2": "#!/bin/bash\n                   xte \"keydown F\"\n                   sleep 0.5\n                   xte \"keyup F\"\n                   xte \"keydown R\"\n                   sleep 0.5\n                   xte \"keyup R\"\n                   xte \"keydown E\"\n                   sleep 0.5\n                   xte \"keyup E\""
+      },
+      "/mnt/807EB5FA7EB5E954/games/Oblivion Gold/Oblivion.exe": {
+        "XBUTTON2": "#!/bin/bash\n                   xte \"keydown space\"\n                   sleep 0.5\n                   xte \"keyup space\"\n                   xte \"keydown E\"\n                   sleep 0.5\n                   xte \"keyup E\""
+      },
+      "/mnt/807EB5FA7EB5E954/games/Quantum Break/dx11/QuantumBreak.exe": {
+        "XBUTTON2": "#!/bin/bash\n                   xte \"keydown E\"\n                   sleep 0.5\n                   xte \"keyup E\"\n                   xte \"keydown R\"\n                   sleep 0.5\n                   xte \"keyup R\"\n                   xte \"keydown F\"\n                   sleep 0.5\n                   xte \"keyup F\""
+      },
+      "/mnt/807EB5FA7EB5E954/games/Entropy Zero 2/hl2.exe": {
+        "XBUTTON2": "#!/bin/bash\n                   xte \"keydown E\"\n                   sleep 0.5\n                   xte \"keyup E\"\n                   xte \"keydown R\"\n                   sleep 0.5\n                   xte \"keyup R\"\n                   xte \"keydown F\"\n                   sleep 0.5\n                   xte \"keyup F\""
+      }
+    },
+    "keyboard_script": {
+      "/mnt/807EB5FA7EB5E954/games/Splinter Cell - Chaos Theory/System/SPLINTERCELL3.EXE": {
+        "keys": {
+          "J": "#!/bin/sh\n              for i in \n              keydown $k\"\n              sleep 0.05\n              xte \"keyup $k\"\n              done\n              done\n              done\""
+        }
+      },
+      "/mnt/807EB5FA7EB5E954/games/Alien Isolation/AI.exe": {
+        "keys": {
+          "N": "xte \"keydown E\"\n              sleep 5.23\n              xte \"keyup E\"\n              xte \"mousedown 1\"\n              xte \"mousedown 3\"\n              xte \"keydown A\"\n              xte \"keyup A\"\n              xte \"mouseup 3\"\n              xte \"mouseup 1\"",
+          "H": "xte \"mousedown 3\"\n              sleep 9.23\n              xte \"mouseup 3\"",
+          "L": "xte \"mousedown 3\"",
+          "P": "xte \"mouseup 3\"",
+          "T": "#!/bin/bash\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\""
+        }
+      },
+      "/mnt/807EB5FA7EB5E954/games/Outlast Whistleblower/Binaries/Win64/OLGame.exe": {
+        "keys": {
+          "up": "#!/bin/bash\n               xte \"keydown Shift_L\"\n               xte \"keydown W\"\n               sleep 1.0\n               xte \"keydown space\"\n               sleep 0.1\n               xte \"keyup space\"\n               xte \"keyup W\"\n               xte \"keyup Shift_L\""
+        }
+      },
+      "/mnt/807EB5FA7EB5E954/games/Entropy Zero 2/hl2.exe": {
+        "keys": {
+          "?\n                                                                                                                                                                                                                                                                                                         /": "#!/bin/bash\n                                                                                                                                                                                                                                                                                                                 xte \"keydown C\"",
+          "Ctrl_r": "#!/bin/bash\n                   xte \"keydown C\"\n                   sleep 6.5\n                   xte \"keyup C\""
+        }
+      },
+      "/mnt/807EB5FA7EB5E954/games/Tomb Raider Game of The Year Edition/TombRaider.exe": {
+        "keys": {
+          "L": "#!/bin/bash\n              xte \"keydown Left\"\n              sleep 0.02\n              xte \"keyup Left\"\n              xte \"keydown Right\"\n              sleep 0.02\n              xte \"keyup Right\"\n              xte \"keydown Left\"\n              sleep 0.02\n              xte \"keyup Left\"\n              xte \"keydown Right\"\n              sleep 0.02\n              xte \"keyup Right\"\n              xte \"keydown Left\"\n              sleep 0.02\n              xte \"keyup Left\"\n              xte \"keydown Right\"\n              sleep 0.02\n              xte \"keyup Right\"\n              xte \"keydown Left\"\n              sleep 0.02\n              xte \"keyup Left\"\n              xte \"keydown Right\"\n              sleep 0.02\n              xte \"keyup Right\"\n              xte \"keydown Left\"\n              sleep 0.02\n              xte \"keyup Left\"\n              xte \"keydown Right\"\n              sleep 0.02\n              xte \"keyup Right\"\n              xte \"keydown Left\"\n              sleep 0.02\n              xte \"keyup Left\"\n              xte \"keydown Right\"\n              sleep 0.02\n              xte \"keyup Right\"\n              xte \"keydown Left\"\n              sleep 0.02\n              xte \"keyup Left\"\n              xte \"keydown Right\"\n              sleep 0.02\n              xte \"keyup Right\"\n              xte \"keydown Left\"\n              sleep 0.02\n              xte \"keyup Left\"\n              xte \"keydown Right\"\n              sleep 0.02\n              xte \"keyup Right\"\n              xte \"keydown Left\"\n              sleep 0.02\n              xte \"keyup Left\"\n              xte \"keydown Right\"\n              sleep 0.02\n              xte \"keyup Right\"\n              xte \"keydown Left\"\n              sleep 0.02\n              xte \"keyup Left\"\n              xte \"keydown Right\"\n              sleep 0.02\n              xte \"keyup Right\"\n              xte \"keydown Left\"\n              sleep 0.02\n              xte \"keyup Left\"\n              xte \"keydown Right\"\n              sleep 0.02\n              xte \"keyup Right\"\n              xte \"keydown Left\"\n              sleep 0.02\n              xte \"keyup Left\"\n              xte \"keydown Right\"\n              sleep 0.02\n              xte \"keyup Right\"\n              xte \"keydown Left\"\n              sleep 0.02\n              xte \"keyup Left\"\n              xte \"keydown Right\"\n              sleep 0.02\n              xte \"keyup Right\"\n              xte \"keydown Left\"\n              sleep 0.02\n              xte \"keyup Left\"\n              xte \"keydown Right\"\n              sleep 0.02\n              xte \"keyup Right\"\n              xte \"keydown Left\"\n              sleep 0.02\n              xte \"keyup Left\"\n              xte \"keydown Right\"\n              sleep 0.02\n              xte \"keyup Right\"\n              xte \"keydown Left\"\n              sleep 0.02\n              xte \"keyup Left\"\n              xte \"keydown Right\"\n              sleep 0.02\n              xte \"keyup Right\"\n              xte \"keydown Left\"\n              sleep 0.02\n              xte \"keyup Left\"\n              xte \"keydown Right\"\n              sleep 0.02\n              xte \"keyup Right\"\n              xte \"keydown Left\"\n              sleep 0.02\n              xte \"keyup Left\"\n              xte \"keydown Right\"\n              sleep 0.02\n              xte \"keyup Right\"\n              xte \"keydown Left\"\n              sleep 0.02\n              xte \"keyup Left\"\n              xte \"keydown Right\"\n              sleep 0.02\n              xte \"keyup Right\"\n              xte \"keydown Left\"\n              sleep 0.02\n              xte \"keyup Left\"\n              xte \"keydown Right\"\n              sleep 0.02\n              xte \"keyup Right\"\n              xte \"keydown Left\"\n              sleep 0.02\n              xte \"keyup Left\"\n              xte \"keydown Right\"\n              sleep 0.02\n              xte \"keyup Right\"\n              xte \"keydown Left\"\n              sleep 0.02\n              xte \"keyup Left\"\n              xte \"keydown Right\"\n              sleep 0.02\n              xte \"keyup Right\"\n              xte \"keydown Left\"\n              sleep 0.02\n              xte \"keyup Left\"\n              xte \"keydown Right\"\n              sleep 0.02\n              xte \"keyup Right\"",
+          "D": "#!/bin/bash\n              xte \"keydown Right\"\n              sleep 0.02\n              xte \"keydown space\"\n              sleep 0.02\n              xte \"keyup space\"\n              xte \"keyup Right\"",
+          "A": "#!/bin/bash\n              xte \"keydown Left\"\n              sleep 0.02\n              xte \"keydown space\"\n              sleep 0.02\n              xte \"keyup space\"\"\n              sleep 0.02\n              xte \"keyup Left\"",
+          "K": "#!/bin/bash\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"\n              xte \"keydown F\"\n              sleep 0.02\n              xte \"keyup F\"",
+          "N": "#!/bin/bash\n              xte 'mouseclick 1' 'usleep 100000' 'mouseclick 1'\n              xte 'mouseclick 1' 'usleep 100000' 'mouseclick 1'\n              xte 'mouseclick 1' 'usleep 100000' 'mouseclick 1'\n              xte 'mouseclick 1' 'usleep 100000' 'mouseclick 1'",
+          "M": "#!/bin/bash\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\"\n              xte \"keydown E\"\n              sleep 0.02\n              xte \"keyup E\""
+        }
+      },
+      "/mnt/807EB5FA7EB5E954/games/Portal 2 community edition/portal2.exe": {
+        "keys": {
+          "KEY_KPPLUS": "#!/bin/bash\n                       TIMESCALE=\"2\"\n                       sleep 0.2\n                       xdotool key grave\n                       sleep 0.8\n                       xdotool type \"sv_cheats 1\"\n                       xdotool key Return\n                       sleep 0.3\n                       xdotool type \"host_timescale $TIMESCALE\"\n                       xdotool key Return\n                       sleep 0.81\n                       xdotool key Escape",
+          "KEY_KPMINUS": "#!/bin/bash\n                        TIMESCALE=\"0.3\"\n                        sleep 0.2\n                        xdotool key grave\n                        sleep 0.8\n                        xdotool type \"sv_cheats 1\"\n                        xdotool key Return\n                        sleep 0.3\n                        xdotool type \"host_timescale $TIMESCALE\"\n                        xdotool key Return\n                        sleep 0.81\n                        xdotool key Escape"
+        }
+      },
+      "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/total_commander.exe": {
+        "keys": {
+          "M": "#!/bin/bash\n              xte \"keydown W\"\n              sleep 2.02\n              xte \"keydown space\"\n              sleep 0.02\n              xte \"keyup space\"\n              xte \"keyup W\""
+        }
+      },
+      "/mnt/807EB5FA7EB5E954/games/Portal Stories Mel/portal2.exe": {
+        "keys": {
+          "KEY_KPPLUS": "#!/bin/bash\n                       TIMESCALE=\"1\"\n                       xte \"keydown Esc\"\n                       sleep 0.62\n                       xte \"keyup Esc\"\n                       sleep 1.2\n                       xdotool key grave\n                       sleep 1.8\n                       xdotool type \"sv_cheats 1\"\n                       xdotool key Return\n                       sleep 1.3\n                       xdotool type \"host_timescale $TIMESCALE\"\n                       xdotool key Return\n                       sleep 0.81\n                       xdotool key Escape"
+        }
+      },
+      "/mnt/807EB5FA7EB5E954/games/Serious Sam Classics Revolution/Bin/SeriousSam.exe": {
+        "keys": {
+          "N": "#!/bin/bash\n              xte \"keydown W\"\n              sleep 0.02\n              xte \"keyup W\"\n              sleep 1.02\n              xte \"keydown space\"\n              sleep 0.02\n              xte \"keyup space\"\n              xte \"keyup W\""
+        }
+      },
+      "/mnt/807EB5FA7EB5E954/games/Cold Fear/ColdFear_retail.exe": {
+        "keys": {
+          "L": "#!/bin/bash\n              xte \"keydown space\"\n              xte \"keydown E\"",
+          "Shift_R": "#!/bin/bash\n                    xte \"keydown E\"\n                    sleep 0.23\n                    xte \"keyup E\""
+        }
+      },
+      "/mnt/807EB5FA7EB5E954/games/Need for Speed - Most Wanted/speed.exe": {
+        "keys": {
+          "up": "#!/bin/bash\n               xte \"keydown W\"",
+          "Down": "#!/bin/bash\n                 xte \"keyup W\""
+        }
+      }
+    },
+    "additional_exe": {
+      "C:/Windows/explorer.exe": [
+        "C:/Windows/explorer.exe"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Splinter Cell - Chaos Theory/System/SPLINTERCELL3.EXE": [
+        "/mnt/807EB5FA7EB5E954/games/Splinter Cell - Chaos Theory/System/SC3UpdateLauncher.exe",
+        "/mnt/807EB5FA7EB5E954/games/Splinter Cell - Chaos Theory/System/SPLINTERCELL3.EXE",
+        "/mnt/807EB5FA7EB5E954/games/Splinter Cell - Chaos Theory/System/Tom Clancy's Splinter Cell Chaos Theory 1.05 + 5 Trainer.exe",
+        "/mnt/807EB5FA7EB5E954/games/Splinter Cell - Chaos Theory/System/Tom Clancy's Splinter Cell Chaos Theory Trainer.EXE"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Alien Isolation/AI.exe": [
+        "/mnt/807EB5FA7EB5E954/games/Alien Isolation/AI.exe",
+        "/mnt/807EB5FA7EB5E954/games/Alien Isolation/Alien Isolation V13.01.2019 Trainer +5  MrAntiFun.exe"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Outlast Whistleblower/Binaries/Win64/OLGame.exe": [
+        "/mnt/807EB5FA7EB5E954/games/Outlast Whistleblower/Binaries/Win64/OLGame.exe",
+        "/mnt/807EB5FA7EB5E954/games/Outlast Whistleblower/Binaries/Win64/OLGame_R.exe",
+        "/mnt/807EB5FA7EB5E954/games/Outlast Whistleblower/Binaries/Win64/UE3ShaderCompileWorker.exe"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Crysis 2/bin32/Crysis2.exe": [
+        "/mnt/807EB5FA7EB5E954/games/Crysis 2/bin32/Crysis2.exe",
+        "/mnt/807EB5FA7EB5E954/games/Crysis 2/bin32/Crysis2Launcher.exe",
+        "/mnt/807EB5FA7EB5E954/games/Crysis 2/bin32/fxc.exe"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Portal Reloaded/Play Portal 2.exe": [
+        "/mnt/807EB5FA7EB5E954/games/Portal Reloaded/Play Portal 2.exe",
+        "/mnt/807EB5FA7EB5E954/games/Portal Reloaded/portal2.exe"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Entropy Zero 2/hl2.exe": [
+        "/mnt/807EB5FA7EB5E954/games/Entropy Zero 2/hl2.exe",
+        "/mnt/807EB5FA7EB5E954/games/Entropy Zero 2/unins000.exe"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Far Cry/Bin32/FarCry.exe": [
+        "/mnt/807EB5FA7EB5E954/games/Far Cry/Bin32/CgfDump.exe",
+        "/mnt/807EB5FA7EB5E954/games/Far Cry/Bin32/Editor.exe",
+        "/mnt/807EB5FA7EB5E954/games/Far Cry/Bin32/FarCry.exe",
+        "/mnt/807EB5FA7EB5E954/games/Far Cry/Bin32/FarCryConfigurator.exe",
+        "/mnt/807EB5FA7EB5E954/games/Far Cry/Bin32/FarCry_WinSV.exe",
+        "/mnt/807EB5FA7EB5E954/games/Far Cry/Bin32/LuaCompiler.exe",
+        "/mnt/807EB5FA7EB5E954/games/Far Cry/Bin32/cgc.exe",
+        "/mnt/807EB5FA7EB5E954/games/Far Cry/Bin32/fxc.exe",
+        "/mnt/807EB5FA7EB5E954/games/Far Cry/Bin32/rc.exe"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Assassins Creed IV Black Flag/AC4BFSP.exe": [
+        "/mnt/807EB5FA7EB5E954/games/Assassins Creed IV Black Flag/AC4BFSP.exe",
+        "/mnt/807EB5FA7EB5E954/games/Assassins Creed IV Black Flag/unins000.exe"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Tomb Raider Game of The Year Edition/TombRaider.exe": [
+        "/mnt/807EB5FA7EB5E954/games/Tomb Raider Game of The Year Edition/Tomb Raider v1.1.838.0 Plus 12 Trainer.exe",
+        "/mnt/807EB5FA7EB5E954/games/Tomb Raider Game of The Year Edition/TombRaider.exe",
+        "/mnt/807EB5FA7EB5E954/games/Tomb Raider Game of The Year Edition/unins000.exe"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Mafia II/pc/mafia2.exe": [
+        "/mnt/807EB5FA7EB5E954/games/Mafia II/pc/RemoveSaves.exe",
+        "/mnt/807EB5FA7EB5E954/games/Mafia II/pc/mafia2.exe"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Portal 2 community edition/portal2.exe": [
+        "/mnt/807EB5FA7EB5E954/games/Portal 2 community edition/portal2.exe"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Grand Theft Auto V/GTAVLauncher.exe": [
+        "/mnt/807EB5FA7EB5E954/games/Grand Theft Auto V/GTA5.exe",
+        "/mnt/807EB5FA7EB5E954/games/Grand Theft Auto V/GTAVLauncher.exe"
+      ],
+      "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/total_commander.exe": [
+        "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/screen-reader.exe",
+        "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/total_commander.exe"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Splinter Cell - Blacklist/src/SYSTEM/Blacklist_DX11_game.exe": [
+        "/mnt/807EB5FA7EB5E954/games/Splinter Cell - Blacklist/src/SYSTEM/Blacklist.exe",
+        "/mnt/807EB5FA7EB5E954/games/Splinter Cell - Blacklist/src/SYSTEM/Blacklist_DX11_game.exe",
+        "/mnt/807EB5FA7EB5E954/games/Splinter Cell - Blacklist/src/SYSTEM/Blacklist_game.exe",
+        "/mnt/807EB5FA7EB5E954/games/Splinter Cell - Blacklist/src/SYSTEM/FirewallInstall.exe",
+        "/mnt/807EB5FA7EB5E954/games/Splinter Cell - Blacklist/src/SYSTEM/GDFInstall.exe",
+        "/mnt/807EB5FA7EB5E954/games/Splinter Cell - Blacklist/src/SYSTEM/gu.exe"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Oblivion Gold/Oblivion.exe": [
+        "/mnt/807EB5FA7EB5E954/games/Oblivion Gold/4gb_patch.exe",
+        "/mnt/807EB5FA7EB5E954/games/Oblivion Gold/OBSEcomplete.exe",
+        "/mnt/807EB5FA7EB5E954/games/Oblivion Gold/Oblivion.exe",
+        "/mnt/807EB5FA7EB5E954/games/Oblivion Gold/OblivionLauncher.exe",
+        "/mnt/807EB5FA7EB5E954/games/Oblivion Gold/Wrye Bash 309.1 - Installer-22368-309-1-1623232793.exe",
+        "/mnt/807EB5FA7EB5E954/games/Oblivion Gold/obse_loader.exe",
+        "/mnt/807EB5FA7EB5E954/games/Oblivion Gold/unins000.exe",
+        "/mnt/807EB5FA7EB5E954/games/Oblivion Gold/unins001.exe"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Portal Stories Mel/portal2.exe": [
+        "/mnt/807EB5FA7EB5E954/games/Portal Stories Mel/portal2.exe",
+        "/mnt/807EB5FA7EB5E954/games/Portal Stories Mel/unins000.exe"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Quantum Break/dx11/QuantumBreak.exe": [
+        "/mnt/807EB5FA7EB5E954/games/Quantum Break/dx11/QuantumBreak.exe"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Serious Sam Classic/Bin/SeriousSam_Custom.exe": [
+        "/mnt/807EB5FA7EB5E954/games/Serious Sam Classic/Bin/AskFiles.exe",
+        "/mnt/807EB5FA7EB5E954/games/Serious Sam Classic/Bin/DecodeReport.exe",
+        "/mnt/807EB5FA7EB5E954/games/Serious Sam Classic/Bin/DedicatedServer.exe",
+        "/mnt/807EB5FA7EB5E954/games/Serious Sam Classic/Bin/DedicatedServerGamespy.exe",
+        "/mnt/807EB5FA7EB5E954/games/Serious Sam Classic/Bin/DedicatedServer_Custom.exe",
+        "/mnt/807EB5FA7EB5E954/games/Serious Sam Classic/Bin/Depend.exe",
+        "/mnt/807EB5FA7EB5E954/games/Serious Sam Classic/Bin/Ecc.exe",
+        "/mnt/807EB5FA7EB5E954/games/Serious Sam Classic/Bin/MakeFONT.exe",
+        "/mnt/807EB5FA7EB5E954/games/Serious Sam Classic/Bin/RCon.exe",
+        "/mnt/807EB5FA7EB5E954/games/Serious Sam Classic/Bin/RConGamespy.exe",
+        "/mnt/807EB5FA7EB5E954/games/Serious Sam Classic/Bin/SeriousEditor.exe",
+        "/mnt/807EB5FA7EB5E954/games/Serious Sam Classic/Bin/SeriousEditor32.exe",
+        "/mnt/807EB5FA7EB5E954/games/Serious Sam Classic/Bin/SeriousEditor_Custom.exe",
+        "/mnt/807EB5FA7EB5E954/games/Serious Sam Classic/Bin/SeriousModeler.exe",
+        "/mnt/807EB5FA7EB5E954/games/Serious Sam Classic/Bin/SeriousModeler32.exe",
+        "/mnt/807EB5FA7EB5E954/games/Serious Sam Classic/Bin/SeriousSam.exe",
+        "/mnt/807EB5FA7EB5E954/games/Serious Sam Classic/Bin/SeriousSamGamespy.exe",
+        "/mnt/807EB5FA7EB5E954/games/Serious Sam Classic/Bin/SeriousSam_Custom.exe",
+        "/mnt/807EB5FA7EB5E954/games/Serious Sam Classic/Bin/SeriousSam_old.exe",
+        "/mnt/807EB5FA7EB5E954/games/Serious Sam Classic/Bin/SeriousSkaStudio.exe",
+        "/mnt/807EB5FA7EB5E954/games/Serious Sam Classic/Bin/SeriousSkaStudio32.exe"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Serious Sam Classics Revolution/Bin/SeriousSam.exe": [
+        "/mnt/807EB5FA7EB5E954/games/Serious Sam Classics Revolution/Bin/SeriousSam.exe"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Cold Fear/ColdFear_retail.exe": [
+        "/mnt/807EB5FA7EB5E954/games/Cold Fear/ColdFear_retail.exe"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Deus Ex HRDC/DXHRDC.exe": [
+        "/mnt/807EB5FA7EB5E954/games/Deus Ex HRDC/DXHRDC.exe",
+        "/mnt/807EB5FA7EB5E954/games/Deus Ex HRDC/DXHumanRevolutionDC_v2.02.exe",
+        "/mnt/807EB5FA7EB5E954/games/Deus Ex HRDC/MakeAppXml.exe",
+        "/mnt/807EB5FA7EB5E954/games/Deus Ex HRDC/unins000.exe"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Medal of Honor Allied Assault Breakthrough/MOHAA.EXE": [
+        "/mnt/807EB5FA7EB5E954/games/Medal of Honor Allied Assault Breakthrough/Breakthrough_Server_Setup.exe",
+        "/mnt/807EB5FA7EB5E954/games/Medal of Honor Allied Assault Breakthrough/Configure.exe",
+        "/mnt/807EB5FA7EB5E954/games/Medal of Honor Allied Assault Breakthrough/Install_MOHAACL_1008.exe",
+        "/mnt/807EB5FA7EB5E954/games/Medal of Honor Allied Assault Breakthrough/MOHAA.EXE",
+        "/mnt/807EB5FA7EB5E954/games/Medal of Honor Allied Assault Breakthrough/MOHAACL.exe",
+        "/mnt/807EB5FA7EB5E954/games/Medal of Honor Allied Assault Breakthrough/Uninstal.exe",
+        "/mnt/807EB5FA7EB5E954/games/Medal of Honor Allied Assault Breakthrough/configure_Breakthrough.exe",
+        "/mnt/807EB5FA7EB5E954/games/Medal of Honor Allied Assault Breakthrough/dgVoodooCpl.exe",
+        "/mnt/807EB5FA7EB5E954/games/Medal of Honor Allied Assault Breakthrough/fpupdate.exe",
+        "/mnt/807EB5FA7EB5E954/games/Medal of Honor Allied Assault Breakthrough/moh_Breakthrough.exe",
+        "/mnt/807EB5FA7EB5E954/games/Medal of Honor Allied Assault Breakthrough/moh_Breakthrough_server.exe",
+        "/mnt/807EB5FA7EB5E954/games/Medal of Honor Allied Assault Breakthrough/moh_spearhead.exe",
+        "/mnt/807EB5FA7EB5E954/games/Medal of Honor Allied Assault Breakthrough/moh_spearhead_server.exe",
+        "/mnt/807EB5FA7EB5E954/games/Medal of Honor Allied Assault Breakthrough/mohaa_Server.exe",
+        "/mnt/807EB5FA7EB5E954/games/Medal of Honor Allied Assault Breakthrough/oggdec.exe",
+        "/mnt/807EB5FA7EB5E954/games/Medal of Honor Allied Assault Breakthrough/unins000.exe"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Dark Messiah of Might and Magic/MM.EXE": [
+        "/mnt/807EB5FA7EB5E954/games/Dark Messiah of Might and Magic/MM.EXE",
+        "/mnt/807EB5FA7EB5E954/games/Dark Messiah of Might and Magic/dark.exe",
+        "/mnt/807EB5FA7EB5E954/games/Dark Messiah of Might and Magic/unins000.exe"
+      ],
+      "/mnt/807EB5FA7EB5E954/games/Need for Speed - Most Wanted/speed.exe": [
+        "/mnt/807EB5FA7EB5E954/games/Need for Speed - Most Wanted/speed.exe"
+      ]
+    },
+    "id_name": "USB OPTICAL MOUSE"
+  },
+  "gamepad_data": {
+    "image_path": "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/gamepad xbox 360.png",
+    "zones": [
+      {
+        "name": "LT",
+        "logical_name": "LEFT_TRIGGER",
+        "rx": 0.15435897435897433,
+        "ry": 0.10379509379509379,
+        "rw": 0.14,
+        "rh": 0.06,
+        "color": "#e67e22",
+        "shape": "rect"
+      },
+      {
+        "name": "RT",
+        "logical_name": "RIGHT_TRIGGER",
+        "rx": 0.7030769230769232,
+        "ry": 0.0835930735930736,
+        "rw": 0.14,
+        "rh": 0.06,
+        "color": "#e67e22",
+        "shape": "rect"
+      },
+      {
+        "name": "LB",
+        "logical_name": "LEFT_SHOULDER",
+        "rx": 0.14205128205128206,
+        "ry": 0.17369408369408368,
+        "rw": 0.16,
+        "rh": 0.07,
+        "color": "#95a5a6",
+        "shape": "rect"
+      },
+      {
+        "name": "RB",
+        "logical_name": "RIGHT_SHOULDER",
+        "rx": 0.697948717948718,
+        "ry": 0.1708080808080808,
+        "rw": 0.16,
+        "rh": 0.07,
+        "color": "#95a5a6",
+        "shape": "rect"
+      },
+      {
+        "name": "Guide",
+        "logical_name": "GUIDE",
+        "rx": 0.46,
+        "ry": 0.23,
+        "rw": 0.08,
+        "rh": 0.1,
+        "color": "#3498db",
+        "shape": "ellipse"
+      },
+      {
+        "name": "Back",
+        "logical_name": "BACK",
+        "rx": 0.398974358974359,
+        "ry": 0.3728860028860029,
+        "rw": 0.05,
+        "rh": 0.06,
+        "color": "#9b59b6",
+        "shape": "ellipse"
+      },
+      {
+        "name": "Start",
+        "logical_name": "START",
+        "rx": 0.5546153846153845,
+        "ry": 0.3816450216450216,
+        "rw": 0.05,
+        "rh": 0.06,
+        "color": "#9b59b6",
+        "shape": "ellipse"
+      },
+      {
+        "name": "L↑",
+        "logical_name": "LEFT_THUMB_UP",
+        "rx": 0.18974358974358976,
+        "ry": 0.2901010101010101,
+        "rw": 0.06,
+        "rh": 0.06,
+        "color": "#5b8cff",
+        "shape": "rect"
+      },
+      {
+        "name": "L↓",
+        "logical_name": "LEFT_THUMB_DOWN",
+        "rx": 0.18846153846153849,
+        "ry": 0.47030303030303033,
+        "rw": 0.06,
+        "rh": 0.06,
+        "color": "#5b8cff",
+        "shape": "rect"
+      },
+      {
+        "name": "L←",
+        "logical_name": "LEFT_THUMB_LEFT",
+        "rx": 0.11076923076923077,
+        "ry": 0.3830880230880231,
+        "rw": 0.06,
+        "rh": 0.06,
+        "color": "#5b8cff",
+        "shape": "rect"
+      },
+      {
+        "name": "L→",
+        "logical_name": "LEFT_THUMB_RIGHT",
+        "rx": 0.27384615384615385,
+        "ry": 0.3830880230880231,
+        "rw": 0.06,
+        "rh": 0.06,
+        "color": "#5b8cff",
+        "shape": "rect"
+      },
+      {
+        "name": "LS",
+        "logical_name": "LEFT_THUMB_PRESSED",
+        "rx": 0.18102564102564103,
+        "ry": 0.35731601731601736,
+        "rw": 0.08,
+        "rh": 0.1,
+        "color": "#1a47c4",
+        "shape": "ellipse"
+      },
+      {
+        "name": "Y",
+        "logical_name": "Y",
+        "rx": 0.7561538461538462,
+        "ry": 0.2815440115440116,
+        "rw": 0.06,
+        "rh": 0.08,
+        "color": "#f1c40f",
+        "shape": "ellipse"
+      },
+      {
+        "name": "X",
+        "logical_name": "X",
+        "rx": 0.681025641025641,
+        "ry": 0.36577200577200575,
+        "rw": 0.06,
+        "rh": 0.08,
+        "color": "#3498db",
+        "shape": "ellipse"
+      },
+      {
+        "name": "B",
+        "logical_name": "B",
+        "rx": 0.83,
+        "ry": 0.36577200577200575,
+        "rw": 0.06,
+        "rh": 0.08,
+        "color": "#e74c3c",
+        "shape": "ellipse"
+      },
+      {
+        "name": "A",
+        "logical_name": "A",
+        "rx": 0.7561538461538462,
+        "ry": 0.44855699855699854,
+        "rw": 0.06,
+        "rh": 0.08,
+        "color": "#2ecc71",
+        "shape": "ellipse"
+      },
+      {
+        "name": "↑",
+        "logical_name": "DPAD_UP",
+        "rx": 0.3223076923076923,
+        "ry": 0.5032900432900433,
+        "rw": 0.06,
+        "rh": 0.07,
+        "color": "#7f8c8d",
+        "shape": "rect"
+      },
+      {
+        "name": "↓",
+        "logical_name": "DPAD_DOWN",
+        "rx": 0.321025641025641,
+        "ry": 0.6416450216450217,
+        "rw": 0.06,
+        "rh": 0.07,
+        "color": "#7f8c8d",
+        "shape": "rect"
+      },
+      {
+        "name": "←",
+        "logical_name": "DPAD_LEFT",
+        "rx": 0.2651282051282051,
+        "ry": 0.5688600288600288,
+        "rw": 0.06,
+        "rh": 0.07,
+        "color": "#7f8c8d",
+        "shape": "rect"
+      },
+      {
+        "name": "→",
+        "logical_name": "DPAD_RIGHT",
+        "rx": 0.38333333333333336,
+        "ry": 0.5717460317460318,
+        "rw": 0.06,
+        "rh": 0.07,
+        "color": "#7f8c8d",
+        "shape": "rect"
+      },
+      {
+        "name": "R↑",
+        "logical_name": "RIGHT_THUMB_UP",
+        "rx": 0.6182051282051282,
+        "ry": 0.487012987012987,
+        "rw": 0.06,
+        "rh": 0.06,
+        "color": "#5b8cff",
+        "shape": "rect"
+      },
+      {
+        "name": "R↓",
+        "logical_name": "RIGHT_THUMB_DOWN",
+        "rx": 0.6169230769230769,
+        "ry": 0.6412409812409813,
+        "rw": 0.06,
+        "rh": 0.06,
+        "color": "#5b8cff",
+        "shape": "rect"
+      },
+      {
+        "name": "R←",
+        "logical_name": "RIGHT_THUMB_LEFT",
+        "rx": 0.5392307692307693,
+        "ry": 0.5626839826839827,
+        "rw": 0.06,
+        "rh": 0.06,
+        "color": "#5b8cff",
+        "shape": "rect"
+      },
+      {
+        "name": "R→",
+        "logical_name": "RIGHT_THUMB_RIGHT",
+        "rx": 0.6946153846153846,
+        "ry": 0.5597979797979797,
+        "rw": 0.06,
+        "rh": 0.06,
+        "color": "#5b8cff",
+        "shape": "rect"
+      },
+      {
+        "name": "RS",
+        "logical_name": "RIGHT_THUMB_PRESSED",
+        "rx": 0.6043589743589743,
+        "ry": 0.5412409812409813,
+        "rw": 0.08,
+        "rh": 0.1,
+        "color": "#1a47c4",
+        "shape": "ellipse"
+      }
+    ],
+    "last_profile": "race",
+    "profiles": {
+      "Default": {
+        "A": "KEY_SPACE",
+        "B": "KEY_B",
+        "X": "KEY_X",
+        "Y": "KEY_Y",
+        "LEFT_SHOULDER": "KEY_Q",
+        "RIGHT_SHOULDER": "KEY_E",
+        "LEFT_TRIGGER": "KEY_1",
+        "RIGHT_TRIGGER": "KEY_2",
+        "GUIDE": "KEY_F12",
+        "BACK": "KEY_BACKSPACE",
+        "START": "KEY_ENTER",
+        "DPAD_UP": "KEY_UP",
+        "DPAD_DOWN": "KEY_DOWN",
+        "DPAD_LEFT": "KEY_LEFT",
+        "DPAD_RIGHT": "KEY_RIGHT",
+        "LEFT_THUMB_UP": "KEY_W",
+        "LEFT_THUMB_DOWN": "KEY_S",
+        "LEFT_THUMB_LEFT": "KEY_A",
+        "LEFT_THUMB_RIGHT": "KEY_D",
+        "RIGHT_THUMB_UP": "KEY_KP8",
+        "RIGHT_THUMB_DOWN": "KEY_KP2",
+        "RIGHT_THUMB_LEFT": "KEY_KP4",
+        "RIGHT_THUMB_RIGHT": "KEY_KP6",
+        "LEFT_THUMB_PRESSED": "KEY_LEFTSHIFT",
+        "RIGHT_THUMB_PRESSED": "KEY_Z"
+      },
+      "race": {
+        "A": "KEY_UP",
+        "B": "KEY_KP3",
+        "X": "KEY_KP1",
+        "Y": "KEY_?",
+        "LEFT_SHOULDER": "KEY_Q",
+        "RIGHT_SHOULDER": "KEY_E",
+        "LEFT_TRIGGER": "KEY_DOWN",
+        "RIGHT_TRIGGER": "KEY_KP9",
+        "GUIDE": "KEY_INSERT",
+        "BACK": "KEY_BACKSPACE",
+        "START": "KEY_SPACE",
+        "DPAD_UP": "KEY_?",
+        "DPAD_DOWN": "KEY_DOWN",
+        "DPAD_LEFT": "KEY_LEFT",
+        "DPAD_RIGHT": "KEY_RIGHT",
+        "LEFT_THUMB_UP": "KEY_W",
+        "LEFT_THUMB_DOWN": "KEY_S",
+        "LEFT_THUMB_LEFT": "KEY_A",
+        "LEFT_THUMB_RIGHT": "KEY_D",
+        "RIGHT_THUMB_UP": "KEY_KP8",
+        "RIGHT_THUMB_DOWN": "KEY_KP2",
+        "RIGHT_THUMB_LEFT": "KEY_KP4",
+        "RIGHT_THUMB_RIGHT": "KEY_KP6",
+        "LEFT_THUMB_PRESSED": "KEY_RIGHTCTRL",
+        "RIGHT_THUMB_PRESSED": "KEY_KP5"
+      },
+      "gta": {
+        "A": "KEY_UP",
+        "B": "KEY_KP3",
+        "X": "KEY_RIGHTSHIFT",
+        "Y": "KEY_KP1",
+        "LEFT_SHOULDER": "KEY_Q",
+        "RIGHT_SHOULDER": "KEY_E",
+        "LEFT_TRIGGER": "KEY_KP7",
+        "RIGHT_TRIGGER": "KEY_KP9",
+        "GUIDE": "KEY_INSERT",
+        "BACK": "KEY_BACKSPACE",
+        "START": "KEY_SPACE",
+        "DPAD_UP": "KEY_UP",
+        "DPAD_DOWN": "KEY_DOWN",
+        "DPAD_LEFT": "KEY_LEFT",
+        "DPAD_RIGHT": "KEY_RIGHT",
+        "LEFT_THUMB_UP": "KEY_W",
+        "LEFT_THUMB_DOWN": "KEY_S",
+        "LEFT_THUMB_LEFT": "KEY_A",
+        "LEFT_THUMB_RIGHT": "KEY_D",
+        "RIGHT_THUMB_UP": "KEY_KP8",
+        "RIGHT_THUMB_DOWN": "KEY_KP2",
+        "RIGHT_THUMB_LEFT": "KEY_KP4",
+        "RIGHT_THUMB_RIGHT": "KEY_KP6",
+        "LEFT_THUMB_PRESSED": "KEY_RIGHTCTRL",
+        "RIGHT_THUMB_PRESSED": "KEY_KP5"
+      }
+    },
+    "trigger_modes": {
+      "race": {
+        "RIGHT_THUMB_RIGHT": {
+          "key": "KEY_H",
+          "mode": "hold"
+        },
+        "RIGHT_TRIGGER": {
+          "key": "KEY_H",
+          "mode": "hold"
+        }
+      },
+      "gta": {}
+    },
+    "mouse_on": true,
+    "sens": 7,
+    "sens_x": 7,
+    "sens_y": 7,
+    "smooth": true,
+    "grab": true
+  }
+}
