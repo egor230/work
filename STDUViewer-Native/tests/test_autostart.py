@@ -19,6 +19,7 @@ spec.loader.exec_module(m)
 
 app = QApplication.instance() or QApplication([])
 TMP = Path(tempfile.mkdtemp(prefix='stdu-autostart-'))
+m.POSITIONS_FILE = str(TMP / 'positions.json')
 UNCUGHT = []
 m.QMessageBox.warning = staticmethod(lambda *a, **k: None)
 m.QMessageBox.information = staticmethod(lambda *a, **k: None)
@@ -47,6 +48,7 @@ def make_pdf(path, pages=2):
 
 class Base(unittest.TestCase):
     def setUp(self):
+        Path(m.POSITIONS_FILE).unlink(missing_ok=True)
         UNCUGHT.clear()
         self.old_recent_file = m.RECENT_FILE
         m.RECENT_FILE = str(TMP / 'recent.txt')

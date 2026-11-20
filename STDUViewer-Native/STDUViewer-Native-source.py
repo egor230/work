@@ -9,6 +9,7 @@ import os
 import re
 import sys
 import io
+import json
 import zipfile
 import tempfile
 import subprocess
@@ -56,6 +57,7 @@ ICON_FILE = os.environ.get(
     'STDU_ICON',
     os.path.join(os.path.dirname(os.path.abspath(__file__)), 'STDUViewerApp.ico'))
 RECENT_FILE = os.path.expanduser('~/.local/share/stdu-reader/recent.txt')
+POSITIONS_FILE = os.path.expanduser('~/.local/share/stdu-reader/positions.json')
 
 ALL_FILTER = ("Все поддерживаемые (*.pdf *.djvu *.djv *.epub *.fb2 *.mobi *.azw "
               "*.azw3 *.prc *.xps *.oxps *.ps *.eps *.tif *.tiff *.png *.jpg "
@@ -1028,6 +1030,11 @@ class DocumentTab(QWidget):
         self._fit_timer = QTimer(self)
         self._fit_timer.setSingleShot(True)
         self._fit_timer.timeout.connect(self._refit_after_resize)
+        self._restoring = False
+        self._position_timer = QTimer(self)
+        self._position_timer.setSingleShot(True)
+        self._position_timer.setInterval(400)
+        self._position_timer.timeout.connect(self._save_position_now)
 
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
@@ -1045,7 +1052,24 @@ class DocumentTab(QWidget):
             lay.addWidget(self.view)
             self.browser = None
 
+        # Любая смена страницы или прокрутка сохраняет позицию (с задержкой,
+        # чтобы не писать файл на каждый «тик» колеса мыши).
+        self.pageChanged.connect(self._queue_position_save)
+        if self.view:
+            self.view.verticalScrollBar().valueChanged.connect(
+                self._queue_position_save)
+
         QTimer.singleShot(0, self.render)
+
+    def _queue_position_save(self, *args):
+        if self._restoring or self._closed:
+            return
+        self._position_timer.start()
+
+    def _save_position_now(self):
+        if self._restoring or self._closed:
+            return
+        self.mw.remember_position(self)
 
     def _pages_to_show(self):
         n = self.doc.page_count
@@ -1392,6 +1416,7 @@ class DocumentTab(QWidget):
         """Останавливает отложенные операции перед закрытием документа."""
         self._closed = True
         self._fit_timer.stop()
+        self._position_timer.stop()
         if self.view is not None:
             self.view._stop_anim()
 
@@ -1516,6 +1541,7 @@ class MainWindow(QMainWindow):
                                    if l.strip() and os.path.isfile(l.strip())]
         except Exception:
             pass
+        self.positions = self._load_positions()
         self._tabs = []
         self.continuous = True   # непрерывный просмотр включён по умолчанию
 
@@ -1870,6 +1896,7 @@ class MainWindow(QMainWindow):
                 return
         tab = DocumentTab(doc, self)
         tab.pageChanged.connect(self.update_status)
+        self.restore_position(tab)
         idx = self.tabs.addTab(tab, doc.name)
         self.tabs.setCurrentIndex(idx)
         self._tabs.append(tab)
@@ -1931,6 +1958,88 @@ class MainWindow(QMainWindow):
         self.recent = []
         self._rebuild_recent()
 
+    # -- позиции чтения --------------------------------------------------
+    def _load_positions(self):
+        try:
+            with open(POSITIONS_FILE, encoding='utf-8') as fh:
+                data = json.load(fh)
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}
+
+    def _write_positions(self):
+        try:
+            os.makedirs(os.path.dirname(POSITIONS_FILE), exist_ok=True)
+            tmp = POSITIONS_FILE + '.tmp'
+            with open(tmp, 'w', encoding='utf-8') as fh:
+                json.dump(self.positions, fh, ensure_ascii=False, indent=1)
+            os.replace(tmp, POSITIONS_FILE)
+        except Exception:
+            pass
+
+    def remember_position(self, tab):
+        """Запоминает страницу и место на ней для каждого документа."""
+        if tab is None or tab.doc.kind == 'flow' or tab.view is None:
+            return
+        path = os.path.abspath(tab.doc.path)
+        bar = tab.view.verticalScrollBar()
+        span = bar.maximum() - bar.minimum()
+        frac = ((bar.value() - bar.minimum()) / span) if span > 0 else 0.0
+        self.positions[path] = {
+            'page': int(tab.page),
+            'scroll': round(max(0.0, min(1.0, frac)), 4),
+            'zoom': round(float(tab.zoom), 4),
+            'rotation': int(tab.rotation) % 360,
+            'mode': tab.mode if tab.mode in ('single', 'facing', 'facing_cover')
+                    else 'single',
+            'fit': tab.fit if tab.fit in ('none', 'width', 'height', 'page')
+                   else 'none',
+        }
+        self._write_positions()
+
+    def restore_position(self, tab):
+        """Возвращает документ туда, где пользователь остановился."""
+        if tab is None or tab.doc.kind == 'flow' or tab.view is None:
+            return
+        data = self.positions.get(os.path.abspath(tab.doc.path))
+        if not isinstance(data, dict):
+            return
+        tab._restoring = True
+        try:
+            n = max(1, tab.doc.page_count)
+            tab.page = max(0, min(n - 1, int(data.get('page', 0))))
+            tab.zoom = max(0.05, min(5.0, float(data.get('zoom', 1.0))))
+            tab.rotation = int(data.get('rotation', 0)) % 360
+            mode = data.get('mode', 'single')
+            tab.mode = mode if mode in ('single', 'facing', 'facing_cover') else 'single'
+            fit = data.get('fit', 'none')
+            tab.fit = fit if fit in ('none', 'width', 'height', 'page') else 'none'
+            tab.render()
+            for key, action in self._mode_actions.items():
+                action.setChecked(key == tab.mode)
+            self.update_status()
+            # Диапазон ползунка становится корректным только после того, как
+            # вкладка добавлена и обработана компоновщиком — поэтому прокрутку
+            # восстанавливаем следующим тиком событийного цикла.
+            scroll = float(data.get('scroll', 0))
+
+            def apply_scroll():
+                if tab._closed or tab.view is None:
+                    tab._restoring = False
+                    return
+                try:
+                    bar = tab.view.verticalScrollBar()
+                    span = bar.maximum() - bar.minimum()
+                    if span > 0:
+                        value = bar.minimum() + int(scroll * span)
+                        bar.setValue(max(bar.minimum(), min(bar.maximum(), value)))
+                finally:
+                    tab._restoring = False
+
+            QTimer.singleShot(0, apply_scroll)
+        except Exception:
+            tab._restoring = False
+
     def open_last_recent(self):
         """Открывает последний PDF (или любой последний документ) при запуске."""
         candidates = [p for p in self.recent if p and os.path.isfile(p)]
@@ -1945,6 +2054,7 @@ class MainWindow(QMainWindow):
     def close_tab(self, idx):
         w = self.tabs.widget(idx)
         if isinstance(w, DocumentTab):
+            self.remember_position(w)
             w.prepare_close()
             try:
                 w.doc.close()
@@ -2536,6 +2646,11 @@ class MainWindow(QMainWindow):
             self.find_edit.clear()
             return
         super().keyPressEvent(event)
+
+    def closeEvent(self, event):
+        for tab in list(self._tabs):
+            self.remember_position(tab)
+        super().closeEvent(event)
 
 
 def main():

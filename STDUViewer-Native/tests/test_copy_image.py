@@ -26,6 +26,7 @@ spec.loader.exec_module(m)
 
 app = QApplication.instance() or QApplication([])
 TMP = Path(tempfile.mkdtemp(prefix='stdu-copy-'))
+m.POSITIONS_FILE = str(TMP / 'positions.json')
 UNCUGHT = []
 SAVE = {'path': ''}
 
@@ -73,6 +74,7 @@ class Base(unittest.TestCase):
         make_pdf(cls.pdf)
 
     def setUp(self):
+        Path(m.POSITIONS_FILE).unlink(missing_ok=True)
         UNCUGHT.clear()
         SAVE['path'] = ''
         self.w = m.MainWindow()

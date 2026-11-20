@@ -914,13 +914,14 @@ def create_shortcut(full_path, category=DEFAULT_CATEGORY, install_menu=False):
   print(f"Предупреждение: Иконка для '{filename_without_extension}' не найдена.")
   icon_path = "application-x-executable"  # системная иконка-заглушка
 
- # Генерация .desktop файла (имя ярлыка — с расширением .desktop).
+ # Генерация .desktop файла: расширение нужно имени ФАЙЛА, но не полю Name —
+# иначе меню показывает название с ".desktop" на конце.
  # Первая строка — shebang: позволяет запускать ярлык и через ./имя.desktop.
  desktop_content = f"""#!/usr/bin/env -S gio launch
 [Desktop Entry]
 Type=Application
 Version=1.0
-Name={filename_without_extension}.desktop
+Name={filename_without_extension}
 Exec={exec_command}
 Path={directory}
 Icon={icon_path}

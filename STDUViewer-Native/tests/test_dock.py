@@ -19,6 +19,8 @@ m = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)
 
 app = QApplication.instance() or QApplication([])
+TMP = Path(tempfile.mkdtemp(prefix='stdu-dock-'))
+m.POSITIONS_FILE = str(TMP / 'positions.json')
 UNCUGHT = []
 m.QMessageBox.information = staticmethod(lambda *a, **k: None)
 m.QMessageBox.warning = staticmethod(lambda *a, **k: None)
@@ -38,6 +40,7 @@ def pump(n=3):
 
 class TestDockPanel(unittest.TestCase):
     def setUp(self):
+        Path(m.POSITIONS_FILE).unlink(missing_ok=True)
         UNCUGHT.clear()
         self.w = m.MainWindow()
         pump(3)

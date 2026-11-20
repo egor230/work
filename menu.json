@@ -173,13 +173,16 @@
         "type": "generic",
         "default": [],
         "value": [
-            "IriunWebcam.desktop",
+            "kdenlive.desktop",
+            "org.kde.kdenlive.desktop",
+            "STDUViewer-Native-x86_64.desktop",
             null,
+            "yandex-browser.desktop",
+            "IriunWebcam.desktop",
+            "alacarte-made-d694b5d6-b09b-11f1-b22b-10ffe0293379.desktop",
             "alacarte-made-e5998a80-23f0-11f1-85a1-10ffe0293379.desktop",
             "alacarte-made-e0c0fe51-dd79-11f1-9ffe-10ffe0293379.desktop",
-            "STDUViewer-Native-x86_64.desktop",
             "alacarte-made-006bd1ea-b71b-11f1-bbdf-10ffe0293379.desktop",
-            "yandex-browser.desktop",
             "alacarte-made-892e7095-0894-11f1-8ed9-10ffe0293379.desktop",
             "google-chrome.desktop",
             "alacarte-made-15a3f15a-fd4a-11f0-822d-10ffe0293379.desktop",
@@ -189,10 +192,7 @@
             null,
             "alacarte-made-c615362d-d666-11f1-b8d7-10ffe0293379.desktop",
             "cinnamon-settings-startup.desktop",
-            null,
-            "com.cloudflare.WarpTaskbar.desktop",
-            "mintupdate.desktop",
-            "Far Cry.desktop"
+            null
         ]
     },
     "search-start-folder": {

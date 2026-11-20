@@ -32,6 +32,7 @@ spec.loader.exec_module(m)
 
 app = QApplication.instance() or QApplication([])
 TMP = Path(tempfile.mkdtemp(prefix='stdu-tests-'))
+m.POSITIONS_FILE = str(TMP / 'positions.json')
 
 DIALOGS = []
 URLS = []
@@ -105,6 +106,7 @@ def make_pdf(path, pages=3, size=(595, 842), text='Page %d', toc=None,
 
 class Base(unittest.TestCase):
     def setUp(self):
+        Path(m.POSITIONS_FILE).unlink(missing_ok=True)
         DIALOGS.clear(); URLS.clear(); UNCUGHT.clear()
         CHOICE.update(open='', save='', dir='', password='secret',
                       password_ok=True, text='Закладка')

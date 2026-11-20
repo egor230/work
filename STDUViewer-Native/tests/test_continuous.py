@@ -27,6 +27,7 @@ spec.loader.exec_module(m)
 
 app = QApplication.instance() or QApplication([])
 TMP = Path(tempfile.mkdtemp(prefix='stdu-continuous-'))
+m.POSITIONS_FILE = str(TMP / 'positions.json')
 UNCUGHT = []
 m.QMessageBox.warning = staticmethod(lambda *a, **k: None)
 m.QMessageBox.information = staticmethod(lambda *a, **k: None)
@@ -69,6 +70,7 @@ class Base(unittest.TestCase):
         make_pdf(cls.pdf)
 
     def setUp(self):
+        Path(m.POSITIONS_FILE).unlink(missing_ok=True)
         UNCUGHT.clear()
         self.w = m.MainWindow()
         pump(3)
