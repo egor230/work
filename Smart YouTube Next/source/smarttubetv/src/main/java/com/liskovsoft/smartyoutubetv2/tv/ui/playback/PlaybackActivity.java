@@ -1,5 +1,7 @@
 package com.liskovsoft.smartyoutubetv2.tv.ui.playback;
 
+import android.content.Intent;
+
 import android.annotation.TargetApi;
 import android.app.PictureInPictureParams;
 import android.os.Build;
@@ -187,6 +189,14 @@ public class PlaybackActivity extends LeanbackActivity {
                 // Player with TextureView keeps running in background because onStop() fired with huge delay (~5sec).
                 mPlaybackFragment.maybeReleasePlayer();
             } else {
+                // External video link: BACK must return to our app, not to whatever
+                // task was open before (file manager, launcher, ...).
+                if (getIntent() != null && getIntent().getData() != null) {
+                    Intent root = new Intent(this,
+                            com.liskovsoft.smartyoutubetv2.tv.ui.browse.BrowseActivity.class);
+                    root.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                    startActivity(root);
+                }
                 super.finish();
             }
         }

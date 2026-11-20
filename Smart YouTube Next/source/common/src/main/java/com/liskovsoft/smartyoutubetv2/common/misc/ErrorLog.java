@@ -8,6 +8,14 @@ import java.util.Locale;
 public final class ErrorLog {
     private static final String TAG = "ErrorLog";
     private static final String FILE_NAME = "autofix_errors.log";
+    private static final String SEEN_FILE = "autofix_seen.txt";
+    private static final int MAX_SEEN = 500;
+    private static final java.util.Set<String> sSeen = new java.util.HashSet<>();
+    private static boolean sLoaded = false;
+    private static final java.util.concurrent.ExecutorService sExecutor =
+            java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r, "webtube-errorlog"); t.setDaemon(true); return t;
+            });
     private static final long MAX_SIZE = 5L * 1024 * 1024;
     private static final int MAX_ENTRY_CHARS = 4096;
     private ErrorLog() {}
@@ -15,6 +23,17 @@ public final class ErrorLog {
     public static void log(Context c, String tag, String message, Throwable error) {
         if (c == null) return;
         try {
+            // Log only errors we have never seen before (signature = class + top frames).
+            String signature = signature(tag, message, error);
+            loadSeen(c);
+            synchronized (sSeen) {
+                if (sSeen.contains(signature)) return;
+                sSeen.add(signature);
+            }
+            saveSeen(c);
+
+            sExecutor.execute(() -> {
+                try {
             File f = getFile(c);
             StringBuilder e = new StringBuilder();
             String t = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date());
@@ -27,8 +46,54 @@ public final class ErrorLog {
             FileWriter w = new FileWriter(f, true);
             try { w.write(e.toString()); } finally { w.close(); }
             trim(f);
+                } catch (Throwable ignored) {}
+            });
         } catch (Throwable ex) { Log.e(TAG, "log failed: " + ex.getMessage()); }
     }
+    private static String signature(String tag, String message, Throwable error) {
+        StringBuilder sb = new StringBuilder(tag).append('|');
+        if (error != null) {
+            sb.append(error.getClass().getName());
+            StackTraceElement[] st = error.getStackTrace();
+            int n = Math.min(3, st == null ? 0 : st.length);
+            for (int i = 0; i < n; i++) {
+                sb.append('|').append(st[i].getClassName()).append('.').append(st[i].getMethodName());
+            }
+        } else {
+            // for lifecycle/status messages, message itself is the signature
+            sb.append(String.valueOf(message).replaceAll("\\d{2}:\\d{2}:\\d{2}", "TIME"));
+        }
+        return sb.toString();
+    }
+
+    private static void loadSeen(Context c) {
+        if (sLoaded) return;
+        sLoaded = true;
+        try {
+            File f = new File(c.getFilesDir(), SEEN_FILE);
+            if (!f.exists()) return;
+            java.io.BufferedReader r = new java.io.BufferedReader(new java.io.FileReader(f));
+            try {
+                String line;
+                while ((line = r.readLine()) != null) if (!line.isEmpty()) sSeen.add(line);
+            } finally { r.close(); }
+        } catch (Throwable ignored) {}
+    }
+
+    private static void saveSeen(Context c) {
+        try {
+            File f = new File(c.getFilesDir(), SEEN_FILE);
+            java.io.PrintWriter w = new java.io.PrintWriter(f);
+            try {
+                int i = 0;
+                for (String sig : sSeen) {
+                    if (i++ >= MAX_SEEN) break;
+                    w.println(sig);
+                }
+            } finally { w.close(); }
+        } catch (Throwable ignored) {}
+    }
+
     private static void trim(File f) {
         if (!f.exists() || f.length() <= MAX_SIZE) return;
         try {

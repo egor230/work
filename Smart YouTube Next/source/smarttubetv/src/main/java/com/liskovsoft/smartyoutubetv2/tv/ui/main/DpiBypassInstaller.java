@@ -24,31 +24,58 @@ public final class DpiBypassInstaller {
     private static final String LIBDIR = MODULE + "/system/lib/arm64-v8a";
 
     private static volatile boolean sAppForeground = true;
+    // All root shell work runs on a background thread. Running `su` on the main
+    // thread blocked the UI for seconds on every activity resume/pause.
+    private static final java.util.concurrent.ExecutorService sExecutor =
+            java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r, "webtube-dpi"); t.setDaemon(true); return t;
+            });
+    private static volatile Boolean sRootAvailable = null;
+    private static volatile boolean sRunning = false;
     static {
         PlaybackStateHolder.setListener(() -> {
             if (!sAppForeground && !PlaybackStateHolder.isActive()) {
-                stopInternal(null);
+                // Async: stopInternal() does blocking `su` work, never call it on
+                // the main thread (PlaybackStateHolder listener runs there).
+                stop(null);
             }
         });
     }
     private DpiBypassInstaller() {}
 
-    /** Start the bypass. Called when the app comes to foreground. */
-    public static void start(Context context) {
-        try {
-            if (!hasRoot()) {
-                ErrorLog.log(context, TAG, "no root available — DPI bypass skipped", null);
-                return;
+    /** One-time initialization; never blocks the caller. */
+    public static void initialize(final Context context) {
+        sExecutor.execute(() -> {
+            try {
+                if (!hasRootCached()) return;
+                installOnce(context);
+            } catch (Throwable e) {
+                ErrorLog.log(context, TAG, "DPI init failed", e);
             }
-            installOnce(context);
-            String status = runRootWithOutput("LD_LIBRARY_PATH=" + LIBDIR + " " + BIN + " status");
-            if (status == null || !status.contains("working")) {
+        });
+    }
+
+    public static void start(final Context context) {
+        sExecutor.execute(() -> {
+            try {
+                if (!hasRootCached()) {
+                    ErrorLog.log(context, TAG, "no root available — DPI bypass skipped", null);
+                    return;
+                }
+                installOnce(context);
+                if (sRunning) return; // already started, avoid another `su` roundtrip
+                String status = runRootWithOutput("LD_LIBRARY_PATH=" + LIBDIR + " " + BIN + " status");
+                if (status != null && status.contains("working")) {
+                    sRunning = true;
+                    return;
+                }
                 String out = runRootWithOutput("LD_LIBRARY_PATH=" + LIBDIR + " " + BIN + " start");
+                sRunning = true;
                 ErrorLog.log(context, TAG, "nfqws START (app foreground): " + out.trim(), null);
+            } catch (Throwable e) {
+                ErrorLog.log(context, TAG, "DPI bypass start failed", e);
             }
-        } catch (Throwable e) {
-            ErrorLog.log(context, TAG, "DPI bypass start failed", e);
-        }
+        });
     }
 
     public static void onForeground(Context context) {
@@ -67,23 +94,28 @@ public final class DpiBypassInstaller {
     }
 
     /** Stop the bypass. Called when the app goes to background. */
-    public static void stop(Context context) {
-        stopInternal(context);
+    public static void stop(final Context context) {
+        sExecutor.execute(() -> stopInternal(context));
     }
 
-    private static void stopInternal(Context context) {
-        try {
-            if (!hasRoot()) {
-                return;
-            }
-            String status = runRootWithOutput("LD_LIBRARY_PATH=" + LIBDIR + " " + BIN + " status");
-            if (status != null && status.contains("working")) {
+    private static void stopInternal(final Context context) {
+        synchronized (sExecutor) {
+            try {
+                if (!hasRootCached() || !sRunning) return;
                 String out = runRootWithOutput("LD_LIBRARY_PATH=" + LIBDIR + " " + BIN + " stop");
+                sRunning = false;
                 ErrorLog.log(context, TAG, "nfqws STOP (app background): " + out.trim(), null);
+            } catch (Throwable e) {
+                ErrorLog.log(context, TAG, "DPI bypass stop failed", e);
             }
-        } catch (Throwable e) {
-            ErrorLog.log(context, TAG, "DPI bypass stop failed", e);
         }
+    }
+
+    private static boolean hasRootCached() {
+        if (sRootAvailable == null) {
+            sRootAvailable = hasRoot();
+        }
+        return sRootAvailable;
     }
 
     public static void installOnce(Context context) throws Exception {

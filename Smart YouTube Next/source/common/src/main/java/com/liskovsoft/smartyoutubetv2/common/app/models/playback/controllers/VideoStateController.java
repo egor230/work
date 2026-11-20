@@ -186,8 +186,18 @@ public class VideoStateController extends BasePlayerController {
     public void onMetadata(MediaItemMetadata metadata) {
         // Channel info should be loaded at this point
         if (getVideo() != null && !getVideo().isRemote) {
-            if (metadata != null && metadata.getChannelId() != null) {
-                getVideo().channelId = metadata.getChannelId();
+            if (metadata != null) {
+                if (metadata.getChannelId() != null) {
+                    getVideo().channelId = metadata.getChannelId();
+                }
+                // Fix "null - Author" in background mini-player: some videos come
+                // from an external intent without a title. Fill it from metadata.
+                String metaTitle = metadata.getTitle();
+                if (metaTitle != null && !metaTitle.isEmpty()
+                        && (getVideo().title == null || getVideo().title.isEmpty()
+                        || "null".equals(getVideo().title))) {
+                    getVideo().title = metaTitle;
+                }
             }
             restoreSubtitleFormat();
         }

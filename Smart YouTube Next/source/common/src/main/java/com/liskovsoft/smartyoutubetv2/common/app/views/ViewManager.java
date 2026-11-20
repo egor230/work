@@ -138,6 +138,11 @@ public class ViewManager {
             if (parentActivity == null && !isPlayerOnlyModeEnabled()) {
                 parentActivity = getDefaultParent(activity);
             }
+            // Video opened from an external link has no stored parent. Return to the
+            // app's root instead of exiting to the TV launcher on BACK.
+            if (parentActivity == null && !isPlayerOnlyModeEnabled()) {
+                parentActivity = getRootActivity();
+            }
 
             if (parentActivity == null || isPlayerOnlyModeEnabled()) {
                 Log.d(TAG, "Parent activity name doesn't stored in registry. Exiting to Home...");
