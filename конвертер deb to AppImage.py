@@ -125,7 +125,11 @@ class DebToAppImageThread(QThread):
             # Упаковываем в AppImage
             self.log_signal.emit("📦 Упаковываю в AppImage...")
             env = os.environ.copy()
-            env['ARCH'] = pkg_arch if pkg_arch != 'all' else 'x86_64'
+            # appimagetool ожидает свои названия архитектур (x86_64/aarch64), а не deb-ные
+            arch_map = {'amd64': 'x86_64', 'x86_64': 'x86_64', 'all': 'x86_64',
+                        'i386': 'i686', 'i686': 'i686', 'arm64': 'aarch64',
+                        'aarch64': 'aarch64'}
+            env['ARCH'] = arch_map.get(pkg_arch, pkg_arch)
 
             result = subprocess.run(
                 [appimagetool, self.appdir_path, output_path],
@@ -484,8 +488,8 @@ Categories=Utility;
         return None
 
     def _ensure_icon(self, appdir, desktop_file):
-        """Свежий appimagetool роняет сборку, если иконки нет в корне AppDir.
-        Имя файла должно совпадать со stem из Icon= (расширение пробуют сами)."""
+        """Гарантирует иконку в корне AppDir — свежий appimagetool без неё роняет сборку.
+        Имя файла должно совпадать со stem из Icon= (расширение он переберёт сам)."""
         icon_val = None
         try:
             with open(desktop_file, 'r', encoding='utf-8', errors='ignore') as f:
@@ -496,34 +500,98 @@ Categories=Utility;
         except Exception:
             return
         if not icon_val:
-            return
+            icon_val = os.path.splitext(os.path.basename(desktop_file))[0]
+            self.log_signal.emit(f"⚠️ В .desktop нет Icon= — использую имя: {icon_val}")
+
         base = os.path.basename(icon_val)
         stem = base.rsplit('.', 1)[0] if base.lower().endswith(('.png', '.svg', '.xpm')) else base
+        candidates = tuple(c.lower() for c in (f'{stem}.png', f'{stem}.svg', f'{stem}.xpm'))
+
+        # 1) иконка уже лежит в корне AppDir
         for ext in ('.png', '.svg', '.xpm'):
             if os.path.exists(os.path.join(appdir, stem + ext)):
+                self.log_signal.emit(f"🖼️ Иконка в корне AppDir: {stem + ext}")
                 return
-        # ищем файл с подходящим именем по всему AppDir
+
         found = []
+        # 2) ищем внутри распакованного deb-пакета
         for root, _dirs, files in os.walk(appdir):
             for f in files:
-                if f.lower() in (f'{stem}.png', f'{stem}.svg', f'{stem}.xpm'):
+                if f.lower() in candidates:
                     found.append(os.path.join(root, f))
+
+        # 3) иконка часто приходит отдельным пакетом (breeze/hicolor) — ищем в системе
         if not found:
-            # страховка: иконка с обычным именем в каталогах иконок или в папке приложения
+            import glob
+            esc = glob.escape(stem)
+            patterns = (
+                f'/usr/share/icons/*/*/apps/{esc}.*',
+                f'/usr/share/icons/*/apps/{esc}.*',
+                f'/usr/share/icons/hicolor/*/{esc}.*',
+                f'/usr/share/pixmaps/{esc}.*',
+            )
+            for pattern in patterns:
+                for p in glob.glob(pattern):
+                    if os.path.isfile(p) and os.path.basename(p).lower() in candidates:
+                        found.append(p)
+
+        # 4) страховка: icon.png / icon.svg в каталогах иконок или в opt/
+        if not found:
             for root, _dirs, files in os.walk(appdir):
                 rel = os.path.relpath(root, appdir)
                 if rel.startswith(('usr/share/icons', 'opt')):
                     found.extend(os.path.join(root, f) for f in files
-                                 if f.lower() in ('icon.png', 'icon.svg', 'icon.xpm', f'{stem}.png'))
+                                 if f.lower() in ('icon.png', 'icon.svg', 'icon.xpm'))
+
         if found:
-            best = max(found, key=os.path.getsize)
-            ext = os.path.splitext(best)[1] or '.png'
+            # png предпочтительнее: appimagetool ждёт именно 256x256 png
+            try:
+                found.sort(key=lambda p: (0 if p.lower().endswith('.png') else 1,
+                                          -os.path.getsize(p)))
+            except OSError:
+                pass
+            best = found[0]
+            ext = os.path.splitext(best)[1].lower() or '.png'
             dst = os.path.join(appdir, stem + ext)
             if os.path.abspath(best) != os.path.abspath(dst):
                 shutil.copy2(best, dst)
-            self.log_signal.emit(f"🖼️ Иконка в корне AppDir: {os.path.basename(dst)}")
-        else:
-            self.log_signal.emit(f"⚠️ Иконка {icon_val} не найдена в пакете — свежий appimagetool может прервать сборку")
+            self.log_signal.emit(f"🖼️ Иконка в корне AppDir: {os.path.basename(dst)} (из {best})")
+            return
+
+        # 5) ничего не нашли — создаём валидную заглушку, иначе сборка прервётся
+        dst = os.path.join(appdir, stem + '.png')
+        try:
+            self._generate_placeholder_png(dst, 256)
+            self.log_signal.emit(f"⚠️ Иконка {icon_val} не найдена — создана заглушка {stem}.png "
+                                 "(при желании замени её на настоящую иконку 256x256)")
+        except Exception as e:
+            self.log_signal.emit(f"⚠️ Не удалось создать иконку-заглушку: {e}")
+
+    def _generate_placeholder_png(self, path, size=256):
+        """Создаёт валидный 256x256 PNG-градиент без внешних библиотек (только zlib/struct)."""
+        import struct
+        import zlib
+        r, g, b = 38, 78, 120
+
+        def chunk(tag, data):
+            return (struct.pack('>I', len(data)) + tag + data
+                    + struct.pack('>I', zlib.crc32(tag + data) & 0xffffffff))
+
+        raw = bytearray()
+        for y in range(size):
+            raw.append(0)  # фильтр 'None'
+            t = y / max(1, size - 1)
+            rr = int(r + (255 - r) * t * 0.35)
+            gg = int(g + (255 - g) * t * 0.35)
+            bb = int(b + (255 - b) * t * 0.35)
+            raw.extend(bytes((rr, gg, bb, 255)) * size)
+
+        png = (b'\x89PNG\r\n\x1a\n'
+               + chunk(b'IHDR', struct.pack('>IIBBBBB', size, size, 8, 6, 0, 0, 0))
+               + chunk(b'IDAT', zlib.compress(bytes(raw), 9))
+               + chunk(b'IEND', b''))
+        with open(path, 'wb') as f:
+            f.write(png)
 
     def _bundle_dependencies(self, appdir, exec_path):
         """Копирует разделяемые библиотеки в AppDir"""

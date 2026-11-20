@@ -14,9 +14,13 @@ import tempfile
 import subprocess
 import shutil
 import html as html_mod
+from html.parser import HTMLParser
 from pathlib import Path
 
-from PyQt5.QtCore import Qt, QSize, QTimer, QUrl, QFileInfo, pyqtSignal, QRectF, QPointF
+from PyQt5.QtCore import (
+    Qt, QSize, QTimer, QUrl, QFileInfo, pyqtSignal, QRectF, QPointF,
+    QPropertyAnimation, QEasingCurve,
+)
 from PyQt5.QtGui import (
     QImage, QPixmap, QIcon, QFont, QTransform, QPainter, QColor,
     QKeySequence, QStandardItem, QCursor, QPalette, QBrush, QPen,
@@ -85,6 +89,14 @@ class DocBase:
     def text(self, index):
         return ''
 
+    def text_rect(self, index, rect):
+        """Текст внутри прямоугольника в координатах страницы."""
+        return self.text(index)
+
+    def image_regions(self, index):
+        """Список (прямоугольник, xref) изображений на странице."""
+        return []
+
     def toc(self):
         return []
 
@@ -133,11 +145,22 @@ class PdfDoc(DocBase):
 
     def render(self, index, zoom=1.0, rotation=0):
         page = self.doc[index]
-        pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=False)
+        # Сглаживание (суперсэмплинг): при малом/среднем масштабе рисуем страницу
+        # с запасом и уменьшаем её качественным фильтром. Так текст и тонкие
+        # линии не превращаются в «лестницу»; при крупном масштабе запас не нужен.
+        z = max(0.05, zoom)
+        oversample = 2.0 if z < 1.5 else 1.0
+        pix = page.get_pixmap(matrix=fitz.Matrix(z * oversample, z * oversample),
+                              alpha=False)
         fmt = QImage.Format_RGB888 if pix.n == 3 else QImage.Format_RGBA8888
         img = QImage(pix.samples, pix.width, pix.height, pix.n * pix.width, fmt).copy()
+        if oversample != 1.0:
+            img = img.scaled(max(1, round(pix.width / oversample)),
+                             max(1, round(pix.height / oversample)),
+                             Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
         if rotation:
-            img = img.transformed(QTransform().rotate(rotation))
+            img = img.transformed(QTransform().rotate(rotation),
+                                  Qt.SmoothTransformation)
         return img
 
     def text(self, index):
@@ -145,6 +168,24 @@ class PdfDoc(DocBase):
             return self.doc[index].get_text()
         except Exception:
             return ''
+
+    def text_rect(self, index, rect):
+        try:
+            return self.doc[index].get_textbox(rect)
+        except Exception:
+            return self.text(index)
+
+    def image_regions(self, index):
+        """Прямоугольники и xref изображений — нужны для контекстного меню."""
+        try:
+            out = []
+            for info in self.doc[index].get_image_info(xrefs=True):
+                box = info.get('bbox')
+                if box:
+                    out.append((fitz.Rect(box), info.get('xref', 0)))
+            return out
+        except Exception:
+            return []
 
     def toc(self):
         try:
@@ -261,7 +302,8 @@ class ImageDoc(DocBase):
             img = img.scaled(int(img.width() * zoom), int(img.height() * zoom),
                              Qt.KeepAspectRatio, Qt.SmoothTransformation)
         if rotation:
-            img = img.transformed(QTransform().rotate(rotation))
+            img = img.transformed(QTransform().rotate(rotation),
+                                  Qt.SmoothTransformation)
         return img
 
     def format_name(self):
@@ -527,7 +569,8 @@ def build_fb2(path):
 
 def build_plain(path):
     ext = Path(path).suffix.lower()
-    raw = open(path, 'rb').read().decode('utf-8', 'ignore')
+    with open(path, 'rb') as fh:
+        raw = fh.read().decode('utf-8', 'ignore')
     if ext in ('.html', '.htm', '.xhtml'):
         return raw, []
     if ext == '.txt':
@@ -698,6 +741,9 @@ class PageLabel(QLabel):
         self.link_regions = []      # список (QRectF, dict-ссылка)
         self._pressed = None
         self._hover = None
+        self._selecting = False
+        self._sel_start = None
+        self._sel_end = None
         self.setMouseTracking(True)
         self.setCursor(Qt.ArrowCursor)
 
@@ -717,7 +763,21 @@ class PageLabel(QLabel):
                 return link
         return None
 
+    def clear_selection(self):
+        self._selecting = False
+        self._sel_start = self._sel_end = None
+        self.tab._selected_text = ''
+        self.update()
+
+    def selection_rect(self):
+        if self._sel_start is None or self._sel_end is None:
+            return QRectF()
+        return QRectF(self._sel_start, self._sel_end).normalized()
+
     def mouseMoveEvent(self, event):
+        if self._selecting and (event.buttons() & Qt.LeftButton):
+            self._sel_end = event.pos()
+            self.update()
         link = self._hit(event.pos())
         if link is not self._hover:
             self._hover = link
@@ -741,55 +801,108 @@ class PageLabel(QLabel):
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
             self._pressed = event.pos()
+            self._sel_start = event.pos()
+            self._sel_end = event.pos()
+            self._selecting = True
+            self.tab._selected_text = ''
+            self.update()
         super().mousePressEvent(event)
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.LeftButton and self._pressed is not None:
             pressed = self._pressed
             self._pressed = None
+            self._selecting = False
             if (pressed - event.pos()).manhattanLength() <= 4:
+                # Короткий клик — переход по ссылке, выделение сбрасываем.
+                self._sel_start = self._sel_end = None
                 link = self._hit(event.pos())
                 if link is not None:
                     self.tab.activate_link(link)
                     return
+            else:
+                # Протаскивание — выделяем текст и сразу кладём в буфер обмена.
+                rect = self.selection_rect()
+                text = self.tab.text_in_rect(rect)
+                if text.strip():
+                    self.tab._selected_text = text
+                    QApplication.clipboard().setText(text)
+        self.update()
         super().mouseReleaseEvent(event)
 
     def contextMenuEvent(self, event):
         menu = QMenu(self)
-        act = menu.addAction('Копировать текст страницы')
-        act.triggered.connect(self._copy_page_text)
+        if self.tab._selected_text:
+            menu.addAction('Копировать выделенный текст',
+                           self._copy_selection)
+        menu.addAction('Копировать текст страницы', self._copy_page_text)
+        menu.addAction('Копировать весь документ', self._copy_all_text)
+
+        # Изображение под курсором: копируем в буфер или сохраняем на диск.
+        image = self.tab.image_at(event.pos())
+        if image is not None:
+            pno, xref = image
+            menu.addSeparator()
+            menu.addAction('Копировать изображение',
+                           lambda: self.tab.copy_image(pno, xref))
+            menu.addAction('Сохранить изображение как...',
+                           lambda: self.tab.save_image(pno, xref))
+
         hovered = self._hit(event.pos())
         if hovered is not None:
             address = link_tooltip(hovered)
-            act = menu.addAction('Копировать адрес ссылки: %s' % address)
-            act.triggered.connect(
-                lambda: QApplication.clipboard().setText(address))
-            act = menu.addAction('Перейти по ссылке')
-            act.triggered.connect(lambda: self.tab.activate_link(hovered))
+            menu.addSeparator()
+            menu.addAction('Копировать адрес ссылки: %s' % address,
+                           lambda: QApplication.clipboard().setText(address))
+            menu.addAction('Перейти по ссылке',
+                           lambda: self.tab.activate_link(hovered))
         menu.exec_(event.globalPos())
 
+    def _copy_selection(self):
+        self.tab.copy_selection()
+
     def _copy_page_text(self):
-        try:
-            text = self.tab.doc.text(self.tab.page)
-        except Exception:
-            text = ''
-        QApplication.clipboard().setText(text)
+        text = self.tab.page_text()
+        if text:
+            QApplication.clipboard().setText(text)
+
+    def _copy_all_text(self):
+        text = self.tab.all_text()
+        if text:
+            QApplication.clipboard().setText(text)
 
     def paintEvent(self, event):
         super().paintEvent(event)
+        selection = self.selection_rect()
+        if self._hover is None and selection.isEmpty():
+            return
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
+        if not selection.isEmpty():
+            painter.fillRect(selection, QColor(30, 100, 200, 70))
+            painter.setPen(QPen(QColor(20, 80, 180), 1, Qt.SolidLine))
+            painter.drawRect(selection)
         if self._hover is not None:
-            painter = QPainter(self)
-            painter.setRenderHint(QPainter.Antialiasing, True)
             for rect, link in self.link_regions:
                 if link is self._hover:
                     painter.fillRect(rect, QColor(30, 100, 200, 40))
                     painter.setPen(QPen(QColor(30, 100, 200), 1, Qt.DashLine))
                     painter.drawRect(rect)
                     break
-            painter.end()
+        painter.end()
 
 
 class PageView(QScrollArea):
+    """Прокручиваемая область со страницей.
+
+    Помимо обычной прокрутки внутри страницы поддерживается *непрерывный
+    просмотр*: когда колесо дошло до нижнего/верхнего края страницы,
+    автоматически открывается следующая/предыдущая страница, и прокрутка
+    продолжается уже на ней. Благодаря этому весь документ можно листать
+    одним непрерывным движением колеса, не нажимая «Вперёд/Назад».
+    """
+
     def __init__(self, tab):
         super().__init__()
         self.tab = tab
@@ -801,8 +914,39 @@ class PageView(QScrollArea):
         self.label.setBackgroundRole(QPalette.Dark)
         self.setWidget(self.label)
         self.setWidgetResizable(False)
+        self.verticalScrollBar().setSingleStep(48)
+        self._scroll_anim = None
+
+    # -- служебные методы прокрутки ------------------------------------
+    def _stop_anim(self):
+        if self._scroll_anim is not None:
+            if self._scroll_anim.state() == QPropertyAnimation.Running:
+                self._scroll_anim.stop()
+            self._scroll_anim = None
+
+    def _animate_scroll(self, target):
+        """Плавная (сглаженная) прокрутка к заданному положению ползунка."""
+        bar = self.verticalScrollBar()
+        target = max(bar.minimum(), min(bar.maximum(), int(target)))
+        self._stop_anim()
+        if target == bar.value():
+            return
+        self._scroll_anim = QPropertyAnimation(bar, b'value', self)
+        self._scroll_anim.setDuration(200)
+        self._scroll_anim.setEasingCurve(QEasingCurve.OutCubic)
+        self._scroll_anim.setEndValue(target)
+        self._scroll_anim.start()
+
+    def scroll_to_top(self):
+        self._stop_anim()
+        self.verticalScrollBar().setValue(self.verticalScrollBar().minimum())
+
+    def scroll_to_bottom(self):
+        self._stop_anim()
+        self.verticalScrollBar().setValue(self.verticalScrollBar().maximum())
 
     def set_image(self, qimage, links=None):
+        self.label.clear_selection()
         self.label.set_links(links or [])
         if qimage.isNull():
             self.label.clear()
@@ -810,13 +954,54 @@ class PageView(QScrollArea):
         self.label.setPixmap(QPixmap.fromImage(qimage))
         self.label.resize(self.label.pixmap().size())
 
+    # -- колесо мыши ----------------------------------------------------
     def wheelEvent(self, event):
+        # Ctrl + колесо — масштабирование (как в оригинале).
         if event.modifiers() & Qt.ControlModifier:
             delta = 1.12 if event.angleDelta().y() > 0 else 1 / 1.12
             self.tab.set_zoom(self.tab.zoom * delta)
             event.accept()
-        else:
+            return
+
+        dy = event.angleDelta().y()
+        if dy == 0:
             super().wheelEvent(event)
+            return
+
+        bar = self.verticalScrollBar()
+        step = abs(dy) or 120
+        down = dy < 0        # в Qt отрицательный angleDelta — прокрутка вниз
+
+        # seamless-режим выключен: просто плавно листаем текущую страницу.
+        continuous = getattr(self.tab, 'continuous', True)
+        pages = self.tab.doc.page_count
+        can_turn = continuous and pages > 1
+
+        if down:
+            room = bar.maximum() - bar.value()
+            if room > step or not can_turn or self.tab.page >= pages - 1:
+                self._animate_scroll(bar.value() + step)
+                event.accept()
+                return
+            # Дошли до низа — переходим на следующую страницу и переносим
+            # оставшийся «хвост» прокрутки на неё, чтобы листание было непрерывным.
+            overflow = max(0, step - room)
+            self.tab.next_page()
+            self.scroll_to_top()
+            if overflow:
+                bar.setValue(min(overflow, bar.maximum()))
+        else:
+            room = bar.value() - bar.minimum()
+            if room > step or not can_turn or self.tab.page <= 0:
+                self._animate_scroll(bar.value() - step)
+                event.accept()
+                return
+            overflow = max(0, step - room)
+            self.tab.prev_page()
+            self.scroll_to_bottom()
+            if overflow:
+                bar.setValue(max(bar.minimum(), bar.maximum() - overflow))
+        event.accept()
 
 
 class DocumentTab(QWidget):
@@ -831,11 +1016,18 @@ class DocumentTab(QWidget):
         self.rotation = 0
         self.fit = 'none'
         self.mode = 'single'   # single | facing | facing_cover
+        self.continuous = getattr(main_window, 'continuous', True)
+        self._closed = False
         self._dirty = False
         self._find_text = ''
         self._find_matches = []   # [(страница, [прямоугольники])]
         self._find_index = -1
         self._find_rects = []     # подсветка на текущей странице
+        self._selected_text = ''  # текст, выделенный мышью на странице
+        self._pages, self._imgs, self._offsets, self._z = [], [], [], 1.0
+        self._fit_timer = QTimer(self)
+        self._fit_timer.setSingleShot(True)
+        self._fit_timer.timeout.connect(self._refit_after_resize)
 
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
@@ -880,6 +1072,10 @@ class DocumentTab(QWidget):
                 else:
                     z = max(0.05, min((w - 24) / (probe.width() * len(self._pages_to_show())),
                                       (h - 24) / probe.height()))
+                # Расчётный масштаб должен стать текущим: иначе строка состояния
+                # и последующие операции показывают/используют старое значение.
+                z = max(0.05, min(5.0, z))
+                self.zoom = z
 
         pages, imgs = [], []
         for i in self._pages_to_show():
@@ -906,6 +1102,7 @@ class DocumentTab(QWidget):
             canvas = QImage(total_w, total_h, QImage.Format_RGB32)
             canvas.fill(QColor('#808080'))
             p = QPainter(canvas)
+            p.setRenderHint(QPainter.SmoothPixmapTransform, True)
             for im, ox in zip(imgs, offsets):
                 p.drawImage(ox, 0, im)
             p.end()
@@ -913,6 +1110,7 @@ class DocumentTab(QWidget):
         if self._find_rects:
             painter = QPainter(canvas)
             painter.setRenderHint(QPainter.Antialiasing, True)
+            painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
             for pno, im, ox in zip(pages, imgs, offsets):
                 if pno == self.page:
                     for fr in self._find_rects:
@@ -921,6 +1119,9 @@ class DocumentTab(QWidget):
                             painter.fillRect(rect, QColor(255, 215, 0, 110))
             painter.end()
 
+        # Запоминаем геометрию текущей отрисовки: по ней выделение текста и
+        # контекстное меню переводят пиксели картинки обратно в точки страницы.
+        self._pages, self._imgs, self._offsets, self._z = pages, imgs, offsets, z
         self.view.set_image(canvas, self._link_regions(pages, imgs, offsets, z))
         self.pageChanged.emit(self.page)
 
@@ -960,6 +1161,138 @@ class DocumentTab(QWidget):
                 if not rect.isEmpty():
                     regions.append((rect, link))
         return regions
+
+    # -- выделение и копирование текста / изображений -------------------
+    def _pixel_to_point(self, x, y):
+        """Пиксель картинки → (номер страницы, X, Y) в точках PDF."""
+        z = self._z or self.zoom or 1.0
+        for pno, im, ox in zip(self._pages, self._imgs, self._offsets):
+            if x < ox or x > ox + im.width() or y < 0 or y > im.height():
+                continue
+            lx, ly = x - ox, y
+            pw, ph = self.doc.page_size(pno)
+            if pw <= 0 or ph <= 0:
+                pw, ph = im.width() / z, im.height() / z
+            base_w, base_h = pw * z, ph * z
+            rot = self.rotation % 360
+            # Обратное преобразование к повороту из _map_rect().
+            if rot == 90:
+                bx, by = ly, base_h - lx
+            elif rot == 180:
+                bx, by = base_w - lx, base_h - ly
+            elif rot == 270:
+                bx, by = base_w - ly, lx
+            else:
+                bx, by = lx, ly
+            return pno, bx / z, by / z
+        return None
+
+    def text_in_rect(self, rect):
+        """Текст внутри прямоугольника, заданного в пикселях картинки."""
+        corners = [self._pixel_to_point(rect.left(), rect.top()),
+                   self._pixel_to_point(rect.right(), rect.top()),
+                   self._pixel_to_point(rect.left(), rect.bottom()),
+                   self._pixel_to_point(rect.right(), rect.bottom())]
+        if any(c is None for c in corners):
+            return ''
+        seen = []
+        for c in corners:
+            if c[0] not in seen:
+                seen.append(c[0])
+        parts = []
+        for pno in seen:
+            pts = [c for c in corners if c[0] == pno]
+            x0, x1 = min(c[1] for c in pts), max(c[1] for c in pts)
+            y0, y1 = min(c[2] for c in pts), max(c[2] for c in pts)
+            if x1 - x0 < 1 or y1 - y0 < 1:
+                continue
+            try:
+                text = self.doc.text_rect(pno, fitz.Rect(x0, y0, x1, y1))
+                if text:
+                    parts.append(text)
+            except Exception:
+                pass
+        return '\n'.join(parts)
+
+    def page_text(self):
+        try:
+            return self.doc.text(self.page) or ''
+        except Exception:
+            return ''
+
+    def all_text(self):
+        if self.browser is not None:
+            return self.browser.toPlainText()
+        parts = []
+        for i in range(self.doc.page_count):
+            try:
+                parts.append(self.doc.text(i) or '')
+            except Exception:
+                pass
+        return '\n\n'.join(parts)
+
+    def copy_selection(self):
+        """Ctrl+C: выделенный фрагмент, а если выделения нет — текст страницы."""
+        text = self._selected_text or self.page_text()
+        if text:
+            QApplication.clipboard().setText(text)
+        return text
+
+    def image_at(self, pos):
+        """ Возвращает (страница, xref) под курсором или None. """
+        point = self._pixel_to_point(pos.x(), pos.y())
+        if not point:
+            return None
+        pno, x, y = point
+        for rect, xref in self.doc.image_regions(pno):
+            if rect.contains(fitz.Point(x, y)):
+                return pno, xref
+        # Для чистых изображений (PNG, TIFF, CBZ, DjVu) картинка — вся страница.
+        ext = Path(self.doc.path).suffix.lower()
+        if ext in (IMAGE_EXTS | COMIC_EXTS | CONVERT_EXTS | DJVU_EXTS):
+            return pno, None
+        return None
+
+    def _image_qimage(self, pno, xref=None):
+        if xref:
+            try:
+                info = self.doc.doc.extract_image(xref)
+                img = QImage.fromData(info['image'])
+                if not img.isNull():
+                    return img, (info.get('ext') or 'png').lower()
+            except Exception:
+                pass
+        return self.doc.render(pno, 1.0, 0), 'png'
+
+    def copy_image(self, pno, xref=None):
+        img, _ext = self._image_qimage(pno, xref)
+        if img.isNull():
+            return False
+        clipboard = QApplication.clipboard()
+        clipboard.setPixmap(QPixmap.fromImage(img))
+        clipboard.setImage(img)
+        return True
+
+    def save_image(self, pno, xref=None):
+        img, ext = self._image_qimage(pno, xref)
+        if img.isNull():
+            return
+        filt = 'Изображения (*.png *.jpg *.jpeg *.bmp *.webp *.tiff);;Все файлы (*)'
+        path, _f = QFileDialog.getSaveFileName(
+            self.mw, 'Сохранить изображение', 'image.' + ext, filt)
+        if not path:
+            return
+        if not Path(path).suffix:
+            path += '.' + ext
+        if xref:
+            try:
+                info = self.doc.doc.extract_image(xref)
+                with open(path, 'wb') as fh:
+                    fh.write(info['image'])
+                return
+            except Exception:
+                pass
+        img.save(path)
 
     # -- гиперссылки ----------------------------------------------------
     def activate_link(self, link):
@@ -1039,6 +1372,29 @@ class DocumentTab(QWidget):
     def viewport_height(self):
         return self.view.height() if self.view else 600
 
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        # При изменении размера окна режимы «По ширине / По высоте / По странице»
+        # должны пересчитывать масштаб — иначе страница остаётся старого размера.
+        if self.view is not None and self.fit != 'none':
+            self._fit_timer.start(120)
+
+    def _refit_after_resize(self):
+        if self._closed or self.view is None or self.fit == 'none':
+            return
+        try:
+            self.render()
+            self.mw.update_status()
+        except Exception:
+            pass   # документ мог быть закрыт, пока таймер ожидал срабатывания
+
+    def prepare_close(self):
+        """Останавливает отложенные операции перед закрытием документа."""
+        self._closed = True
+        self._fit_timer.stop()
+        if self.view is not None:
+            self.view._stop_anim()
+
     def goto(self, index):
         n = self.doc.page_count
         if n == 0:
@@ -1048,12 +1404,16 @@ class DocumentTab(QWidget):
             return
         self.page = index
         self.render()
+        if self.view:
+            self.view.scroll_to_top()
         self._dirty = False
 
     def set_mode(self, mode):
         self.mode = mode
         self.page = 0
         self.render()
+        if self.view:
+            self.view.scroll_to_top()
 
     def next_page(self):
         step = 2 if self.mode in ('facing', 'facing_cover') and self.doc.page_count > 1 else 1
@@ -1121,6 +1481,15 @@ class DocumentTab(QWidget):
         self.page = pno
         self._dirty = True
         self.render()
+        # Подводим найденный фрагмент к верху видимой области, чтобы подсветка
+        # не осталась за пределами экрана на длинной странице.
+        if self.view and rects:
+            try:
+                top = min(r.y0 for r in rects)
+                bar = self.view.verticalScrollBar()
+                self.view._animate_scroll(max(bar.minimum(), int(top) - 80))
+            except Exception:
+                pass
         self.mw.update_status()
 
     def scroll_to_anchor(self, anchor):
@@ -1142,11 +1511,13 @@ class MainWindow(QMainWindow):
         self.recent = []
         try:
             if os.path.exists(RECENT_FILE):
-                self.recent = [l.strip() for l in open(RECENT_FILE, encoding='utf-8')
-                               if l.strip() and os.path.isfile(l.strip())]
+                with open(RECENT_FILE, encoding='utf-8') as fh:
+                    self.recent = [l.strip() for l in fh
+                                   if l.strip() and os.path.isfile(l.strip())]
         except Exception:
             pass
         self._tabs = []
+        self.continuous = True   # непрерывный просмотр включён по умолчанию
 
         self.tabs = QTabWidget()
         self.tabs.setTabsClosable(True)
@@ -1174,6 +1545,9 @@ class MainWindow(QMainWindow):
         dock = QDockWidget('Навигация', self)
         dock.setObjectName('navDock')
         dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
+        dock.setFeatures(QDockWidget.DockWidgetClosable |
+                         QDockWidget.DockWidgetMovable |
+                         QDockWidget.DockWidgetFloatable)
         inner = QWidget()
         lay = QVBoxLayout(inner)
         lay.setContentsMargins(0, 0, 0, 0)
@@ -1197,6 +1571,9 @@ class MainWindow(QMainWindow):
 
         self.recent_list = QListWidget()
         self.recent_list.setToolTip('Недавно открытые документы')
+        self.recent_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.recent_list.customContextMenuRequested.connect(
+            self.on_recent_context_menu)
         self.recent_list.itemClicked.connect(self.on_recent_clicked)
         self.nav.insertTab(0, self.recent_list, 'Недавние документы')
         self.recent_tab = self.recent_list
@@ -1214,10 +1591,31 @@ class MainWindow(QMainWindow):
         self.bookmark_list.itemClicked.connect(self.on_bookmark_clicked)
         self.nav.addTab(self.bookmark_list, 'Закладки')
 
+        # «Недавние документы» должны быть открыты при запуске. insertTab(0)
+        # оставляет текущим прежний виджет («Содержание»), поэтому выбираем
+        # вкладку явно — после добавления всех вкладок.
+        self.nav.setCurrentWidget(self.recent_list)
+
+        # Небольшая кнопка «×» прямо на панели — скрыть одним кликом,
+        # независимо от стиля заголовка dock-виджета.
+        header = QHBoxLayout()
+        header.setContentsMargins(2, 2, 2, 0)
+        header.addStretch(1)
+        hide_btn = QToolButton()
+        hide_btn.setText('×')
+        hide_btn.setToolTip('Скрыть панель навигации (F6)')
+        hide_btn.setFixedSize(22, 20)
+        hide_btn.clicked.connect(self.toggle_nav)
+        header.addWidget(hide_btn)
+        self._nav_hide_button = hide_btn
+
+        lay.addLayout(header)
         lay.addWidget(self.nav)
         dock.setWidget(inner)
-        dock.setMinimumWidth(330)
+        # Панель можно сунуть почти полностью влево — минимум был 330 px.
+        dock.setMinimumWidth(170)
         self.addDockWidget(Qt.LeftDockWidgetArea, dock)
+        dock.visibilityChanged.connect(self._on_nav_visibility)
         self.nav_dock = dock
 
     def _action(self, text, icon=None, shortcut=None, checkable=False, slot=None):
@@ -1250,14 +1648,26 @@ class MainWindow(QMainWindow):
         m_file.addAction(self._action('Сохранить копию...', save_ico, slot=self.save_copy))
         m_file.addAction(self._action('Печать...', print_ico, 'Ctrl+P', slot=self.print_current))
         m_file.addSeparator()
+        self.export_md_action = self._action(
+            'Экспорт в Markdown...', slot=self.export_markdown)
+        self.export_docx_action = self._action(
+            'Экспорт в DOCX (Word)...', slot=self.export_docx)
+        m_file.addAction(self.export_md_action)
+        m_file.addAction(self.export_docx_action)
+        m_file.addSeparator()
         self.recent_menu = m_file.addMenu('Недавние файлы')
         m_file.addSeparator()
         m_file.addAction(self._action('Выход', None, 'Ctrl+Q', slot=self.close))
 
         m_view = mb.addMenu('Вид')
-        m_view.addAction(self._action('Панель навигации', checkable=True, slot=lambda c: self.nav_dock.setVisible(c)))
-        self.nav_dock.toggleViewAction().setCheckable(True)
-        m_view.actions()[0].setChecked(True)
+        panel_ico = self._std_icon('SP_FileDialogDetailedView',
+                                   'SP_ToolBarHorizontalExtensionButton')
+        self._panel_action = self._action(
+            'Панель навигации', panel_ico, 'F6', checkable=True,
+            slot=self.toggle_nav)
+        self._panel_action.setChecked(True)
+        self._panel_action.setToolTip('Скрыть/показать левую панель (F6)')
+        m_view.addAction(self._panel_action)
         m_view.addSeparator()
         m_view.addAction(self._action('Увеличить', None, 'Ctrl++', slot=lambda: self.zoom_by(1.2)))
         m_view.addAction(self._action('Уменьшить', None, 'Ctrl+-', slot=lambda: self.zoom_by(1 / 1.2)))
@@ -1277,6 +1687,11 @@ class MainWindow(QMainWindow):
             m_view.addAction(a)
         self._mode_actions['single'].setChecked(True)
         m_view.addSeparator()
+        self._continuous_action = self._action(
+            'Непрерывный просмотр', checkable=True, slot=self.toggle_continuous)
+        self._continuous_action.setChecked(True)
+        m_view.addAction(self._continuous_action)
+        m_view.addSeparator()
         m_view.addAction(self._action('Повернуть по часовой стрелке', slot=lambda: self.rotate(90)))
         m_view.addAction(self._action('Повернуть против часовой стрелки', slot=lambda: self.rotate(-90)))
         m_view.addSeparator()
@@ -1284,7 +1699,7 @@ class MainWindow(QMainWindow):
                             ('Большие эскизы', 144), ('Огромные эскизы', 200)):
             m_view.addAction(self._action(label, slot=lambda c=False, s=size: self.set_thumb_size(s)))
         m_view.addSeparator()
-        self._nav_action = self._action('Скрыть навигационные панели', shortcut='F6', slot=self.toggle_nav)
+        self._nav_action = self._action('Скрыть/показать панель навигации', slot=self.toggle_nav)
         m_view.addAction(self._nav_action)
         m_view.addAction(self._action('Во весь экран', shortcut='F11', slot=self.toggle_fullscreen))
 
@@ -1302,6 +1717,11 @@ class MainWindow(QMainWindow):
         m_nav.addAction(self._action('Импортировать закладки из файла', slot=self.import_bookmarks))
 
         m_tools = mb.addMenu('Инструменты')
+        m_tools.addAction(self._action('Копировать', None, 'Ctrl+C', slot=self.copy_text))
+        m_tools.addAction(self._action('Копировать текст страницы', slot=self.copy_page_text))
+        m_tools.addAction(self._action('Копировать весь документ', slot=self.copy_all_text))
+        m_tools.addAction(self._action('Сохранить изображение как...', slot=self.save_image_at_cursor))
+        m_tools.addSeparator()
         m_tools.addAction(self._action('Поиск', None, 'Ctrl+F', slot=self.focus_find))
         m_tools.addAction(self._action('Следующее совпадение', None, 'F3', slot=self.find_forward))
         m_tools.addAction(self._action('Предыдущее совпадение', None, 'Shift+F3', slot=self.find_backward))
@@ -1309,6 +1729,8 @@ class MainWindow(QMainWindow):
         m_tools.addSeparator()
         m_tools.addAction(self._action('Экспортировать текущий документ как набор изображений', slot=self.export_images))
         m_tools.addAction(self._action('Экспортировать текущий документ в текстовый файл', slot=self.export_text))
+        m_tools.addAction(self.export_md_action)
+        m_tools.addAction(self.export_docx_action)
         m_tools.addAction(self._action('Экспортировать текущую страницу в файл изображения', slot=self.export_page))
         m_tools.addSeparator()
         m_tools.addAction(self._action('Настройки программы', slot=self.settings_dialog))
@@ -1330,6 +1752,7 @@ class MainWindow(QMainWindow):
 
         tb.addAction(self._action('Открыть', open_ico, slot=self.open_file))
         tb.addAction(self._action('Сохранить копию', save_ico, slot=self.save_copy))
+        tb.addAction(self._panel_action)   # кнопка скрытия левой панели
         tb.addSeparator()
         tb.addAction(self._action('Первая', first, slot=self.first_page))
         tb.addAction(self._action('Назад', left, slot=self.prev_page))
@@ -1471,9 +1894,13 @@ class MainWindow(QMainWindow):
             it.setToolTip(p)
             it.setIcon(self.style().standardIcon(QStyle.SP_FileIcon))
             self.recent_list.addItem(it)
+        self.recent_menu.addSeparator()
+        self.recent_menu.addAction(
+            self._action('Очистить список', slot=self.clear_recent))
         try:
             os.makedirs(os.path.dirname(RECENT_FILE), exist_ok=True)
-            open(RECENT_FILE, 'w', encoding='utf-8').write('\n'.join(self.recent))
+            with open(RECENT_FILE, 'w', encoding='utf-8') as fh:
+                fh.write('\n'.join(self.recent))
         except Exception:
             pass
 
@@ -1482,9 +1909,43 @@ class MainWindow(QMainWindow):
         if path:
             self.open_file(path)
 
+    def on_recent_context_menu(self, pos):
+        """Правый клик в «Недавних документах»: открыть / удалить / очистить."""
+        item = self.recent_list.itemAt(pos)
+        menu = QMenu(self)
+        if item is not None:
+            path = item.data(Qt.UserRole)
+            menu.addAction('Открыть', lambda: self.open_file(path))
+            menu.addAction('Удалить из списка',
+                           lambda: self.remove_recent(path))
+            menu.addSeparator()
+        menu.addAction('Очистить недавние документы', self.clear_recent)
+        menu.exec_(self.recent_list.viewport().mapToGlobal(pos))
+
+    def remove_recent(self, path):
+        if path in self.recent:
+            self.recent.remove(path)
+        self._rebuild_recent()
+
+    def clear_recent(self):
+        self.recent = []
+        self._rebuild_recent()
+
+    def open_last_recent(self):
+        """Открывает последний PDF (или любой последний документ) при запуске."""
+        candidates = [p for p in self.recent if p and os.path.isfile(p)]
+        if not candidates:
+            return None
+        pdfs = [p for p in candidates
+                if Path(p).suffix.lower() in PDF_EXTS]
+        target = pdfs[0] if pdfs else candidates[0]
+        self.open_file(target)
+        return target
+
     def close_tab(self, idx):
         w = self.tabs.widget(idx)
         if isinstance(w, DocumentTab):
+            w.prepare_close()
             try:
                 w.doc.close()
             except Exception:
@@ -1702,10 +2163,30 @@ class MainWindow(QMainWindow):
     def set_thumb_size(self, size):
         self.thumb_list.setIconSize(QSize(size, int(size * 1.33)))
 
-    def toggle_nav(self):
+    def toggle_continuous(self, checked=None):
+        """Включает/выключает непрерывный просмотр (листание колесом)."""
+        if checked is None:
+            checked = not self.continuous
+        self.continuous = bool(checked)
+        for tab in self._tabs:
+            tab.continuous = self.continuous
+
+    def _on_nav_visibility(self, visible):
+        """Держит галочку меню и кнопку панели в синхроне с её реальным видом."""
+        action = getattr(self, '_panel_action', None)
+        if action is None:
+            return
+        action.blockSignals(True)
+        action.setChecked(visible)
+        action.setText(('Скрыть' if visible else 'Показать') + ' панель навигации')
+        action.setToolTip(('Скрыть' if visible else 'Показать') +
+                          ' левую панель (F6)')
+        action.blockSignals(False)
+
+    def toggle_nav(self, checked=None):
         visible = not self.nav_dock.isVisible()
         self.nav_dock.setVisible(visible)
-        self._nav_action.setText(('Скрыть' if visible else 'Показать') + ' навигационные панели')
+        self._on_nav_visibility(visible)
 
     def toggle_fullscreen(self):
         if self.isFullScreen():
@@ -1785,6 +2266,150 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.warning(self, 'Ошибка', str(e))
 
+    # -- экспорт в Markdown / DOCX --------------------------------------
+    def _export_html(self, tab):
+        """Собирает HTML всего документа — общий источник для MD и DOCX."""
+        if tab.doc.kind == 'flow':
+            return tab.doc.html() or '<html><body></body></html>'
+        parts = ['<!DOCTYPE html><html><head><meta charset="utf-8">'
+                 '<title>%s</title></head><body>' % html_mod.escape(tab.doc.name)]
+        for i in range(tab.doc.page_count):
+            parts.append('<h2>Страница %d</h2>' % (i + 1))
+            try:
+                text = tab.doc.text(i) or ''
+            except Exception:
+                text = ''
+            lines = []
+            for line in text.splitlines():
+                if line.strip():
+                    lines.append(html_mod.escape(line))
+                elif lines:
+                    parts.append('<p>%s</p>' % '<br/>'.join(lines))
+                    lines = []
+            if lines:
+                parts.append('<p>%s</p>' % '<br/>'.join(lines))
+        parts.append('</body></html>')
+        return '\n'.join(parts)
+
+    def _html_to_markdown(self, source):
+        if shutil.which('pandoc'):
+            try:
+                res = subprocess.run(
+                    ['pandoc', '-f', 'html', '-t', 'gfm'],
+                    input=source.encode('utf-8'), stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE, timeout=120)
+                if res.returncode == 0:
+                    return res.stdout.decode('utf-8', 'replace')
+            except Exception:
+                pass
+        try:
+            import html2text
+            conv = html2text.HTML2Text()
+            conv.body_width = 0
+            conv.unicode_snob = True
+            return conv.handle(source)
+        except Exception:
+            return re.sub(r'<[^>]+>', '', source)
+
+    def _html_to_docx(self, source, path):
+        """Резервный вариант без pandoc: простой HTML-парсер + python-docx."""
+        from docx import Document
+
+        class Blocks(HTMLParser):
+            def __init__(self):
+                super().__init__(convert_charrefs=True)
+                self.blocks = []
+                self.kind = 'paragraph'
+                self.level = 0
+                self.buf = []
+
+            def flush(self):
+                text = ''.join(self.buf).strip()
+                if text:
+                    self.blocks.append((self.kind, self.level, text))
+                self.buf = []
+                self.kind, self.level = 'paragraph', 0
+
+            def handle_starttag(self, tag, attrs):
+                if re.fullmatch(r'h[1-6]', tag):
+                    self.flush()
+                    self.kind, self.level = 'heading', int(tag[1])
+                elif tag in ('p', 'div', 'tr', 'br'):
+                    self.flush()
+                elif tag == 'li':
+                    self.flush()
+                    self.kind = 'list_item'
+
+            def handle_endtag(self, tag):
+                if re.fullmatch(r'h[1-6]', tag) or tag in ('p', 'div', 'li', 'tr'):
+                    self.flush()
+
+            def handle_data(self, data):
+                self.buf.append(data)
+
+        blocks = Blocks()
+        blocks.feed(source)
+        blocks.flush()
+        doc = Document()
+        for kind, level, text in blocks.blocks:
+            if kind == 'heading':
+                doc.add_heading(text, level=min(level, 9))
+            elif kind == 'list_item':
+                doc.add_paragraph(text, style='List Bullet')
+            else:
+                doc.add_paragraph(text)
+        doc.save(path)
+
+    def export_markdown(self):
+        t = self.current_tab()
+        if not t:
+            return
+        default = Path(t.doc.name).stem + '.md'
+        path, _f = QFileDialog.getSaveFileName(
+            self, 'Экспорт в Markdown', default,
+            'Markdown (*.md);;Текстовые файлы (*.txt)')
+        if not path:
+            return
+        if not Path(path).suffix:
+            path += '.md'
+        try:
+            with open(path, 'w', encoding='utf-8') as fh:
+                fh.write(self._html_to_markdown(self._export_html(t)))
+            QMessageBox.information(self, 'Готово', 'Файл сохранён:\n%s' % path)
+        except Exception as e:
+            QMessageBox.warning(self, 'Ошибка', str(e))
+
+    def export_docx(self):
+        t = self.current_tab()
+        if not t:
+            return
+        default = Path(t.doc.name).stem + '.docx'
+        path, _f = QFileDialog.getSaveFileName(
+            self, 'Экспорт в DOCX', default, 'Документ Word (*.docx)')
+        if not path:
+            return
+        if not Path(path).suffix:
+            path += '.docx'
+        source = self._export_html(t)
+        ok = False
+        if shutil.which('pandoc'):
+            try:
+                res = subprocess.run(
+                    ['pandoc', '-f', 'html', '-t', 'docx', '-o', path],
+                    input=source.encode('utf-8'), stdout=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE, timeout=180)
+                ok = (res.returncode == 0 and os.path.isfile(path)
+                      and os.path.getsize(path) > 0)
+            except Exception:
+                ok = False
+        if not ok:
+            try:
+                self._html_to_docx(source, path)
+            except Exception as e:
+                QMessageBox.warning(self, 'Ошибка', str(e))
+                return
+        QMessageBox.information(self, 'Готово', 'Файл сохранён:\n%s' % path)
+
     def export_page(self):
         t = self.current_tab()
         if not t or not t.view:
@@ -1817,6 +2442,46 @@ class MainWindow(QMainWindow):
                 return '%.1f %s' % (n, unit)
             n /= 1024
         return '%.1f ТБ' % n
+
+    # -- копирование ---------------------------------------------------------
+    def copy_text(self):
+        """Ctrl+C: не трогаем стандартное копирование из полей ввода."""
+        focus = QApplication.focusWidget()
+        if isinstance(focus, (QLineEdit, QTextBrowser, QComboBox)):
+            if hasattr(focus, 'copy'):
+                focus.copy()
+            return
+        tab = self.current_tab()
+        if tab:
+            tab.copy_selection()
+
+    def copy_page_text(self):
+        tab = self.current_tab()
+        if tab:
+            text = tab.page_text()
+            if text:
+                QApplication.clipboard().setText(text)
+
+    def copy_all_text(self):
+        tab = self.current_tab()
+        if tab:
+            text = tab.all_text()
+            if text:
+                QApplication.clipboard().setText(text)
+
+    def save_image_at_cursor(self):
+        tab = self.current_tab()
+        if not tab or tab.view is None:
+            return
+        pos = tab.view.label.mapFromGlobal(QCursor.pos())
+        image = tab.image_at(pos)
+        if image is None:
+            QMessageBox.information(
+                self, 'Изображение',
+                'Наведите курсор на изображение на странице и повторите действие.')
+            return
+        pno, xref = image
+        tab.save_image(pno, xref)
 
     # -- find / misc --------------------------------------------------------
     def focus_find(self):
@@ -1880,10 +2545,16 @@ def main():
         app.setWindowIcon(QIcon(ICON_FILE))
     app.setStyle('Fusion')
     w = MainWindow()
+    opened_from_args = False
     if len(sys.argv) > 1:
         for arg in sys.argv[1:]:
             if os.path.isfile(arg):
                 w.open_file(arg)
+                opened_from_args = True
+    # Если файл не передан явно — открываем последний документ из списка
+    # недавних (предпочтительно PDF), как просил пользователь.
+    if not opened_from_args:
+        w.open_last_recent()
     sys.exit(app.exec_())
 
 
