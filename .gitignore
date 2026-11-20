@@ -18,6 +18,7 @@ wine-prefix-backup/drive_c/
 
 # Исключённые файлы
 dictionary of substitutions.json
+Smart YouTube Next/settings/latest_backup.zip
 
 # Этот скрипт (чтобы не отправлять токен на GitHub)
 /updata git.sh

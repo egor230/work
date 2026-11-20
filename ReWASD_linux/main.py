@@ -15,6 +15,8 @@ import sys
 import json
 import traceback
 import keyboard as keyboard_hotkey
+import time as time_module
+from pynput import keyboard as pynput_keyboard
 import mss
 from datetime import datetime
 from PIL import Image
@@ -46,7 +48,7 @@ from appearance import (
 )
 from library import (LIST_MOUSE_BUTTONS, Worker, GAMEPAD_EC, MouseSettingApp,
                      dict_save, add_text_pytq5, defaut_list_mouse_buttons,
-                     cleanup_empty_script_entries)
+                     cleanup_empty_script_entries, scripts_to_text)
 
 SETTINGS_FILE = HERE / "settings.json"
 LOCK_FILE = Path("/tmp/rewasd_linux_single_instance.lock")
@@ -112,7 +114,25 @@ def _migrate_json_files():
             pass
 
 
+def _normalize_scripts_file():
+    """Однократно убрать старые отступы continuation-строк в скриптах."""
+    try:
+        if not SETTINGS_FILE.exists():
+            return
+        data = json.loads(SETTINGS_FILE.read_text(encoding="utf-8"), strict=False)
+        before = json.dumps(data, sort_keys=True, ensure_ascii=False)
+        scripts_to_text(data.get("mouse_data", {}))
+        after = json.dumps(data, sort_keys=True, ensure_ascii=False)
+        if before != after:
+            SETTINGS_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2),
+                                     encoding="utf-8")
+    except Exception:
+        pass
+
+
 _migrate_json_files()
+_normalize_scripts_file()
+
 GAMEPAD_IMAGE = ASSETS / "gamepad_minimal.png"
 SCREENSHOT = HERE / "screenshot.png"
 BANNER_SEND_INPUT = ASSETS / "Resources_011.png"
@@ -1246,8 +1266,8 @@ class RewasdApp(QMainWindow):
             self.status("Геймпад не запущен: " + str(exc)[:120])
 
     def take_screenshot(self):
-        """F11 — скриншот в папку 'Screenshot Games' рядом с программой."""
-        folder = HERE / "Screenshot Games"
+        """F11 — скриншот в папку 'Screenshot_from_games' рядом с программой."""
+        folder = HERE / "Screenshot_from_games"
         try:
             folder.mkdir(exist_ok=True)
             profiles = self.data.get("profiles", [])
@@ -1271,16 +1291,46 @@ class RewasdApp(QMainWindow):
             return None
 
     def install_hotkeys(self):
-        """Глобальная клавиша End останавливает эмуляцию, F3 — режим зон."""
+        """Глобальные F11/End/F3 через pynput (keyboard требует root в Linux)."""
+        self._last_hotkey = {}
+
+        def fire(name, action):
+            now = time_module.monotonic()
+            if now - self._last_hotkey.get(name, 0) < 0.5:
+                return
+            self._last_hotkey[name] = now
+            QTimer.singleShot(0, action)
+
+        actions = {
+            "f11": self.take_screenshot,
+            "f3": lambda: self.btn_edit_zones.setChecked(
+                not self.btn_edit_zones.isChecked()),
+            "end": self.stop_emulation,
+        }
+
+        def on_press(key):
+            try:
+                name = getattr(key, "name", None) or ""
+            except Exception:
+                name = ""
+            if name in actions:
+                fire(name, actions[name])
+
         try:
-            keyboard_hotkey.on_press_key(
-                "end", lambda _e: QTimer.singleShot(0, self.stop_emulation))
-            keyboard_hotkey.on_press_key(
-                "f3", lambda _e: QTimer.singleShot(
-                    0, lambda: self.btn_edit_zones.setChecked(
-                        not self.btn_edit_zones.isChecked())))
-            keyboard_hotkey.on_press_key(
-                "f11", lambda _e: QTimer.singleShot(0, self.take_screenshot))
+            listener = pynput_keyboard.Listener(on_press=on_press)
+            listener.daemon = True
+            listener.start()
+            self._hotkey_listener = listener
+        except Exception:
+            pass
+
+        # Дополнительно — локальные Qt-шорткаты, когда окно в фокусе
+        try:
+            from PyQt6.QtGui import QShortcut, QKeySequence
+            for combo, name in (("F11", "f11"), ("F3", "f3"), ("End", "end")):
+                sc = QShortcut(QKeySequence(combo), self)
+                sc.activated.connect(
+                    lambda n=name: fire(n, actions[n]))
         except Exception:
             pass
 
@@ -1357,7 +1407,9 @@ class RewasdApp(QMainWindow):
                     scripts = res.get("script_mouse", {}).get(app, {})
                     if key in scripts:
                         del scripts[key]
-            dict_save.save_jnson(cleanup_empty_script_entries(res))
+            res = cleanup_empty_script_entries(res)
+            scripts_to_text(res)
+            dict_save.save_jnson(res)
             self.sync_engine_settings()
             self.refresh_script_highlights()
             self.refresh_macro_table()
@@ -1401,7 +1453,10 @@ class RewasdApp(QMainWindow):
     # ---------- макросы ----------
     def _read_all_settings(self):
         try:
-            return json.loads(SETTINGS_FILE.read_text(encoding="utf-8"), strict=False)
+            data = json.loads(SETTINGS_FILE.read_text(encoding="utf-8"), strict=False)
+            # continuation-строки скриптов не должны тащить огромные отступы
+            scripts_to_text(data.get("mouse_data", {}))
+            return data
         except Exception:
             return {}
 
@@ -1758,6 +1813,8 @@ class RewasdApp(QMainWindow):
             mouse["current_app"] = path
         self._write_all_settings(root)
         self.sync_engine_settings()
+        # Подсветить кнопки, у которых в ЭТОМ профиле есть скрипт
+        self.refresh_script_highlights()
 
         vals = mouse.get("key_value", {}).get(path, [])
         for i, btn in enumerate(MOUSE_BUTTONS):

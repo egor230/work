@@ -166,3 +166,23 @@
 [2026-11-19 16:12:28] [DEBUG] mouse_action slot=5 action='RBUTTON' pressed=False hold=True dur=None repeat=False sticky=_R toggle=T
 [2026-11-19 16:29:15] [DEBUG] mouse_action slot=2 action='MBUTTON' pressed=True hold=False dur=None repeat=False sticky= toggle=-
 [2026-11-19 16:29:15] [DEBUG] mouse_action slot=2 action='MBUTTON' pressed=False hold=False dur=None repeat=False sticky= toggle=-
+[2026-11-19 16:40:39] [DEBUG] mouse_action slot=5 action='SCROLL_UP' pressed=True hold=False dur=None repeat=False sticky= toggle=-
+[2026-11-19 16:40:39] [DEBUG] mouse_action slot=5 action='SCROLL_UP' pressed=False hold=False dur=None repeat=False sticky= toggle=-
+[2026-11-19 16:42:37] Mapped key-up was not emitted: 0
+[2026-11-19 16:42:37] Mapped key-up was not emitted: 0
+[2026-11-19 16:45:52] Mapped key-up was not emitted: 0
+[2026-11-19 16:45:52] Mapped key-up was not emitted: 0
+[2026-11-19 16:46:46] [profile] switch '/mnt/807EB5FA7EB5E954/games/Entropy Zero 2/hl2.exe' -> 'C:/Windows/explorer.exe' (active_game='')
+[2026-11-19 16:46:46] [profile] switch '/mnt/807EB5FA7EB5E954/games/Entropy Zero 2/hl2.exe' -> 'C:/Windows/explorer.exe' (active_game='')
+[2026-11-19 16:47:29] [profile] switch '/mnt/807EB5FA7EB5E954/games/Entropy Zero 2/hl2.exe' -> 'C:/Windows/explorer.exe' (active_game='')
+[2026-11-19 16:47:29] [profile] switch '/mnt/807EB5FA7EB5E954/games/Entropy Zero 2/hl2.exe' -> 'C:/Windows/explorer.exe' (active_game='')
+[2026-11-19 16:48:58] Mapped key-up was not emitted: 0
+[2026-11-19 16:48:58] Mapped key-up was not emitted: 0
+[2026-11-19 16:54:33] [profile] switch '/mnt/807EB5FA7EB5E954/games/Entropy Zero 2/hl2.exe' -> 'C:/Windows/explorer.exe' (active_game='')
+[2026-11-19 16:54:33] [profile] switch '/mnt/807EB5FA7EB5E954/games/Entropy Zero 2/hl2.exe' -> 'C:/Windows/explorer.exe' (active_game='')
+[2026-11-19 16:55:32] [profile] switch '/mnt/807EB5FA7EB5E954/games/Entropy Zero 2/hl2.exe' -> 'C:/Windows/explorer.exe' (active_game='')
+[2026-11-19 16:55:32] [profile] switch '/mnt/807EB5FA7EB5E954/games/Entropy Zero 2/hl2.exe' -> 'C:/Windows/explorer.exe' (active_game='')
+[2026-11-19 17:01:00] [DEBUG] mouse_action slot=6 action='SCROLL_DOWN' pressed=True hold=False dur=None repeat=False sticky= toggle=-
+[2026-11-19 17:01:01] [DEBUG] mouse_action slot=6 action='SCROLL_DOWN' pressed=False hold=False dur=None repeat=False sticky= toggle=-
+[2026-11-19 17:02:53] [DEBUG] mouse_action slot=5 action='SCROLL_UP' pressed=True hold=False dur=None repeat=False sticky= toggle=-
+[2026-11-19 17:02:53] [DEBUG] mouse_action slot=5 action='SCROLL_UP' pressed=False hold=False dur=None repeat=False sticky= toggle=-
