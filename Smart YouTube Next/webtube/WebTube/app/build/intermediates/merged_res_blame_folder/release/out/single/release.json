@@ -1,0 +1,14 @@
+[
+    {
+        "merged": "com.egor.webtube.app-merged_res-21:/drawable_banner.png.flat",
+        "source": "com.egor.webtube.app-main-22:/drawable/banner.png"
+    },
+    {
+        "merged": "com.egor.webtube.app-merged_res-21:/mipmap_banner.png.flat",
+        "source": "com.egor.webtube.app-main-22:/mipmap/banner.png"
+    },
+    {
+        "merged": "com.egor.webtube.app-merged_res-21:/mipmap_ic_launcher.png.flat",
+        "source": "com.egor.webtube.app-main-22:/mipmap/ic_launcher.png"
+    }
+]

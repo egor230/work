@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=SysBackup
+Exec=sysbackup-gui
+Icon=sysbackup
+Categories=System;
+Terminal=false

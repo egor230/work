@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<map>
+    <string name="last_profile_name">егор_щербанов</string>
+    <string name="web_proxy_uri"></string>
+    <boolean name="web_proxy_enabled" value="true" />
+</map>

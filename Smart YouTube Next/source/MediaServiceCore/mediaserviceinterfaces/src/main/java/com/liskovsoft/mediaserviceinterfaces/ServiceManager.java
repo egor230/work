@@ -1,0 +1,20 @@
+package com.liskovsoft.mediaserviceinterfaces;
+
+public interface ServiceManager {
+    SignInService getSignInService();
+    RemoteControlService getRemoteControlService();
+    ContentService getContentService();
+    MediaItemService getMediaItemService();
+    LiveChatService getLiveChatService();
+    CommentsService getCommentsService();
+    NotificationsService getNotificationsService();
+    ChannelGroupService getChannelGroupService();
+    void invalidateCache();
+    void invalidateFormatCache();
+    void warmUpCacheIfNeeded();
+    void switchNextClient();
+    void switchNextClientNow();
+    void switchNextSubsFormat();
+    void reloadPlayerResponse(String videoId, String reloadPlaybackToken);
+    void allowRestrictedVideos(boolean allow);
+}

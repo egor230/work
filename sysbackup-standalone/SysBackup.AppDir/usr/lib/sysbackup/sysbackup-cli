@@ -1,0 +1,132 @@
+#!/usr/bin/env python3
+import argparse
+import os
+import sys
+from pathlib import Path
+
+# Ensure project root is on sys.path when run directly
+ROOT = Path(__file__).resolve().parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from core.backup import BackupManager
+from core.sudoers import disable_sudo_password
+from core.utils import CommandError, logger, preflight_check, verify_backup_structure, load_backup_info, format_bytes, disk_usage_free
+
+
+def main():
+    parser = argparse.ArgumentParser(prog="sysbackup-cli", description="SysBackup - утилита бэкапа и восстановления Linux")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    p_backup = sub.add_parser("backup", help="Создать бэкап")
+    p_backup.add_argument("--dest", required=True, help="Папка назначения для бэкапа")
+
+    p_restore = sub.add_parser("restore", help="Восстановить из бэкапа")
+    p_restore.add_argument("--source", required=True, help="Папка с бэкапом")
+
+    sub.add_parser("disable-sudo-password", help="Отключить запрос пароля sudo для текущего пользователя")
+
+    p_serve = sub.add_parser("serve", help="Запустить сетевой сервер (headless/по сети)")
+    p_serve.add_argument("--host", default="0.0.0.0", help="Адрес прослушивания (по умолчанию 0.0.0.0)")
+    p_serve.add_argument("--port", type=int, default=8765, help="Порт (по умолчанию 8765)")
+    p_serve.add_argument("--token", default=None, help="Токен доступа (или переменная SYSBACKUP_SERVER_TOKEN)")
+    p_serve.add_argument("--once", action="store_true", help="Обработать один запрос и завершиться")
+
+    p_rbackup = sub.add_parser("remote-backup", help="Запустить бэкап на удалённом сервере SysBackup")
+    p_rbackup.add_argument("--host", required=True, help="Хост сервера")
+    p_rbackup.add_argument("--port", type=int, default=8765, help="Порт сервера")
+    p_rbackup.add_argument("--dest", required=True, help="Путь для бэкапа на удалённой машине")
+    p_rbackup.add_argument("--token", default=None, help="Токен доступа")
+
+    p_rrestore = sub.add_parser("remote-restore", help="Запустить восстановление на удалённом сервере SysBackup")
+    p_rrestore.add_argument("--host", required=True, help="Хост сервера")
+    p_rrestore.add_argument("--port", type=int, default=8765, help="Порт сервера")
+    p_rrestore.add_argument("--source", required=True, help="Путь к бэкапу на удалённой машине")
+    p_rrestore.add_argument("--token", default=None, help="Токен доступа")
+
+    p_rsudo = sub.add_parser("remote-disable-sudo-password", help="Отключить запрос sudo на удалённом сервере")
+    p_rsudo.add_argument("--host", required=True)
+    p_rsudo.add_argument("--port", type=int, default=8765)
+    p_rsudo.add_argument("--token", default=None)
+
+    p_check = sub.add_parser("check", help="Проверить окружение и/или структуру бэкапа")
+    p_check.add_argument("--source", default=None, help="Папка бэкапа для проверки (опционально)")
+
+    args = parser.parse_args()
+    try:
+        if args.command == "backup":
+            mgr = BackupManager(args.dest)
+            mgr.create_backup()
+            print(f"Бэкап создан: {Path(args.dest).expanduser().resolve()}")
+        elif args.command == "restore":
+            mgr = BackupManager(args.source)
+            mgr.restore_backup()
+            print(f"Восстановление завершено из: {Path(args.source).expanduser().resolve()}")
+        elif args.command == "disable-sudo-password":
+            path = disable_sudo_password()
+            print(f"Правило sudoers создано: {path}")
+        elif args.command == "serve":
+            from core.net import serve
+            if args.token:
+                os.environ["SYSBACKUP_SERVER_TOKEN"] = args.token
+            serve(host=args.host, port=args.port, once=args.once)
+        elif args.command == "remote-backup":
+            from core.net import request
+            resp = request(args.host, args.port, "backup", token=args.token, dest=args.dest)
+            print(f"Удалённый бэкап создан: {resp.get('result')}")
+        elif args.command == "remote-restore":
+            from core.net import request
+            resp = request(args.host, args.port, "restore", token=args.token, source=args.source)
+            print(f"Удалённое восстановление завершено: {resp.get('result')}")
+        elif args.command == "remote-disable-sudo-password":
+            from core.net import request
+            resp = request(args.host, args.port, "disable-sudo-password", token=args.token)
+            print(f"Удалённое правило sudoers создано: {resp.get('result')}")
+        elif args.command == "check":
+            issues = preflight_check(require_root=False)
+            if issues:
+                print("Проблемы окружения:")
+                for i in issues:
+                    print(f" - {i}")
+            else:
+                print("Окружение: базовые зависимости (rsync, sudo) доступны")
+            if args.source:
+                bdir = Path(args.source).expanduser().resolve()
+                s_issues = verify_backup_structure(bdir)
+                if s_issues:
+                    print("Проблемы бэкапа:")
+                    for i in s_issues:
+                        print(f" - {i}")
+                else:
+                    info = load_backup_info(bdir)
+                    print(f"Бэкап: структура распознана ({bdir})")
+                    if info:
+                        print(f" - Создан: {info.get('created_at', 'n/a')}")
+                        print(f" - Пользователь: {info.get('user', 'n/a')}")
+                        osr = info.get('os_release', {})
+                        if isinstance(osr, dict):
+                            name = osr.get('PRETTY_NAME') or osr.get('NAME')
+                            if name:
+                                print(f" - ОС: {name}")
+                try:
+                    free = disk_usage_free(bdir if bdir.exists() else Path(args.source).expanduser().resolve().parent)
+                    print(f"Свободное место: {format_bytes(free)}")
+                except Exception:
+                    pass
+            if issues or (args.source and verify_backup_structure(Path(args.source).expanduser().resolve())):
+                sys.exit(1)
+    except CommandError as e:
+        logger.error("Ошибка: %s", e)
+        print(f"Ошибка: {e}", file=sys.stderr)
+        sys.exit(1)
+    except KeyboardInterrupt:
+        print("Прервано пользователем", file=sys.stderr)
+        sys.exit(130)
+    except Exception as e:
+        logger.exception("Непредвиденная ошибка")
+        print(f"Непредвиденная ошибка: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

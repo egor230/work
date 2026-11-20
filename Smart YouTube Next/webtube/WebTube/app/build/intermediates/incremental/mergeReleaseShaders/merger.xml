@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="utf-8"?>
+<merger version="3"><dataSet config="main" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/android-tv-emu/WebTube/app/src/main/shaders"/></dataSet><dataSet config="release" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/android-tv-emu/WebTube/app/src/release/shaders"/></dataSet></merger>

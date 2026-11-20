@@ -1,0 +1,4 @@
+#Fri Sep 18 02:03:55 YEKT 2026
+base.0=/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/android-tv-emu/WebTube/app/build/intermediates/dex/release/mergeDexRelease/classes.dex
+renamed.0=classes.dex
+path.0=classes.dex

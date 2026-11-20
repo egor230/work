@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<map>
+    <boolean name="fallback_init_done" value="true" />
+    <int name="preferred_dns_type" value="2" />
+    <int name="fallback_step" value="0" />
+</map>

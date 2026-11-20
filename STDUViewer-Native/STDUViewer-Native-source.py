@@ -16,10 +16,11 @@ import shutil
 import html as html_mod
 from pathlib import Path
 
-from PyQt5.QtCore import Qt, QSize, QTimer, QUrl, QFileInfo, pyqtSignal
+from PyQt5.QtCore import Qt, QSize, QTimer, QUrl, QFileInfo, pyqtSignal, QRectF, QPointF
 from PyQt5.QtGui import (
     QImage, QPixmap, QIcon, QFont, QTransform, QPainter, QColor,
-    QKeySequence, QStandardItem, QCursor, QPalette, QBrush,
+    QKeySequence, QStandardItem, QCursor, QPalette, QBrush, QPen,
+    QDesktopServices,
 )
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QTabWidget, QToolBar, QMenuBar, QMenu,
@@ -29,6 +30,7 @@ from PyQt5.QtWidgets import (
     QSplitter, QTextBrowser, QAbstractItemView, QFrame, QSizePolicy,
     QStyle, QToolButton, QInputDialog, QComboBox,
 )
+from PyQt5.QtPrintSupport import QPrinter, QPrintDialog
 
 import pymupdf as fitz
 
@@ -92,6 +94,23 @@ class DocBase:
     def format_name(self):
         return Path(self.path).suffix.lstrip('.').upper()
 
+    # --- hyperlinks --------------------------------------------------
+    def page_size(self, index):
+        """Размер страницы в пунктах (ширина, высота)."""
+        return 0.0, 0.0
+
+    def links(self, index):
+        """Список ссылок со страницы (словари в формате PyMuPDF)."""
+        return []
+
+    def search(self, index, text):
+        """Прямоугольники всех вхождений текста на странице."""
+        return []
+
+    def named_destination(self, name):
+        """Разрешить именованный пункт назначения."""
+        return None
+
 
 class PdfDoc(DocBase):
     def __init__(self, path, password=''):
@@ -129,9 +148,44 @@ class PdfDoc(DocBase):
 
     def toc(self):
         try:
-            return [(lvl, title, page) for lvl, title, page in self.doc.get_toc()]
+            # PyMuPDF возвращает номера страниц с единицы, в программе же
+            # страницы индексируются с нуля — сразу приводим к внутреннему виду.
+            return [(lvl, title, max(0, page - 1))
+                    for lvl, title, page in self.doc.get_toc()]
         except Exception:
             return []
+
+    def page_size(self, index):
+        try:
+            r = self.doc[index].rect
+            return r.width, r.height
+        except Exception:
+            return 0.0, 0.0
+
+    def links(self, index):
+        try:
+            return self.doc[index].get_links()
+        except Exception:
+            return []
+
+    def search(self, index, text):
+        try:
+            return [r for r in self.doc[index].search_for(text)]
+        except Exception:
+            return []
+
+    def named_destination(self, name):
+        try:
+            names = self.doc.resolve_names()
+            if isinstance(names, dict):
+                item = names.get(name)
+                return item if isinstance(item, dict) else None
+            for item in names or []:
+                if isinstance(item, dict) and item.get('name') == name:
+                    return item
+        except Exception:
+            pass
+        return None
 
 
 class DjvuDoc(DocBase):
@@ -296,6 +350,7 @@ def build_epub(path):
     from ebooklib import epub
     book = epub.read_epub(path)
     parts = []
+    names = []
     images = {}
     for item in book.get_items():
         if item.get_type() == ebooklib.ITEM_IMAGE:
@@ -314,6 +369,7 @@ def build_epub(path):
         for name, uri in images.items():
             txt = txt.replace(os.path.basename(name), uri)
         parts.append(txt)
+        names.append(item.get_name())
 
     toc = []
 
@@ -338,7 +394,32 @@ def build_epub(path):
         walk(book.toc)
     except Exception:
         pass
-    return wrap_html('\n'.join(parts)), toc
+
+    # Все файлы книги склеены в один HTML, поэтому ссылки оглавления
+    # (chap1.xhtml#section) нужно превратить в реальные якоря QTextBrowser.
+    anchors = {}
+    for _level, _title, href in toc:
+        if not href:
+            continue
+        file_name, sep, fragment = href.partition('#')
+        base = os.path.basename(file_name)
+        name = fragment if sep and fragment else base
+        anchors.setdefault(base, set()).add(name)
+
+    wrapped = []
+    for name, txt in zip(names, parts):
+        base = os.path.basename(name)
+        tags = ''.join('<a name="%s"></a>' % html_mod.escape(a)
+                       for a in sorted(anchors.get(base, set()) | {base}))
+        wrapped.append('<div>%s%s</div>' % (tags, txt))
+
+    norm_toc = []
+    for level, title, href in toc:
+        if href:
+            file_name, sep, fragment = href.partition('#')
+            href = fragment if sep and fragment else os.path.basename(file_name)
+        norm_toc.append((level, title, href))
+    return wrap_html('\n'.join(wrapped)), norm_toc
 
 
 def build_mobi(path):
@@ -418,8 +499,9 @@ def build_fb2(path):
                 break
         if title_el is not None:
             text = ''.join(title_el.itertext()).strip()
-            out.append('<h2>%s</h2>' % html_mod.escape(text))
-            toc.append((1, text, 'sec%d' % len(toc)))
+            anchor = 'sec%d' % len(toc)
+            out.append('<h2 id="%s">%s</h2>' % (anchor, html_mod.escape(text)))
+            toc.append((1, text, anchor))
         for ch in sec:
             n = etree.QName(ch).localname
             if n == 'title':
@@ -589,6 +671,124 @@ def open_document(path):
 # ---------------------------------------------------------------------------
 # Виджеты
 # ---------------------------------------------------------------------------
+def link_tooltip(link):
+    """Подсказка для ссылки PDF."""
+    kind = link.get('kind', fitz.LINK_NONE)
+    if kind == fitz.LINK_URI:
+        return link.get('uri', '') or 'Ссылка'
+    if kind == fitz.LINK_GOTO:
+        try:
+            return 'Перейти на страницу %d' % (int(link.get('page', 0)) + 1)
+        except Exception:
+            return 'Перейти на страницу'
+    if kind == fitz.LINK_NAMED:
+        return 'Перейти: %s' % (link.get('name', '') or 'раздел')
+    if kind in (fitz.LINK_GOTOR, fitz.LINK_LAUNCH):
+        return link.get('file', '') or link.get('uri', '') or 'Открыть файл'
+    return 'Ссылка'
+
+
+class PageLabel(QLabel):
+    """Метка со страницей: отслеживает наведение и нажатия на ссылки PDF."""
+
+    def __init__(self, view):
+        super().__init__()
+        self.view = view
+        self.tab = view.tab
+        self.link_regions = []      # список (QRectF, dict-ссылка)
+        self._pressed = None
+        self._hover = None
+        self.setMouseTracking(True)
+        self.setCursor(Qt.ArrowCursor)
+
+    def set_links(self, regions):
+        self.link_regions = list(regions or [])
+        if self._hover is not None:
+            self._hover = None
+            self.unsetCursor()
+            self.setToolTip('')
+        self.update()
+
+    def _hit(self, pos):
+        point = QPointF(pos)
+        # Поздние регионы (поверх предыдущих) имеют приоритет.
+        for rect, link in reversed(self.link_regions):
+            if rect.contains(point):
+                return link
+        return None
+
+    def mouseMoveEvent(self, event):
+        link = self._hit(event.pos())
+        if link is not self._hover:
+            self._hover = link
+            if link is not None:
+                self.setCursor(Qt.PointingHandCursor)
+                self.setToolTip(link_tooltip(link))
+            else:
+                self.unsetCursor()
+                self.setToolTip('')
+            self.update()
+        super().mouseMoveEvent(event)
+
+    def leaveEvent(self, event):
+        if self._hover is not None:
+            self._hover = None
+            self.unsetCursor()
+            self.setToolTip('')
+            self.update()
+        super().leaveEvent(event)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self._pressed = event.pos()
+        super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton and self._pressed is not None:
+            pressed = self._pressed
+            self._pressed = None
+            if (pressed - event.pos()).manhattanLength() <= 4:
+                link = self._hit(event.pos())
+                if link is not None:
+                    self.tab.activate_link(link)
+                    return
+        super().mouseReleaseEvent(event)
+
+    def contextMenuEvent(self, event):
+        menu = QMenu(self)
+        act = menu.addAction('Копировать текст страницы')
+        act.triggered.connect(self._copy_page_text)
+        hovered = self._hit(event.pos())
+        if hovered is not None:
+            address = link_tooltip(hovered)
+            act = menu.addAction('Копировать адрес ссылки: %s' % address)
+            act.triggered.connect(
+                lambda: QApplication.clipboard().setText(address))
+            act = menu.addAction('Перейти по ссылке')
+            act.triggered.connect(lambda: self.tab.activate_link(hovered))
+        menu.exec_(event.globalPos())
+
+    def _copy_page_text(self):
+        try:
+            text = self.tab.doc.text(self.tab.page)
+        except Exception:
+            text = ''
+        QApplication.clipboard().setText(text)
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        if self._hover is not None:
+            painter = QPainter(self)
+            painter.setRenderHint(QPainter.Antialiasing, True)
+            for rect, link in self.link_regions:
+                if link is self._hover:
+                    painter.fillRect(rect, QColor(30, 100, 200, 40))
+                    painter.setPen(QPen(QColor(30, 100, 200), 1, Qt.DashLine))
+                    painter.drawRect(rect)
+                    break
+            painter.end()
+
+
 class PageView(QScrollArea):
     def __init__(self, tab):
         super().__init__()
@@ -596,13 +796,14 @@ class PageView(QScrollArea):
         self.setAlignment(Qt.AlignCenter)
         self.setBackgroundRole(QPalette.Dark)
         self.setViewportMargins(0, 0, 0, 0)
-        self.label = QLabel()
+        self.label = PageLabel(self)
         self.label.setAlignment(Qt.AlignCenter)
         self.label.setBackgroundRole(QPalette.Dark)
         self.setWidget(self.label)
         self.setWidgetResizable(False)
 
-    def set_image(self, qimage):
+    def set_image(self, qimage, links=None):
+        self.label.set_links(links or [])
         if qimage.isNull():
             self.label.clear()
             return
@@ -631,6 +832,10 @@ class DocumentTab(QWidget):
         self.fit = 'none'
         self.mode = 'single'   # single | facing | facing_cover
         self._dirty = False
+        self._find_text = ''
+        self._find_matches = []   # [(страница, [прямоугольники])]
+        self._find_index = -1
+        self._find_rects = []     # подсветка на текущей странице
 
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
@@ -675,26 +880,158 @@ class DocumentTab(QWidget):
                 else:
                     z = max(0.05, min((w - 24) / (probe.width() * len(self._pages_to_show())),
                                       (h - 24) / probe.height()))
-        imgs = [self.doc.render(i, z, self.rotation) for i in self._pages_to_show()]
-        imgs = [im for im in imgs if not im.isNull()]
+
+        pages, imgs = [], []
+        for i in self._pages_to_show():
+            im = self.doc.render(i, z, self.rotation)
+            if not im.isNull():
+                pages.append(i)
+                imgs.append(im)
         if not imgs:
-            self.view.set_image(QImage())
-        elif len(imgs) == 1:
-            self.view.set_image(imgs[0])
+            self.view.set_image(QImage(), [])
+            self.pageChanged.emit(self.page)
+            return
+
+        # Собираем разворот и запоминаем горизонтальное смещение каждой страницы —
+        # оно нужно, чтобы наложить ссылки на правильное место картинки.
+        offsets, x = [], 0
+        for im in imgs:
+            offsets.append(x)
+            x += im.width() + 8
+        if len(imgs) == 1:
+            canvas = imgs[0]
         else:
-            gap = 8
-            total_w = sum(i.width() for i in imgs) + gap * (len(imgs) - 1)
-            total_h = max(i.height() for i in imgs)
+            total_w = x - 8
+            total_h = max(im.height() for im in imgs)
             canvas = QImage(total_w, total_h, QImage.Format_RGB32)
             canvas.fill(QColor('#808080'))
             p = QPainter(canvas)
-            x = 0
-            for im in imgs:
-                p.drawImage(x, 0, im)
-                x += im.width() + gap
+            for im, ox in zip(imgs, offsets):
+                p.drawImage(ox, 0, im)
             p.end()
-            self.view.set_image(canvas)
+
+        if self._find_rects:
+            painter = QPainter(canvas)
+            painter.setRenderHint(QPainter.Antialiasing, True)
+            for pno, im, ox in zip(pages, imgs, offsets):
+                if pno == self.page:
+                    for fr in self._find_rects:
+                        rect = self._map_rect(pno, im, ox, z, fr)
+                        if not rect.isEmpty():
+                            painter.fillRect(rect, QColor(255, 215, 0, 110))
+            painter.end()
+
+        self.view.set_image(canvas, self._link_regions(pages, imgs, offsets, z))
         self.pageChanged.emit(self.page)
+
+    def _map_rect(self, pno, im, ox, z, fr):
+        """Одна область из координат страницы в пиксели картинки."""
+        pw, ph = self.doc.page_size(pno)
+        if pw <= 0 or ph <= 0:
+            pw, ph = im.width() / z, im.height() / z
+        base_w, base_h = pw * z, ph * z
+        try:
+            x0, y0, x1, y1 = fr.x0 * z, fr.y0 * z, fr.x1 * z, fr.y1 * z
+        except Exception:
+            return QRectF()
+        # Программа может дополнительно поворачивать уже отрисованную
+        # картинку — переносим прямоугольник вместе с ней.
+        rot = self.rotation % 360
+        if rot == 90:
+            x0, y0, x1, y1 = base_h - y1, x0, base_h - y0, x1
+        elif rot == 180:
+            x0, y0, x1, y1 = base_w - x1, base_h - y1, base_w - x0, base_h - y0
+        elif rot == 270:
+            x0, y0, x1, y1 = y0, base_w - x1, y1, base_w - x0
+        x0, x1 = sorted((x0, x1))
+        y0, y1 = sorted((y0, y1))
+        rect = QRectF(x0 + ox, y0, x1 - x0, y1 - y0)
+        return rect.intersected(QRectF(ox, 0, im.width(), im.height()))
+
+    def _link_regions(self, pages, imgs, offsets, z):
+        """Переводит ссылки PDF из координат страницы в пиксели картинки."""
+        regions = []
+        for pno, im, ox in zip(pages, imgs, offsets):
+            for link in self.doc.links(pno):
+                fr = link.get('from')
+                if fr is None:
+                    continue
+                rect = self._map_rect(pno, im, ox, z, fr)
+                if not rect.isEmpty():
+                    regions.append((rect, link))
+        return regions
+
+    # -- гиперссылки ----------------------------------------------------
+    def activate_link(self, link):
+        """Обрабатывает переход по ссылке PDF."""
+        kind = link.get('kind', fitz.LINK_NONE)
+        if kind == fitz.LINK_GOTO or kind == fitz.LINK_NAMED:
+            if kind == fitz.LINK_NAMED:
+                dest = self.doc.named_destination(link.get('name', ''))
+                if not dest:
+                    return
+                pno = dest.get('page', -1)
+            else:
+                pno = link.get('page', -1)
+            try:
+                pno = int(pno)
+            except Exception:
+                return
+            if 0 <= pno < self.doc.page_count:
+                self.goto(pno)
+            return
+
+        if kind == fitz.LINK_GOTOR or kind == fitz.LINK_LAUNCH:
+            target = link.get('file') or link.get('uri') or ''
+            if target:
+                self._open_target(target, link.get('page'))
+            return
+
+        if kind == fitz.LINK_URI:
+            self._open_target(link.get('uri', ''), None)
+
+    def _open_target(self, target, page=None):
+        if not target:
+            return
+        # Фрагмент внутри того же документа: #page=5 (нумерация с единицы).
+        if target.startswith('#'):
+            m = re.search(r'page=(\d+)', target, re.IGNORECASE)
+            if m:
+                self.goto(int(m.group(1)) - 1)
+            return
+
+        local = target
+        if target.startswith('file://'):
+            local = QUrl(target).toLocalFile()
+        elif '://' in target or target.lower().startswith(('mailto:', 'tel:')):
+            QDesktopServices.openUrl(QUrl(target))
+            return
+
+        # Относительный путь считаем от папки текущего документа.
+        if not os.path.isabs(local):
+            local = os.path.join(os.path.dirname(os.path.abspath(self.doc.path)), local)
+        local = os.path.normpath(local)
+        fragment = None
+        if '#' in local and not os.path.exists(local):
+            local, fragment = local.split('#', 1)
+        if os.path.isfile(local):
+            if page is None and fragment:
+                m = re.search(r'page=(\d+)', fragment, re.IGNORECASE)
+                if m:
+                    page = int(m.group(1)) - 1
+            if Path(local).suffix.lower() in (PDF_EXTS | DJVU_EXTS | IMAGE_EXTS |
+                                              COMIC_EXTS | EBOOK_EXTS | TEXT_EXTS |
+                                              CONVERT_EXTS):
+                self.mw.open_file(local)
+                if page is not None:
+                    tab = self.mw.current_tab()
+                    if tab:
+                        tab.goto(page)
+            else:
+                QDesktopServices.openUrl(QUrl.fromLocalFile(local))
+        else:
+            # Ссылка может быть обычным веб-адресом без схемы в старых PDF.
+            QDesktopServices.openUrl(QUrl(target))
 
     def viewport_width(self):
         return self.view.width() if self.view else 800
@@ -711,6 +1048,7 @@ class DocumentTab(QWidget):
             return
         self.page = index
         self.render()
+        self._dirty = False
 
     def set_mode(self, mode):
         self.mode = mode
@@ -736,16 +1074,54 @@ class DocumentTab(QWidget):
         self.render()
 
     def find_text(self, text):
+        """Ищет все совпадения и показывает первое с подсветкой."""
+        self._find_text = text or ''
+        self._find_rects = []
         if not text:
+            self._find_matches = []
+            self._find_index = -1
             return False
         if self.browser:
-            return self.browser.find(text)
+            found = bool(self.browser.find(text))
+            self._find_matches = [(0, [])] if found else []
+            self._find_index = 0 if found else -1
+            return found
+
         pat = re.compile(re.escape(text), re.IGNORECASE)
+        matches = []
         for i in range(self.doc.page_count):
-            if pat.search(self.doc.text(i)):
-                self.goto(i)
-                return True
-        return False
+            rects = self.doc.search(i, text)
+            try:
+                in_text = bool(rects) or bool(pat.search(self.doc.text(i)))
+            except Exception:
+                in_text = bool(rects)
+            if in_text:
+                matches.append((i, rects))
+        self._find_matches = matches
+        if not matches:
+            self._find_index = -1
+            return False
+        self._find_index = 0
+        self._show_match()
+        return True
+
+    def find_next(self, step=1):
+        """Переход к следующему/предыдущему совпадению (по циклу)."""
+        if self.browser:
+            return bool(self.browser.find(self._find_text))
+        if not self._find_matches:
+            return False
+        self._find_index = (self._find_index + step) % len(self._find_matches)
+        self._show_match()
+        return True
+
+    def _show_match(self):
+        pno, rects = self._find_matches[self._find_index]
+        self._find_rects = rects
+        self.page = pno
+        self._dirty = True
+        self.render()
+        self.mw.update_status()
 
     def scroll_to_anchor(self, anchor):
         if self.browser:
@@ -927,6 +1303,8 @@ class MainWindow(QMainWindow):
 
         m_tools = mb.addMenu('Инструменты')
         m_tools.addAction(self._action('Поиск', None, 'Ctrl+F', slot=self.focus_find))
+        m_tools.addAction(self._action('Следующее совпадение', None, 'F3', slot=self.find_forward))
+        m_tools.addAction(self._action('Предыдущее совпадение', None, 'Shift+F3', slot=self.find_backward))
         m_tools.addAction(self._action('Быстрый поиск в содержании', slot=self.focus_toc_search))
         m_tools.addSeparator()
         m_tools.addAction(self._action('Экспортировать текущий документ как набор изображений', slot=self.export_images))
@@ -1068,6 +1446,7 @@ class MainWindow(QMainWindow):
                 doc.close()
                 return
         tab = DocumentTab(doc, self)
+        tab.pageChanged.connect(self.update_status)
         idx = self.tabs.addTab(tab, doc.name)
         self.tabs.setCurrentIndex(idx)
         self._tabs.append(tab)
@@ -1137,10 +1516,35 @@ class MainWindow(QMainWindow):
         tab = self.current_tab()
         if not tab:
             return
+        printer = QPrinter(QPrinter.HighResolution)
+        dialog = QPrintDialog(printer, self)
+        if dialog.exec_() != QPrintDialog.Accepted:
+            return
+        self._print_document(tab, printer)
+
+    def print_to_pdf(self, tab, path):
+        """Печать документа в PDF-файл (используется и в тестах)."""
+        printer = QPrinter(QPrinter.HighResolution)
+        printer.setOutputFormat(QPrinter.PdfFormat)
+        printer.setOutputFileName(path)
+        self._print_document(tab, printer)
+
+    def _print_document(self, tab, printer):
         if tab.doc.kind == 'flow':
-            tab.browser.print_(None) if hasattr(tab.browser, 'print_') else None
-        else:
-            QMessageBox.information(self, 'Печать', 'Для печати изображений используйте контекстное меню системы.')
+            tab.browser.print_(printer)
+            return
+        painter = QPainter(printer)
+        rect = painter.viewport()
+        for i in range(tab.doc.page_count):
+            img = tab.doc.render(i, 1.0, tab.rotation)
+            if img.isNull():
+                continue
+            if i:
+                printer.newPage()
+            scaled = img.scaled(rect.size(), Qt.KeepAspectRatio,
+                                Qt.SmoothTransformation)
+            painter.drawImage(rect, scaled)
+        painter.end()
 
     # -- navigation ---------------------------------------------------------
     def first_page(self):
@@ -1419,16 +1823,30 @@ class MainWindow(QMainWindow):
         self.find_edit.setFocus()
         self.find_edit.selectAll()
 
-    def do_find(self):
+    def do_find(self, next_only=False):
         tab = self.current_tab()
         text = self.find_edit.text().strip()
         if tab and text:
-            if not tab.find_text(text):
-                self.find_edit.setStyleSheet('background:#ffdddd;')
-                QTimer.singleShot(900, lambda: self.find_edit.setStyleSheet(''))
+            if next_only and getattr(tab, '_find_matches', None) and \
+                    tab._find_text == text:
+                found = tab.find_next(1)
             else:
-                self.find_edit.setStyleSheet('background:#ddffdd;')
-                QTimer.singleShot(900, lambda: self.find_edit.setStyleSheet(''))
+                found = tab.find_text(text)
+            self.find_edit.setStyleSheet(
+                'background:%s;' % ('#ddffdd' if found else '#ffdddd'))
+            QTimer.singleShot(900, lambda: self.find_edit.setStyleSheet(''))
+
+    def find_forward(self):
+        tab = self.current_tab()
+        if tab:
+            tab.find_next(1)
+            self.update_status()
+
+    def find_backward(self):
+        tab = self.current_tab()
+        if tab:
+            tab.find_next(-1)
+            self.update_status()
 
     def about(self):
         QMessageBox.about(self, 'О программе',

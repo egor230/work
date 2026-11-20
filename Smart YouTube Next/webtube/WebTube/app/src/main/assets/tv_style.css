@@ -1,0 +1,343 @@
+/* ============================================================
+   WebTube TV-mode CSS — 10-foot UI как в SmartTube
+   Применяется к m.youtube.com через инъекцию в onPageFinished.
+   ============================================================ */
+
+/* Корневые переменные темы */
+:root {
+  --tv-bg: #0f0f0f;
+  --tv-surface: #212121;
+  --tv-text: #f1f1f1;
+  --tv-text-dim: #aaaaaa;
+  --tv-accent: #ff0000;
+  --tv-focus: #ffffff;
+  --tv-radius: 12px;
+}
+
+/* Базовый масштаб: мобильный сайт слишком мелкий для ТВ.
+   Увеличиваем базовый шрифт — масштабируются все rem/em элементы. */
+html, body {
+  font-size: 20px !important;
+  background-color: var(--tv-bg) !important;
+  color: var(--tv-text) !important;
+  overflow-x: hidden !important;
+}
+
+/* Сетка видео: 2-3 крупных колонки вместо 4-5 мелких.
+   ytm-rich-grid-renderer — главная сетка на m.youtube.com */
+ytm-rich-grid-renderer,
+.rich-grid-renderer,
+ytm-rich-grid-renderer-contents,
+.rich-grid-renderer-contents {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 28px 24px !important;
+  padding: 0 40px !important;
+  max-width: 1920px !important;
+  margin: 0 auto !important;
+}
+
+/* На узких экранах/в bootstrap — минимум 2 колонки */
+@media (max-width: 1280px) {
+  ytm-rich-grid-renderer,
+  .rich-grid-renderer,
+  ytm-rich-grid-renderer-contents,
+  .rich-grid-renderer-contents {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+/* Карточка видео — крупная, как 200x110dp в SmartTube */
+ytm-rich-item-renderer,
+.rich-item-renderer,
+ytm-video-with-context-renderer,
+ytm-media-item,
+ytm-search-video-renderer,
+ytm-compact-video-renderer,
+.video-with-context-renderer {
+  display: block !important;
+  width: 100% !important;
+  min-height: 240px !important;
+  margin: 0 0 24px 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border-radius: var(--tv-radius) !important;
+  scroll-margin: 20px !important;
+  /* плавная анимация масштабирования при фокусе */
+  transition: transform 0.18s ease-out, box-shadow 0.18s ease-out !important;
+  transform-origin: center !important;
+  contain: layout style !important;
+}
+
+/* Превью — 16:9, скруглённое */
+ytm-rich-item-renderer img,
+ytm-video-with-context-renderer img,
+.media-item-thumbnail,
+.video-thumbnail-container,
+ytm-media-item img {
+  width: 100% !important;
+  aspect-ratio: 16 / 9 !important;
+  object-fit: cover !important;
+  border-radius: var(--tv-radius) !important;
+  background: #1a1a1a !important;
+}
+
+/* Мета: название + канал + просмотры + длина */
+.media-item-headline,
+.video-info-block,
+ytm-media-item .media-item-headline,
+ytm-video-with-context-renderer [class*="headline"],
+ytm-rich-item-renderer [class*="headline"] {
+  font-size: 18px !important;
+  line-height: 1.35 !important;
+  font-weight: 500 !important;
+  color: var(--tv-text) !important;
+  margin: 10px 0 4px 0 !important;
+  max-height: 3em !important;
+  overflow: hidden !important;
+}
+
+.media-item-subhead,
+.video-secondary-text,
+ytm-media-item .media-item-subhead,
+ytm-video-with-context-renderer [class*="subhead"],
+ytm-rich-item-renderer [class*="subhead"] {
+  font-size: 15px !important;
+  color: var(--tv-text-dim) !important;
+  margin: 0 !important;
+}
+
+/* Бейдж длины ролика */
+.media-item-badge,
+ytm-media-item [class*="badge"],
+.video-duration-badge,
+ytd-thumbnail-overlay-time-status-renderer,
+.thumbnail-overlay-time-status-renderer {
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  padding: 4px 8px !important;
+  border-radius: 6px !important;
+  background: rgba(0,0,0,0.85) !important;
+  color: #fff !important;
+}
+
+/* ---------------- ВИДИМЫЙ ФОКУС (как рамка фокуса Leanback) ---------------- */
+
+/* Класс вешается JS-движком на элемент под D-pad */
+.tv-focused {
+  outline: 4px solid var(--tv-focus) !important;
+  outline-offset: 3px !important;
+  border-radius: var(--tv-radius) !important;
+  transform: scale(1.045) !important;
+  box-shadow: 0 0 0 6px rgba(255,255,255,0.18),
+              0 18px 40px rgba(0,0,0,0.7) !important;
+  z-index: 5 !important;
+  position: relative !important;
+  background: var(--tv-surface) !important;
+}
+
+/* Все интерактивные элементы получают базовый переход,
+   чтобы появление рамки было плавным */
+ytm-rich-item-renderer,
+ytm-video-with-context-renderer,
+ytm-media-item,
+ytm-search-video-renderer,
+ytm-compact-video-renderer,
+a, button, [tabindex] {
+  transition: transform 0.18s ease-out, box-shadow 0.18s ease-out,
+              outline 0.12s ease-out !important;
+}
+
+/* ---------------- Топбар и поиск ---------------- */
+
+.mobile-topbar,
+ytm-mobile-topbar-renderer,
+ytm-topbar-renderer,
+topbar,
+ytm-topbar {
+  height: 88px !important;
+  min-height: 88px !important;
+  padding: 0 40px !important;
+  background: rgba(15,15,15,0.97) !important;
+  backdrop-filter: blur(8px) !important;
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 100 !important;
+}
+
+/* Кнопки в топбаре крупнее */
+.mobile-topbar button,
+ytm-mobile-topbar-renderer button,
+ytm-topbar-renderer button,
+.mobile-topbar [role="button"],
+ytm-mobile-topbar-renderer [role="button"] {
+  min-width: 64px !important;
+  min-height: 64px !important;
+  margin: 0 6px !important;
+}
+
+/* Иконки топбара */
+.mobile-topbar svg,
+ytm-mobile-topbar-renderer svg,
+ytm-topbar-renderer svg {
+  width: 32px !important;
+  height: 32px !important;
+}
+
+/* Логотип YouTube */
+.mobile-topbar img[alt*="YouTube"],
+ytm-mobile-topbar-renderer img,
+ytm-topbar-renderer img {
+  height: 44px !important;
+}
+
+/* ---------------- Списки (search results, channel) ---------------- */
+
+ytm-search-results,
+.search-results,
+ytm-section-list-renderer,
+ytm-item-section-renderer,
+ytm-channel-list,
+ytm-playlist-video-list-renderer,
+ytm-playlist-video-renderer {
+  padding: 24px 40px !important;
+  max-width: 1920px !important;
+  margin: 0 auto !important;
+}
+
+ytm-search-results ytm-video-with-context-renderer,
+ytm-search-results ytm-search-video-renderer,
+ytm-compact-video-renderer,
+ytm-playlist-video-renderer {
+  margin: 0 0 20px 0 !important;
+  padding: 12px !important;
+  border-radius: var(--tv-radius) !important;
+}
+
+/* ---------------- Кнопки плеера ---------------- */
+
+/* Кнопки управления плеером крупнее */
+.ytp-button,
+.ytp-large-play-button,
+.ytp-time-display,
+.ytp-volume-area,
+.ytp-chrome-controls .ytp-button {
+  min-width: 56px !important;
+  min-height: 56px !important;
+}
+
+.ytp-button svg,
+.ytp-chrome-controls svg {
+  width: 32px !important;
+  height: 32px !important;
+}
+
+/* Прогресс-бар толще */
+.ytp-progress-bar-container,
+.ytp-scrubber-container,
+.ytp-progress-bar {
+  height: 10px !important;
+}
+
+.ytp-scrubber-button {
+  width: 24px !important;
+  height: 24px !important;
+  border-radius: 50% !important;
+}
+
+/* ---------------- OSD-индикатор (наш, рисуется JS) ---------------- */
+
+#tv-osd {
+  position: fixed !important;
+  bottom: 60px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  background: rgba(0,0,0,0.88) !important;
+  color: #fff !important;
+  font-size: 26px !important;
+  font-weight: 600 !important;
+  font-family: Roboto, "Noto Sans", sans-serif !important;
+  padding: 16px 36px !important;
+  border-radius: 14px !important;
+  z-index: 2147483647 !important;
+  pointer-events: none !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.8) !important;
+  letter-spacing: 0.5px !important;
+  transition: opacity 0.25s ease-out !important;
+}
+
+/* ---------------- Скрываем мобильный мусор ---------------- */
+
+/* Нижний мобильный бар — мешает, дублирует топбар */
+ytm-mobile-topbar-renderer,
+.bottom-bar-mobile,
+ytm-bottom-bar-renderer,
+app-drawer,
+ytm-app-drawer,
+ytm-chips-bar,
+.chips-bar,
+ytm-feed-filter-chip-bar,
+.feed-filter-chip-bar,
+  display: none !important;
+}
+
+/* Реклама и промо */
+ytm-companion-slot-renderer,
+ytm-promoted-video-renderer,
+ytd-banner-promo-renderer,
+.banner-promo,
+ytm-shorts-renderer,
+.shorts-lockup-view-model,
+ytm-reel-shelf-renderer,
+.reel-shelf-renderer {
+  display: none !important;
+}
+
+/* "Sign in" баннер */
+ytm-sign-in-promo-renderer,
+.sign-in-promo,
+ytm-channel-availability-preview-renderer {
+  display: none !important;
+}
+
+/* ---------------- Прочее ---------------- */
+
+/* Бесконечный скролл-контейнер не должен ломать сетку */
+ytm-browse-results,
+ytm-home-screen-renderer,
+ytm-feed-item-filter-chip-bar-renderer {
+  padding: 24px 0 !important;
+}
+
+/* Заголовки секций крупнее */
+ytm-section-list-renderer h2,
+.section-header,
+.section-title,
+yt-section-header-renderer,
+ytm-shelf-renderer .shelf-title,
+.compact-shelf-header {
+  font-size: 24px !important;
+  font-weight: 600 !important;
+  color: var(--tv-text) !important;
+  padding: 16px 40px 8px 40px !important;
+}
+
+/* Скроллбары тонкие/невидимые */
+::-webkit-scrollbar {
+  width: 8px !important;
+}
+::-webkit-scrollbar-thumb {
+  background: #333 !important;
+  border-radius: 4px !important;
+}
+
+/* Фокус на поле поиска — крупный input */
+input[type="text"], input[type="search"], textarea {
+  font-size: 20px !important;
+  min-height: 56px !important;
+  padding: 12px 16px !important;
+  border-radius: 10px !important;
+  border: 2px solid #444 !important;
+  color: #fff !important;
+  background: #1a1a1a !important;
+}
