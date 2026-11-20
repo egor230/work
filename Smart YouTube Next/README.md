@@ -1,291 +1,536 @@
-# Smart YouTube Next TV — модифицированное приложение YouTube для Android TV
+# Smart YouTube Next TV
 
-> Подробный документ о том, **что это за программа**, откуда она взята, что в ней
-> изменено, какие проблемы встречаются при воспроизведении YouTube на приставке
-> Ugoos AM9 PRO и как именно они обходятся.
-> Актуально на **20.11.2026**.
+**Подробное руководство по модифицированному клиенту YouTube для Android TV.**
+
+Документ отвечает на четыре вопроса:
+
+1. **Что это за программа** и откуда она взялась;
+2. **Почему YouTube тормозил/падал на приставке** — разбор реальных логов;
+3. **Как именно устроены обходы** — каждый механизм с объяснением «почему так»;
+4. **Как обновлять, проверять и диагностировать** — готовые команды.
+
+Актуально на **21.11.2026**. Версия приложения — **32.80**, все правки установлены на приставку и проверены.
 
 ---
 
-## 1. Что это такое
+## Содержание
 
-**Smart YouTube Next TV** — это модифицированная сборка приложения **SmartTube**
-(репозиторий https://github.com/yuliskov/SmartTube) для телевизора/приставки.
+- [1. Обзор](#1-обзор)
+- [2. Исходники и сборка](#2-исходники-и-сборка)
+- [3. Первопричина Problems: разбор логов](#3-первопричина-проблем-разбор-логов)
+- [4. Как устроены обходы](#4-как-устроены-обходы)
+  - [4.1. DPI-обход nfqws / zaprett](#41-dpi-обход-nfqws--zaprett)
+  - [4.2. Живучесть обхода: жизненный цикл и фоновое воспроизведение](#42-живучесть-обхода-жизненный-цикл-и-фоновое-воспроизведение)
+  - [4.3. Авто-фикс при явной ошибке сети](#43-авто-фикс-при-явной-ошибке-сети)
+  - [4.4. Watchdog для «тихого» зависания](#44-watchdog-для-тихого-зависания)
+  - [4.5. Логгер ошибок и дедупликация](#45-логгер-ошибок-и-дедупликация)
+  - [4.6. Быстродействие интерфейса](#46-быстродействие-интерфейса)
+  - [4.7. Прочие исправления](#47-прочие-исправления)
+  - [4.8. Wink и OTT Navigator](#48-wink-и-ott-navigator)
+- [5. Настройки и бэкапы](#5-настройки-и-бэкапы)
+- [6. Практика: обновление и диагностика](#6-практика-обновление-и-диагностика)
+- [7. Эмулятор для проверок](#7-эмулятор-для-проверок)
+- [8. Структура папки проекта](#8-структура-папки-проекта)
+- [9. История работ](#9-история-работ)
 
-- Пакет: `com.egor.youtubetv`
-- Версия: **32.80** (база — upstream `master`)
-- Устройство: **Ugoos AM9 PRO**, Amlogic S905X4, **Android 14**, arm64-v8a, 4K, root через **Magisk**
-- Название в лаунчере: **Smart YouTube Next TV** (переименовано с `SmartTube`)
-- Основной экран — стандартный интерфейс SmartTube: левая панель секций и ряды карточек, управление с пульта.
+---
 
-Это **не** веб-обёртка: плеер нативный (ExoPlayer + SABR/DASH), со своим API-клиентом YouTube, своими списками и настройками.
+## 1. Обзор
 
-### Дополнительные приложения в экосистеме
+**Smart YouTube Next TV** — это модифицированная сборка **[SmartTube](https://github.com/yuliskov/SmartTube)** (ветка `master`) для телевизора/приставки. Мы не писали свой YouTube-клиент с нуля: взяли готовый открытый проект и точечно дописали то, чего ему не хватало в условиях конкретной сети и конкретного железа.
+
+| Параметр | Значение |
+|---|---|
+| Пакет | `com.egor.youtubetv` |
+| Версия | 32.80 (база — upstream `master`) |
+| Устройство | **Ugoos AM9 PRO**, Amlogic S905X4, Android 14, arm64-v8a, 4K |
+| Root | Magisk (нужен только для DPI-обхода) |
+| Имя в лаунчере | **Smart YouTube Next TV** |
+| Подпись | та же, что у прежней сборки (SHA-256 `81f8d2a1…`) |
+| Тип сборки | **release** (без флага `DEBUGGABLE`) |
+
+Это **не веб-обёртка**. Плеер нативный: ExoPlayer + SABR/DASH, собственный API-клиент YouTube, свои списки и настройки. Интерфейс — стандартный для SmartTube: левая панель секций, ряды карточек, управление с пульта.
+
+### Зачем вообще понадобились правки
+
+На приставке YouTube показывал ролики нестабильно: одни видео грузились минутами, другие падали с «Unexpected playback error», иногда экран просто висел на спиннере. Причиной оказалась не мощность железа и не кодек, а **доступ к CDN `*.googlevideo.com`** — подробности в [разделе 3](#3-первопричина-проблем-разбор-логов).
+
+### Другие приложения в экосистеме
 
 | Приложение | Назначение |
 |---|---|
-| `com.egor.youtubetv` — **Smart YouTube Next TV** | основной рабочий клиент |
-| `com.egor.webtube` — WebTube 1.0 TV | запасной клиент: YouTube внутри Android WebView (`m.youtube.com`); useful, когда нативный плеер капризничает |
-| `org.smarttube.stable` 32.71 | официальный релиз с GitHub, без наших правок |
+| `com.egor.youtubetv` — Smart YouTube Next TV | основной рабочий клиент |
+| `com.egor.webtube` — WebTube 1.0 TV | запасной клиент: YouTube внутри Android WebView (`m.youtube.com`). Выручает, когда нативный плеер капризничает |
+| `org.smarttube.stable` 32.71 | официальный релиз с GitHub, без наших правок — эталон для сравнения |
 
 ---
 
-## 2. Откуда взят код и как собирался
+## 2. Исходники и сборка
 
-1. Исходник: `https://github.com/yuliskov/SmartTube` (ветка `master`), подмодули:
-   - `SharedModules` (коммит `5475d318…`)
-   - `MediaServiceCore` (актуальный `master`)
-2. Сборка: JDK 17, Android SDK `/home/egor/android-tv-emu/sdk`, Gradle:
-   ```bash
-   ./gradlew :smarttubetv:assembleStstableDebug
-   ```
-3. Подпись — тем же **debug-keystore**, что и старая сборка на приставке, поэтому
-   обновление через `adb install -r` сохраняет аккаунт и настройки.
-4. Исходники находятся в `source/`, готовые APK — в `apk/`, settings — в `settings/`,
-   вспомогательные скрипты — в `scripts/`, старые документы — в `docs/`.
+### 2.1 Откуда код
 
-⚠️ Правило: **не менять `applicationId` и подпись, не делать `pm clear`** — иначе
-потребуется заново входить в Google-аккаунт. Обновлять только через
-`scripts/update_app.sh`.
+- Репозиторий: `https://github.com/yuliskov/SmartTube`, ветка `master`.
+- Подмодули:
+  - `SharedModules` — коммит `5475d318…`;
+  - `MediaServiceCore` — актуальный `master`.
+
+Правки вносятся **поверх** upstream и по возможности минимальны — чтобы при обновлении базы не приходилось переписывать весь проект заново. Список изменённых файлов можно увидеть в `scripts/patch_lifecycle.py` и в истории коммитов.
+
+### 2.2 Как собирать
+
+Окружение: JDK 17, Android SDK в `/home/egor/android-tv-emu/sdk`.
+
+```bash
+cd /tmp/opencode/SmartTubeRel          # быстрая сборка на /tmp (FUSE-монтаж workspace очень медленный)
+
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+export ANDROID_HOME=/home/egor/android-tv-emu/sdk
+export ANDROID_SDK_ROOT=/home/egor/android-tv-emu/sdk
+
+# РЕКОМЕНДУЕМЫЙ вариант — release:
+./gradlew :smarttubetv:assembleStstableRelease
+
+# Старый вариант (debug, медленнее):
+./gradlew :smarttubetv:assembleStstableDebug --offline
+```
+
+Результат: `smarttubetv/build/outputs/apk/ststable/release/SmartTube_stable_32.80_arm64-v8a.apk`.
+
+**Важно:** release-сборка требует доступа к сети — Gradle докачивает `lint-gradle` и связанные jar'ы. С флагом `--offline` release падает; debug собирается offline.
+
+### 2.3 Подпись — почему не нужно заново логиниться
+
+В корне исходников лежит `keystore.properties`:
+
+```properties
+storeFile=/home/egor/.android/debug.keystore
+storePassword=android
+keyAlias=androiddebugkey
+keyPassword=android
+```
+
+Это **стандартный debug-keystore Android SDK** (пароли «android» известны и не являются секретом). Раньше приложение собиралось как debug и подписывалось именно им. Когда мы перешли на release, я прописал тот же ключ в `signingConfigs.release` — в результате отпечаток сертификата не изменился:
+
+```
+Signer #1 certificate SHA-256 digest: 81f8d2a1a93ae9abccd5f70869ce73c5ac29f00d8a9d6e8659ea835b4d6f8c7a
+```
+
+Поэтому `adb install -r` обновляет приложение **без потери данных**: Google-аккаунт, channels, настройки остаются на месте.
+
+> ⚠️ **Жёсткие правила:**
+> - не менять `applicationId` (`com.egor.youtubetv`);
+> - не менять ключ подписи;
+> - **никогда не делать `pm clear`** — это удалит токены, и вход в Google придётся проходить заново;
+> - обновлять только через `docs/update_app.sh`.
+
+### 2.4 Что делает `update_app.sh`
+
+Скрипт решает задачу «обновить APK, но сохранить аккаунт»:
+
+```bash
+docs/update_app.sh /path/to/app.apk
+```
+
+1. `tar czf /sdcard/appdata_backup.tgz -C /data/data/com.egor.youtubetv .` — полный бэкап данных приложения;
+2. `adb pull` — забираем бэкап на ПК (`/tmp/opencode/appdata_backup/`);
+3. `adb install -r` — ставим новый APK;
+4. `adb push` + `tar xzf` + `chown` — возвращаем данные на место с правильным владельцем.
+
+Если установка не удалась, скрипт останавливается (`set -e`), а бэкап остаётся в `/tmp/opencode/appdata_backup/` — данные не теряются.
 
 ---
 
-## 3. Какие проблемы были на приставке и как они решались
+## 3. Первопричина проблем: разбор логов
 
-### 3.1 Первая проблема (историческая): чёрный экран на Amlogic
-На S905X4 ExoPlayer занижал лимит макс. разрешения декодера → не выбирался поток.
-Лечилось переключателем **AmlogicFix** (поднятие лимита до 1920×1089). Сейчас входит
-в базу настроек; на AM9 включён.
+До правок я снял с приставки `autofix_errors.log` — 23 ошибки за 19–20.11. Классификация:
 
-### 3.2 «Auto-fix» мешал воспроизведению
-СтарыйRecovery-лестница из 8 шагов и слепой `restartEngine()` прерывали работающие
-видео. В нашей сборке логика переписана (см. 4.2).
+| Ошибка | Кол-во | Что это значит |
+|---|---:|---|
+| `HttpDataSourceException: Unable to connect to …googlevideo.com` → `SocketTimeoutException: Read timed out` | 11 | TLS-соединение с CDN установилось, но чтение данных зависло |
+| тот же класс → `NoRouteToHostException: Host unreachable` | 6 | до узла нет маршрута (характерно для «кривых» DNS-ответов) |
+| `SabrReloadPlayerError` | 3 | YouTube просит заново получить player response |
+| `SabrPoTokenError: PENDING / PENDING_MISSING` | 2 | токен `poToken` ещё не готов |
 
-### 3.3 Основная проблема: таймаут видео-CDN
-Логи приставки (`autofix_errors.log`) показали 23 ошибки 19–20.11:
+**Ключевой вывод:** ошибки сетевые, а не кодековые. В логах встречаются av1, avc, vp9 — зависимости от конкретного формата нет. Чаще всего падали ролики `M6TBfUTfuOc` (6 раз) и `gMhKHUYPm_g` (5 раз).
 
-| Ошибка | Кол-во | Причина |
-|---|---|---|
-| `HttpDataSourceException: Unable to connect to …googlevideo.com` → `SocketTimeoutException: Read timed out` | 11 | таймаут TLS/read к CDN-узлу |
-| тот же класс → `NoRouteToHostException: Host unreachable` | 6 | нет маршрута до CDN |
-| `SabrReloadPlayerError` | 3 | сервер просит перезагрузить player response |
-| `SabrPoTokenError: PENDING / PENDING_MISSING` | 2 | poToken не готов |
+Отсюда и стратегия лечения: **чинить канал до `googlevideo.com`**, а не «переключать кодек ради кодека».
 
-**Вывод:** проблема **не в кодеке** (в логах встречаются av1/avc/vp9 — зависимости нет),
-а в доступе к `*.googlevideo.com`. Чаще всего падали `M6TBfUTfuOc` (6), `gMhKHUYPm_g` (5).
+### Дополнительные симптомы и их разбор
 
-### 3.4 «Тихий» завис (спиннер без ошибки)
-Некоторые ролики (4K, свежий poToken) висели вообще без `onEngineError` — watchdog
-через 30 сек меняет YouTube-клиент.
+**«Тихий» завис.** Некоторые ролики (4K, свежий poToken) висели на спиннере вообще без вызова `onEngineError` — авто-фикс по ошибке не срабатывал. Лечится отдельным watchdog'ом ([4.4](#44-watchdog-для-тихого-зависания)).
 
-### 3.5 «Открыть канал» не работало
-У ролика из плеера `channelId` был `null`, а `ChannelPresenter` делал повторную
-сетевую загрузку метаданных — на AM9 она висла. Теперь ID берётся из уже загруженных
-метаданных плеера; есть fallback — поиск по автору.
+**`Unknown part encountered: id=9023, size=-50620897`.** Классический признак оборванного DASH-потока. Возникал, когда обход выключался при уходе на главный экран, а фоновое воспроизведение продолжалось — см. [4.2](#42-живучесть-обхода-жизненный-цикл-и-фоновое-воспроизведение).
 
-### 3.6 Графический баг в диалоге формата
-Системный vector-индикатор `abc_btn_radio_material` рисовался «перевёрнутой C».
-Заменён на простые shape/radio drawable.
+**`null - Космос Просто` в строке фонового плеера.** Ролик, открытый внешним `VIEW`-intent, приходил без заполненного `title` — см. [4.7](#47-прочие-исправления).
 
 ---
 
-## 4. Как именно устроены обходы (что делает приложение)
+## 4. Как устроены обходы
 
-### 4.1 Авто-фикс при явной ошибке сети (`ErrorFixerController.applyAutoDnsFix`)
-Шаги с защитой от циклов (15 сек, счётчик в `autodns_fix`):
+Все механизмы работают вместе и дополняют друг друга. Ниже — каждый по отдельности.
 
-1. `PLAYER_DATA_SOURCE_OKHTTP` + DNS **Google (8.8.8.8)** → перезапуск
-2. DNS **IPv4** → перезапуск
-3. DNS **System** → перезапуск
-4. **H.264 720p + SW-декодер** → `restartEngine()`
-5. **Смена YouTube-клиента** → цикл заново
+### 4.1. DPI-обход nfqws / zaprett
 
-При тихом зависе (watchdog 30 сек) — **сначала смена клиента**, без перезапуска.
+Это **главное** решение сетевых проблем.
 
-### 4.2 Ловушка ошибок
-`ErrorLog` пишет в `<filesDir>/autofix_errors.log` время, videoId, позицию, сетевой
-движок, DNS, SW-декодер, формат и стек ошибки. Лимит — **5 МиБ** (при переполнении
-остаются последние 4 МиБ). Внешний `capture_errors.py` дублирует важные строки из
-`logcat` в `error_log.txt`.
+#### Что такое DPI и зачем обход
 
-### 4.3.3 Заголовок «null — Автор» в фоновом мини-плеере (21.11)
-При открытии ролика внешним `VIEW`-intent у `Video` не всегда заполнен `title`,
-поэтому в строке фонового воспроизведения показывалось `null - Космос Просто`.
-В `VideoStateController.onMetadata()` добавлен fallback: если `title` пустой или
-равен строке `"null"`, он берётся из `metadata.getTitle()`. Сборка установлена.
+DPI (Deep Packet Inspection) — система провайдера, которая смотрит не только на IP, но и на содержимое TLS- handshake. По набору признаков (SNI, порядок extension'ов, длины пакетов) она определяет, что вы идёте на YouTube, и начинает душить/подменять соединение. Отсюда `Read timed out` и `NoRouteToHost`.
 
-### 4.3.2 Фоновое воспроизведение (исправлено 21.11)
-Раньше при выходе на главный экран ТВ обход выключался, а фоновое
-воспроизведение продолжалось — поток обрывался (`Unknown part encountered:
-id=…, size=-50…`), видео тормозило и могли быть вылеты.
+`nfqws` перехватывает исходящие TCP-пакеты через **NFQUEUE** (iptables, цепочка `mangle`) и*mangling* их так, чтобы DPI не смог распознать трафик: разбивает TLS ClientHello на части, добавляет «мусор», подменяет SNI, имитирует другой клиент. Для YouTube это проверенная схема.
 
-Теперь добавлен `PlaybackStateHolder` (в common):
-- `ErrorFixerController.onPlay()` выставляет `playback active = true`;
-- `onPause()`/`onFinish()` — `false`;
-- `DpiBypassInstaller.onBackground()` при активном воспроизведении **не**
-  останавливает `zaprett`, а пишет в лог `app background, but playback active — keep nfqws`;
-- когда воспроизведение фактически заканчивается (или нажата пауза), слушатель
-  состояния останавливает обход.
+#### Почему именно zaprett 7.1.0
 
-Проверено на приставке: играет → HOME → `zaprett is working` → пауза →
-`zaprett is stopped`.
+В проекте используются бинарники **nfqws 1** из **zaprett 7.1.0**. Причина принципиальная: более новые версии (nzapret) перешли на `nfqws2` + Lua-скрипты и **не совместимы** с вашей сохранённой стратегией `general_alt12`. Мы используем именно ту реализацию, под которую стратегия писалась.
 
-### 4.3.1 Обход включается только вместе с приложением (с 20.11)
-`DpiBypassInstaller` зарегистрирован как `ActivityLifecycleCallbacks`:
-- при первом `onActivityResumed` (вход в приложение) — `zaprett start`;
-- при последнем `onActivityPaused` (выход на главный экран ТВ) — `zaprett stop`.
+#### Что именно вшито в APK
 
-Проверено на приставке: `zaprett is working` → HOME → `zaprett is stopped` →
-снова открыли приложение → `zaprett is working`. В логе `autofix_errors.log`
-появляются записи `nfqws START (app foreground)` и `nfqws STOP (app background)`.
-Установка файлов/strategies делается один раз при первом запуске и при обновлении
-не перетирается.
+`DpiBypassInstaller` при первом запуске (нужен root/Magisk) раскладывает:
 
-### 4.3 DPI-обход (nfqws / zaprett) — главное решение сетевых ошибок
-В приложение встроен движок **nfqws 1 из zaprett 7.1.0** и ваша сохранённая стратегия
-**`general_alt12`** (из `/home/egor/Downloads/zapret-discord-youtube-linux`).
+| Куда | Что |
+|---|---|
+| `/data/adb/modules/zaprett/system/bin/zaprett` | бинарник сервиса |
+| `/data/adb/modules/zaprett/system/lib/arm64-v8a/libnfqws.so` | движок nfqws |
+| `/data/adb/modules/zaprett/system/lib/arm64-v8a/libnfqws2.so` | совместимая библиотека |
+| `/storage/emulated/0/zaprett/config.json` | конфигурация сервиса |
+| `/storage/emulated/0/zaprett/strategies/general_alt12.txt` | сама стратегия |
+| `/storage/emulated/0/zaprett/manifests/strategies/general_alt12.json` | манифест |
+| `/storage/emulated/0/zaprett/files/bin`, `files/lists` | payload и списки |
 
-`DpiBypassInstaller` при первом запуске (root/Magisk):
-- раскладывает `zaprett`, `libnfqws.so`, `libnfqws2.so` в `/data/adb/modules/zaprett/`;
-- списки, payload и `config.json` + манифест стратегии — в `/storage/emulated/0/zaprett/`;
-- при **каждом** старте приложения проверяет `zaprett status` и поднимает `zaprett start`.
+Все файлы берутся из `assets/dpi/` внутри APK. Установка происходит **один раз** — marker-файл `dpi_bypass_installed` в `filesDir` защищает от перезаписи при обновлении, поэтому ваши настройки и стратегия не перетираются.
 
-Параметры стратегии сохранены без переделки:
-`fake,multisplit`, `split-seqovl=664`, `split-pos=1`, `fooling=ts`, `repeats=8`,
-`hostfakesplit` для Google с `host=www.google.com`, QUIC `fake` ×11,
-payload `tls_clienthello_www_sferum_ru.bin` + `stun.bin`.
+#### Параметры стратегии `general_alt12`
 
-Проверено на приставке: `zaprett status` → **«zaprett is working»**, NFQUEUE-правила
-в `iptables -t mangle`, ролик `5dGHRR1uizI` играет без новых ошибок.
+Стратегия перенесена из вашего сохранённого `general_alt12.bat` **без переделки**:
 
-⚠️ Обход системный (iptables/NFQUEUE), требует root. Если root недоступен — приложение
-работает как обычно (тихий fallback).
+```
+fake,multisplit
+split-seqovl=664
+split-pos=1
+fooling=ts
+repeats=8
+hostfakesplit для Google с host=www.google.com
+QUIC fake ×11
+payload: tls_clienthello_www_sferum_ru.bin + stun.bin
+```
 
-### 4.6 Лог только новых ошибок + поведение BACK (21.11)
-- `ErrorLog` теперь дедуплицирует записи по сигнатуре `класс + первые 3 кадра стека`
-  (для lifecycle-сообщений — по тексту). Already-seen сигнатуры хранятся в
-  `files/autofix_seen.txt` (до 500) и сохраняются между перезапусками. Проверено:
-  после перезапуска в лог добавилась только 1 новая строка.
-- Заголовок «null - Автор» в фоновом мини-плеере исправлен fallback из metadata.
-- При открытии ролика **внешней ссылкой** BACK может вернуть на предыдущую задачу
-  Android (файловый менеджер/лаунчер) — это особенность task stack. Добавлен возврат
-  в `BrowseActivity` из `PlaybackActivity.finish()` и `ViewManager.startParentView()`,
-  но в автотесте на внешнем intent результат не подтвердился — если вы открываете
-  ролики из интерфейса приложения, BACK работает штатно.
+#### Как запускать вручную
 
-### 4.5 Wink «недоступно на этой территории» (OTT Navigator)
-Плашка Wink появляется, если провайдер отдает поток с геоблоком и плеер шлет
-«не тот» User-Agent. Лечение (найдено в FAQ OTT Navigator и тематических обсуждениях):
-у активного плейлиста в `Свойствах провайдера` выставить **User-Agent**:
+```bash
+export LD_LIBRARY_PATH=/data/adb/modules/zaprett/system/lib/arm64-v8a
+/data/adb/modules/zaprett/system/bin/zaprett status   # «zaprett is working»
+/data/adb/modules/zaprett/system/bin/zaprett start
+/data/adb/modules/zaprett/system/bin/zaprett stop
+```
+
+Проверено: после старта в `iptables -t mangle` появляются NFQUEUE-правила, ролик `5dGHRR1uizI` играет без новых ошибок.
+
+> ⚠️ Обход **системный** (iptables/NFQUEUE) и требует root. Если root недоступен — приложение работает как обычное, тихо fallback'ится (в лог пишется `no root available — DPI bypass skipped`).
+
+### 4.2. Живучесть обхода: жизненный цикл и фоновое воспроизведение
+
+Обход должен работать **только когда приложение активно** — но фоновое воспроизведение считается активным. Здесь была тонкая ошибка, исправленная в два этапа.
+
+**Этап 1 (20.11).** `DpiBypassInstaller` зарегистрирован как `ActivityLifecycleCallbacks` в `MainApplication`:
+- первый `onActivityResumed` → `zaprett start`;
+- последний `onActivityPaused` → `zaprett stop`.
+
+Это дало нужное поведение: ушли на главный экран ТВ — обход выключился.
+
+**Проблема (21.11).** Если включено фоновое воспроизведение (звук / PiP / play-behind), видео продолжает идти, а обход уже выключен. Поток рвётся, появляется `Unknown part encountered`, видео тормозит и могут быть вылеты.
+
+**Решение.** Добавлен `PlaybackStateHolder` в common-модуле — общий флаг «видео сейчас играет»:
+
+- `ErrorFixerController.onPlay()` → `setActive(true)`;
+- `onPause()` / `onFinish()` → `setActive(false)`;
+- `DpiBypassInstaller.onBackground()` при активном воспроизведении **не** останавливает zaprett, а пишет в лог:
+  `app background, but playback active — keep nfqws`;
+- когда воспроизведение фактически заканчивается, слушатель состояния останавливает обход.
+
+**Проверено на приставке:**
+
+```
+играет           → zaprett is working
+HOME (фон)       → zaprett is working   (в логе «keep nfqws»)
+пауза            → zaprett is stopped
+```
+
+### 4.3. Авто-фикс при явной ошибке сети
+
+Если `onEngineError` всё же случился, срабатывает `ErrorFixerController.applyAutoDnsFix()` — лестница из шагов. Защита от циклов: шаг меняется не чаще, чем раз в 15 секунд, счётчик хранится в `autodns_fix`.
+
+| Шаг | Действие |
+|---|---|
+| 0 | `PLAYER_DATA_SOURCE_OKHTTP` + DNS **Google (8.8.8.8)** → перезапуск приложения |
+| 1 | DNS **IPv4** → перезапуск |
+| 2 | DNS **System** → перезапуск |
+| 3 | **H.264 720p + SW-декодер** (`VIDEO_HD_AVC_30`) → `restartEngine()` |
+| 4 | **Смена YouTube-клиента** → сброс счётчика на 0, цикл заново |
+
+Логика простая: сначала пробуем самый «чистый» путь (публичный DNS + HTTP-источник), затем сужаемCircuit до системного DNS, потом уходим на «дешёвый» кодек и софтверный декодер (ему всё равно, что DPI душит аппаратный путь), и наконец меняем клиент — у разных клиентов разные TLS-отпечатки, и один может пройти там, где другой не прошёл.
+
+### 4.4. Watchdog для «тихого» зависания
+
+Отдельный `Handler` с таймаутом **30 секунд** (`STUCK_PLAYBACK_TIMEOUT_MS`). Если прошло 30 секунд, а `getPositionMs()` всё ещё 0 — значит видео висит без ошибки. В этом случае:
+
+```
+watchdog: stalled playback, switching client
+→ YouTubeServiceManager.switchNextClientNow()
+→ reloadVideo()
+```
+
+Важно: watchdog сначала **меняет клиент**, а не дёргает `restartEngine()` — при тихом зависе перезапуск движка часто ничего не менял, зато добавлял задержку.
+
+Таймер снимается в `onPlay()` и перезапускается в `onBuffering()` / `onPause()` — см. код `ErrorFixerController`.
+
+### 4.5. Логгер ошибок и дедупликация
+
+`ErrorLog` пишет в `/data/data/com.egor.youtubetv/files/autofix_errors.log`:
+
+- время, videoId, позиция воспроизведения;
+- сетевой движок, выбранный DNS, SW-декодер, формат;
+- полный стек ошибки (до 4096 символов на запись);
+- лимит файла — **5 МиБ**; при переполнении остаются последние 4 МиБ.
+
+**Дедупликация (21.11).** Раньше одна и та же ошибка записывалась десятки раз, и лог быстро превращался в нечитаемое полотно. Теперь перед записью вычисляется **сигнатура**:
+
+```
+signal = класс исключения + первые 3 кадра стека
+(для служебных сообщений — сам текст с вырезанным временем)
+```
+
+Уже виденные сигнатуры хранятся в `files/autofix_seen.txt` (до 500 штук) и **сохраняются между перезапусками**. Проверено: после перезапуска в лог добавилась только 1 новая строка, старые не повторяются.
+
+Запись файла идёт в фоновом потоке `webtube-errorlog` — чтобы дисковая операция не тормозила UI (подробнее в [4.6](#46-быстродействие-интерфейса)).
+
+Внешний перехват: `docs/capture_errors.py` дублирует важные строки из `logcat` в `error_log.txt`.
+
+### 4.6. Быстродействие интерфейса
+
+Это была отдельная боль: «включаю видео и хочу нажать — приходится ждать несколько секунд». Нашлись **три** причины, все устранены.
+
+#### Причина 1: root-команды на главном потоке
+
+При каждом входе/выходе экрана `DpiBypassInstaller` синхронно вызывал `su`:
+
+```
+hasRoot() → id -u
+status    → zaprett status
+start     → zaprett start
+stop      → zaprett stop
++ при первом запуске ~15 команд cp/mkdir/chmod
+```
+
+Каждый вызов `su` — 100–500 мс, вместе — несколько секунд. Пока `su` выполнялся, главный поток не отрисовывал интерфейс.
+
+**Лечение:** все root-операции перенесены в отдельный поток `webtube-dpi`. Состояние root (`sRootAvailable`) и флаг запуска (`sRunning`) кэшируются, чтобы не дёргать `su` без нужды. Слушатель `PlaybackStateHolder` тоже был переведён с синхронного `stopInternal()` на асинхронный `stop()` — иначе остановка фонового воспроизведения всё равно блокировала бы UI.
+
+#### Причина 2: запись лога на главном потоке
+
+`ErrorLog` открывал и перезаписывал файл прямо в `log()`. Теперь запись идёт в поток `webtube-errorlog`.
+
+#### Причина 3: debug-сборка с флагом `DEBUGGABLE`
+
+`dumpsys package com.egor.youtubetv` показывал:
+
+```
+pkgFlags=[ DEBUGGABLE HAS_CODE ALLOW_CLEAR_USER_DATA ALLOW_BACKUP LARGE_HEAP ]
+```
+
+В режиме `debuggable` Android отключает часть оптимизаций ART и включает дополнительные проверки фреймворка. Переход на **release** с тем же ключом ([2.3](#23-подпись--почему-не-нужно-заново-логиниться)) убрал флаг:
+
+```
+pkgFlags=[ HAS_CODE ALLOW_CLEAR_USER_DATA ALLOW_BACKUP LARGE_HEAP ]
+```
+
+#### Результат (замер на приставке)
+
+Холодный старт → появление `BrowseActivity`:
+
+| Сборка | Время |
+|---|---:|
+| debug (было) | 3572 мс |
+| **release (стало)** | **1273 мс** |
+
+Плюс исчезли задержки при переходе в плеер и обратно — потому что больше нет синхронных `su` на главном потоке.
+
+### 4.7. Прочие исправления
+
+**Заголовок «null — Автор» в фоновом мини-плеере.**
+При открытии ролика внешним `VIEW`-intent у объекта `Video` не всегда заполнен `title`, и бегущая строка показывала `null - Космос Просто`. В `VideoStateController.onMetadata()` добавлен fallback: если `title` пустой или равен строке `"null"`, берём `metadata.getTitle()`.
+
+**Кнопка «Открыть канал».**
+У ролика из плеера `channelId` был `null`, а `ChannelPresenter` пытался загрузить метаданные повторно — на AM9 это висло. Теперь ID берётся из уже загруженных метаданных (`onMetadata` → `video.channelId`), плюс fallback-поиск по автору.
+
+**Радио-иконки в диалоге формата.**
+Системный vector `abc_btn_radio_material` рисовался «перевёрнутой C». Заменён на простые shape/radio drawable — теперь обычные кружки.
+
+**AmlogicFix.**
+На S905X4 ExoPlayer занижал лимит макс. разрешения декодера → поток не выбирался, чёрный экран. Переключатель поднимает лимит до 1920×1089; в базу настроек входит, на AM9 включён.
+
+**Back-кнопка (честно, не до конца вылечено).**
+В upstream при открытии ролика **внешней ссылкой** намеренно включается «player only mode» (`SplashPresenter.enablePlayerOnlyModeIfNeeded`), и BACK возвращает в предыдущую задачу Android (лаунчер/файловый менеджер). Мы добавили возврат в `BrowseActivity` в `PlaybackActivity.finish()` и `ViewManager.startParentView()`, но на внешнем intent автотест результат не подтвердил. Если ролики открываются **из интерфейса приложения** — BACK работает штатно.
+
+**Сохранены upstream-механизмы.**
+Playback recovery, SABR backoff, обработка 403/poToken и decoder errors из оригинала не тронуты — мы их не заменяли, а только добавили свои шаги.
+
+### 4.8. Wink и OTT Navigator
+
+Отдельная проблема — не в SmartTube, а в IPTV-плеере **OTT Navigator** (`studio.scillarium.ottnavigator`).
+
+**Симптом:** на некоторых каналах Wink показывает «недоступно на этой территории».
+
+**Причина:** провайдер отдаёт поток с геоблоком, а плеер шлёт «не тот» User-Agent.
+
+**Лечение:** у активного провайдера в «Свойствах» выставить User-Agent:
+
 ```
 WINK/1.28.2 (AndroidTV/9) HlsWinkPlayer
 ```
-На приставке это выставлено напрямую в
-`studio.scillarium.ottnavigator_preferences.xml` у провайдера `все` (id 232303082),
-после чего приложение перезапущено. Альтернативные значения, которые тоже
-упоминаются: `IPTV` (для стоп-каналов в РФ) и `IPTVPLAYER`.
 
-### 4.4 Другие исправления
-- Имя приложения и `browse_title` → **Smart YouTube Next TV** (в `values/strings.xml` и `ststable`).
-- Боковая панель: бэкапChannels 74+ канала, включая «Фиксики»; вшиты в `assets/default_prefs`.
-- Настройки интерфейса (`main_ui_data2`) и профиль `егор_щербанов` тоже вшиты как
-  значения по умолчанию, но **только при первом запуске** — при обновлении не перетираются.
-- Playback recovery, SABR backoff, 403/poToken, decoder errors — upstream-обработчики сохранены.
+На приставке это выставлено напрямую в `studio.scillarium.ottnavigator_preferences.xml` у провайдера `все` (id `232303082`), после чего приложение перезапущено. Альтернативные значения, которые тоже упоминаются в обсуждениях: `IPTV` (для стоп-каналов в РФ) и `IPTVPLAYER`.
 
-### 4.7 Медленный интерфейс / задержка при нажатии (исправлено 21.11)
-Причины и лечение:
-
-1. **Root-команды (`su`) на главном потоке.** При каждом входе/выходе экрана
-   `DpiBypassInstaller` синхронно вызывал `su` (`hasRoot`, `status`, `start`, `stop`,
-   а при первом запуске ещё ~15 команд копирования). Каждый вызов — 100–500 мс,
-   вместе — несколько секунд, интерфейс «замирал». Все root-операции перенесены
-   в отдельный фоновый поток (`webtube-dpi`), состояние root и флаг `sRunning`
-   кэшируются. Слушатель `PlaybackStateHolder` тоже теперь вызывает асинхронный
-   `stop()`, а не синхронный `stopInternal()`.
-2. **Запись лога ошибок на главном потоке.** `ErrorLog` тоже пишет файл в фоновом
-   потоке (`webtube-errorlog`); дедупликация по сигнатуре prevention повторов.
-3. **Debug-сборка.** Приложение было с флагом `DEBUGGABLE` — Android отключает
-   часть оптимизаций ART. Перешли на **release** с тем же ключом
-   (`keystore.properties` → `~/.android/debug.keystore`), подпись не изменилась
-   (SHA-256 `81f8d2a1…`), аккаунт и настройки сохранены `update_app.sh`.
-
-Замер на приставке (холодный старт → BrowseActivity):
-- debug: **3572 мс**
-- release: **1273 мс**
-
-APK: `apk/SmartTube_stable_32.80_arm64-v8a-release.apk`.
-Сборка: `./gradlew :smarttubetv:assembleStstableRelease` (нужен доступ к сети
-для загрузки lint-jar; `--offline` не срабатывает для release).
+Это решение не требует root и не влияет на SmartTube.
 
 ---
 
 ## 5. Настройки и бэкапы
 
-- `/sdcard/yt_prefs_backup/shared_prefs/` — резерв prefs с приставки
-- `/storage/emulated/0/Documents/SmartTubeBackup/com.egor.youtubetv_20261119-012330.zip`
-  — последний полный бэкап (интерфейс, каналы, аккаунт)
-- `settings/default_prefs/` — вшитые в APK значения по умолчанию
-- `settings/main_ui_data2`, `settings/sidebar_fixiki.txt` — с телевизора
-- Восстановление: `scripts/restore_settings.sh`, обновление: `scripts/update_app.sh`
+| Что | Где |
+|---|---|
+| Резерв prefs с приставки | `/sdcard/yt_prefs_backup/shared_prefs/` |
+| Последний полный бэкап (интерфейс, каналы, аккаунт) | `/storage/emulated/0/Documents/SmartTubeBackup/com.egor.youtubetv_20261119-012330.zip` |
+| Вшитые в APK значения по умолчанию | `settings/default_prefs/` |
+| Настройки интерфейса и сайдбар с ТВ | `settings/main_ui_data2`, `settings/sidebar_fixiki.txt` |
+| Восстановление настроек | `docs/restore_settings.sh` |
+| Обновление приложения | `docs/update_app.sh` |
 
-**Важно:** вход в Google хранится в `files/global_prefs/media_service_account_data`
-в данных приложения. Он сохраняется при `adb install -r` с тем же ключом — повторный
-вход не требуется.
+**Где хранится вход в Google:** `files/global_prefs/media_service_account_data` в данных приложения. Он сохраняется при `adb install -r` тем же ключом — повторный вход **не требуется**. Именно поэтому мы так бережём подпись и никогда не делаем `pm clear`.
+
+**Что вшито по умолчанию:** 74+ канала сайдбара (включая «Фиксики»), настройки интерфейса `main_ui_data2` и профиль `егор_щербанов`. Но **только при первом запуске** — при обновлении существующие настройки не перетираются.
+
+> 🔒 `settings/latest_backup.zip` содержит OAuth-токены — **на GitHub не отправляется** (исключён в `updata git.sh`).
 
 ---
 
-## 6. Как диагностировать новую проблему
+## 6. Практика: обновление и диагностика
 
-1. Открыть ролик, который не идёт.
-2. Снять лог:
-   ```bash
-   adb shell "su -c 'cat /data/data/com.egor.youtubetv/files/autofix_errors.log'" > errors.txt
-   ```
-3. Или внешний перехват: `scripts/capture_errors.py` → `error_log.txt` (лимит 5 МиБ).
-4. Искать:
-   - `Unable to connect to …googlevideo.com` + `SocketTimeoutException` — сеть/CDN;
-   - `NoRouteToHostException` — маршрут/Wi-Fi;
-   - `SabrPoTokenError` — poToken/клиент;
-   - `SabrReloadPlayerError` — защита потока YouTube;
-   - `DpiBypass` — статус обхода.
-5. Проверить обход: `zaprett status` (должно быть «zaprett is working»).
+### 6.1 Обновить приложение
+
+```bash
+docs/update_app.sh /path/to/SmartTube_stable_32.80_arm64-v8a-release.apk
+```
+
+Скрипт сам сделает бэкап, поставит APK и вернёт данные. Проверить результат:
+
+```bash
+adb shell "dumpsys package com.egor.youtubetv | grep pkgFlags"   # DEBUGGABLE быть не должно
+adb shell "su -c 'export LD_LIBRARY_PATH=/data/adb/modules/zaprett/system/lib/arm64-v8a; \
+  /data/adb/modules/zaprett/system/bin/zaprett status'"          # zaprett is working
+```
+
+### 6.2 Снять лог ошибок
+
+```bash
+adb shell "su -c 'cat /data/data/com.egor.youtubetv/files/autofix_errors.log'" > errors.txt
+```
+
+Или внешний перехват: `docs/capture_errors.py` → `error_log.txt`.
+
+### 6.3 Что искать в логе
+
+| Строка | Диагноз |
+|---|---|
+| `Unable to connect to …googlevideo.com` + `SocketTimeoutException` | сеть/CDN, таймаут чтения |
+| `NoRouteToHostException` | маршрут/Wi-Fi/DNS |
+| `SabrPoTokenError` | poToken / клиент |
+| `SabrReloadPlayerError` | защита потока YouTube, нужна перезагрузка player response |
+| `Unknown part encountered` | оборванный поток (часто — обход выключился при фоне) |
+| `watchdog: stalled playback` | тихий завис, смена клиента |
+| `app background, but playback active — keep nfqws` | обход корректно удержан при фоновом воспроизведении |
+| `DpiBypass ... nfqws START/STOP` | статус обхода |
+| `no root available — DPI bypass skipped` | нет root, обход не работает |
+
+### 6.4 Проверить обход
+
+```bash
+export LD_LIBRARY_PATH=/data/adb/modules/zaprett/system/lib/arm64-v8a
+zaprett status
+# ожидаем: zaprett is working
+```
+
+Если обход «stopped» при активном приложении — проверьте, не нажата ли пауза и не ушло ли приложение в фон без воспроизведения.
 
 ---
 
 ## 7. Эмулятор для проверок
 
-- AVD **`AM9_x86_14`**: Android **14 (API 34), Android TV, x86, 1920×1080, 3 ГБ, KVM**.
-- Запуск (отдельным процессом, чтобы не зависеть от таймаутов):
-  ```bash
-  setsid nohup /home/egor/android-tv-emu/sdk/emulator/emulator -avd AM9_x86_14 \
-    -no-audio -no-snapshot -gpu swiftshader_indirect -memory 3072 &
-  ```
-- arm64-образ на этом x86_64 хосте **не запускается** (Emulator 37: «CPU Architecture arm64 is not supported»),
-  поэтому эмулятор подходит для логики/UI, но не для Amlogic-кодек-багов.
+- AVD **`AM9_x86_14`**: Android **14 (API 34)**, Android TV, x86, 1920×1080, 3 ГБ, KVM.
+- Запуск отдельным процессом, чтобы не зависеть от таймаутов:
+
+```bash
+setsid nohup /home/egor/android-tv-emu/sdk/emulator/emulator -avd AM9_x86_14 \
+  -no-audio -no-snapshot -gpu swiftshader_indirect -memory 3072 &
+```
+
+- arm64-образ на этом x86_64-хосте **не запускается** (Emulator 37: «CPU Architecture arm64 is not supported»). Эмулятор годится для проверки логики и UI, но **не** для Amlogic-кодек-багов и не для nfqws (нет root/NFQUEUE) — тестировать это нужно на реальной приставке.
 
 ---
 
-## 8. Структура папки
+## 8. Структура папки проекта
 
 ```
 Smart YouTube Next/
-├── README.md                 ← этот документ
-├── source/                   ← полные исходники SmartTube с нашими правками
-├── apk/                      ← собранные APK (arm64, x86, WebTube)
-├── settings/                 ← бэкапы, вшитые defaults, main_ui_data2, sidebar
-├── scripts/                  ← update_app.sh, restore_settings.sh, capture_errors.py,
-│                               patch_all.py, start-zapret.sh, general_alt12.bat
-├── docs/                     ← README_APPS.md, zapret_general_alt12.md и копии конфигов
-└── webtube/                  ← исходники WebTube
+├── README.md                       ← этот документ
+├── source/                         ← полные исходники SmartTube с нашими правками
+│   ├── keystore.properties         ← ключ подписи (стандартный debug.keystore)
+│   ├── common/                     ← ErrorLog, PlaybackStateHolder, ErrorFixerController,
+│   │                                  VideoStateController, ViewManager
+│   └── smarttubetv/src/main/assets/dpi/  ← zaprett + стратегия general_alt12
+├── apk/                            ← готовые APK
+│   ├── SmartTube_stable_32.80_arm64-v8a.apk          (debug)
+│   ├── SmartTube_stable_32.80_arm64-v8a-release.apk  (рекомендуемый)
+│   ├── SmartTube_stable_32.80_armeabi-v7a.apk
+│   ├── SmartTube_stable_32.80_universal.apk
+│   ├── SmartTube_stable_32.80_x86.apk
+│   └── WebTube_1.0_tv.apk
+├── settings/
+│   ├── default_prefs/              ← вшитые значения по умолчанию
+│   └── latest_backup.zip           ← ⚠️ НЕ отправлять на GitHub (OAuth-токены)
+├── scripts/
+│   └── patch_lifecycle.py          ← патч жизненного цикла DPI-обхода
+├── docs/
+│   ├── update_app.sh               ← безопасное обновление с сохранением данных
+│   ├── restore_settings.sh         ← восстановление настроек
+│   ├── capture_errors.py           ← перехват logcat → error_log.txt
+│   ├── patch_all.py                ← сводный патч правок
+│   ├── README_APPS.md              ← заметки по приложениям экосистемы
+│   ├── zapret_conf.ini
+│   ├── zapret_general_alt12.bat    ← исходная стратегия (эталон)
+│   └── zapret_general_alt12.md     ← описание стратегии
+└── webtube/                        ← исходники WebTube
 ```
 
 ---
 
-## 9. Краткая история работ
+## 9. История работ
 
-- Изучены MD-документы и логи; найдена первопричина (`googlevideo.com` timeout, не кодек).
-- Собрана версия с авто-DNS/H.264/Client, watchdog и логгером.
-- Восстановлены 74+ канала и настройки интерфейса из бэкапа, вход в аккаунт сохранён.
-- Исправлена кнопка «Открыть канал» и radio-иконки.
-- Встроен nfqws/zaprett с вашей рабочей стратегией `general_alt12`.
-- Всё установлено на приставку и проверено на роликах `5dGHRR1uizI` и `hw2nRLPsYyE`.
+| Дата | Что сделано |
+|---|---|
+| 19–20.11 | Изучены лог и документация; найдена первопричина — таймаут `googlevideo.com`, а не кодек |
+| 20.11 | Лестница авто-фикса (DNS → H.264/SW → клиент), watchdog на 30 сек, логгер `ErrorLog` |
+| 20.11 | Восстановлены 74+ каналов и настройки интерфейса из бэкапа; вход в Google сохранён |
+| 20.11 | Исправлены «Открыть канал» и радио-иконки в диалоге формата |
+| 20.11 | Встроены nfqws/zaprett и стратегия `general_alt12`; обход привязан к жизненному циклу приложения |
+| 21.11 | Обход стал учитывать фоновое воспроизведение (`PlaybackStateHolder`) |
+| 21.11 | Исправлен заголовок `null - Автор` в фоновом мини-плеере |
+| 21.11 | `ErrorLog` пишет только новые ошибки, дедупликация с сохранением между перезапусками |
+| 21.11 | Устранены тормоза UI: root-команды и запись лога вынесены в фоновые потоки |
+| 21.11 | Переход на release-сборку с тем же ключом: холодный старт 3572 → 1273 мс |
+| 21.11 | Документ переработан и дополнен; всё отправлено на GitHub |
+
+---
+
+### Итог
+
+Приложение работает штатно: аккаунт и настройки сохраняются при обновлении, обход включается вместе с приложением и не выключается при фоновом воспроизведении, ошибки пишутся компактно и только новые, интерфейс отзывается без задержек. Все правки — точечные и поверх upstream `yuliskov/SmartTube`, чтобы проект можно было обновлять и дальше.
