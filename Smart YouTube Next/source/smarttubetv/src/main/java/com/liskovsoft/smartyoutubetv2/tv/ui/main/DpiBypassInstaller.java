@@ -4,6 +4,7 @@ import android.content.Context;
 import android.util.Log;
 
 import com.liskovsoft.smartyoutubetv2.common.misc.ErrorLog;
+import com.liskovsoft.smartyoutubetv2.common.misc.PlaybackStateHolder;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -22,9 +23,18 @@ public final class DpiBypassInstaller {
     private static final String BIN = MODULE + "/system/bin/zaprett";
     private static final String LIBDIR = MODULE + "/system/lib/arm64-v8a";
 
+    private static volatile boolean sAppForeground = true;
+    static {
+        PlaybackStateHolder.setListener(() -> {
+            if (!sAppForeground && !PlaybackStateHolder.isActive()) {
+                stopInternal(null);
+            }
+        });
+    }
     private DpiBypassInstaller() {}
 
-    public static void ensureAndStart(Context context) {
+    /** Start the bypass. Called when the app comes to foreground. */
+    public static void start(Context context) {
         try {
             if (!hasRoot()) {
                 ErrorLog.log(context, TAG, "no root available — DPI bypass skipped", null);
@@ -34,14 +44,49 @@ public final class DpiBypassInstaller {
             String status = runRootWithOutput("LD_LIBRARY_PATH=" + LIBDIR + " " + BIN + " status");
             if (status == null || !status.contains("working")) {
                 String out = runRootWithOutput("LD_LIBRARY_PATH=" + LIBDIR + " " + BIN + " start");
-                ErrorLog.log(context, TAG, "nfqws start: " + out.trim(), null);
+                ErrorLog.log(context, TAG, "nfqws START (app foreground): " + out.trim(), null);
             }
         } catch (Throwable e) {
-            ErrorLog.log(context, TAG, "DPI bypass failed", e);
+            ErrorLog.log(context, TAG, "DPI bypass start failed", e);
         }
     }
 
-    private static void installOnce(Context context) throws Exception {
+    public static void onForeground(Context context) {
+        sAppForeground = true;
+        start(context);
+    }
+
+    public static void onBackground(Context context) {
+        sAppForeground = false;
+        // Background playback (sound/PiP/play-behind) must keep the bypass on.
+        if (PlaybackStateHolder.isActive()) {
+            ErrorLog.log(context, TAG, "app background, but playback active — keep nfqws", null);
+            return;
+        }
+        stop(context);
+    }
+
+    /** Stop the bypass. Called when the app goes to background. */
+    public static void stop(Context context) {
+        stopInternal(context);
+    }
+
+    private static void stopInternal(Context context) {
+        try {
+            if (!hasRoot()) {
+                return;
+            }
+            String status = runRootWithOutput("LD_LIBRARY_PATH=" + LIBDIR + " " + BIN + " status");
+            if (status != null && status.contains("working")) {
+                String out = runRootWithOutput("LD_LIBRARY_PATH=" + LIBDIR + " " + BIN + " stop");
+                ErrorLog.log(context, TAG, "nfqws STOP (app background): " + out.trim(), null);
+            }
+        } catch (Throwable e) {
+            ErrorLog.log(context, TAG, "DPI bypass stop failed", e);
+        }
+    }
+
+    public static void installOnce(Context context) throws Exception {
         File marker = new File(context.getFilesDir(), "dpi_bypass_installed");
         if (marker.exists()) {
             return;

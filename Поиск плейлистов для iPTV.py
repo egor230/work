@@ -1,7 +1,4 @@
-#!/usr/bin/env python3
-"""
-IPTV Merger v4.0 — Асинхронный сборщик рабочих IPTV-каналов с высокой параллельностью.
-"""
+
 
 import asyncio, argparse, re, time, logging, random, aiohttp
 from dataclasses import dataclass, field
@@ -18,6 +15,11 @@ CONFIG = {
   "MIN_WORKING": 20,
   "MAX_WORKING": 1600,
   "OUTPUT_FILE": "all_tv.m3u",
+  # Строгая проверка: ffprobe должен реально увидеть видеопоток
+  "STRICT_CHECK": False,
+  "STRICT_CANDIDATE_FACTOR": 5,
+  "FFPROBE_TIMEOUT": 3,
+  "FFPROBE_WORKERS": 20,
   "HEAD_FIRST": True,                
 }
 
@@ -401,11 +403,38 @@ async def check_channel_http(ch: Channel, session: aiohttp.ClientSession, timeou
     log.debug(f"Ошибка проверки {ch.url[:80]}: {e}")
   return ch
 
+async def ffprobe_verify(ch: Channel) -> bool:
+  """Строгая проверка: ffprobe должен реально найти видеопоток."""
+  try:
+    headers = get_bypass_headers(ch.url)
+    header_str = "".join(f"{k}: {v}\r\n" for k, v in headers.items())
+    cmd = [
+      "ffprobe", "-v", "error",
+      "-headers", header_str,
+      "-rw_timeout", str(CONFIG["FFPROBE_TIMEOUT"] * 1_000_000),
+      "-show_entries", "stream=codec_type",
+      "-of", "csv=p=0",
+      ch.url,
+    ]
+    proc = await asyncio.create_subprocess_exec(
+      *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
+    try:
+      out, _ = await asyncio.wait_for(
+        proc.communicate(), timeout=CONFIG["FFPROBE_TIMEOUT"] + 2)
+    except asyncio.TimeoutError:
+      try: proc.kill()
+      except Exception: pass
+      return False
+    return b"video" in (out or b"")
+  except Exception:
+    return False
+
 async def smart_check(
   channels: List[Channel],
   max_working: int,
   min_working: int,
   workers: int,
+  strict: bool = False,
 ) -> List[Channel]:
   await asyncio.to_thread(channels.sort, key=lambda x: (-x.quality_score, x.clean_name))
   total = len(channels)
@@ -438,11 +467,23 @@ async def smart_check(
         f"  Проверено: {processed}/{total} | Рабочих: {len(working)} | "
         f"Успех: {len(working)/max(processed,1)*100:.1f}% | Потоков: {workers}"
       )
-      if len(working) >= max_working:
-        log.info(f"  Достигнут лимит {max_working} каналов, досрочная остановка.")
+      candidate_limit = max_working * CONFIG["STRICT_CANDIDATE_FACTOR"] if strict else max_working
+      if len(working) >= candidate_limit:
+        log.info(f"  Достигнут лимит кандидатов {candidate_limit}, досрочная остановка.")
         break
   finally:
     await session.close()
+
+  if strict:
+    log.info(f"  Строгая проверка ffprobe: кандидатов {len(working)} ...")
+    sem = asyncio.Semaphore(CONFIG["FFPROBE_WORKERS"])
+    async def verified(ch: Channel):
+      async with sem:
+        return ch if await ffprobe_verify(ch) else None
+    results = await asyncio.gather(*[verified(ch) for ch in working])
+    checked = [r for r in results if r is not None]
+    log.info(f"  ffprobe подтвердил {len(checked)}/{len(working)} каналов")
+    working = checked[:max_working]
 
   if len(working) < min_working:
     log.warning(f"  Найдено только {len(working)} рабочих (минимум {min_working})")
@@ -561,6 +602,7 @@ async def main():
   parser.add_argument("--no-m3usu", action="store_true", help="Отключить глубокий парсинг m3u.su")
   parser.add_argument("--verbose", "-v", action="store_true", help="Детальное логирование (каждый канал)")
   parser.add_argument("--no-head-first", action="store_true", help="Пропустить HEAD-запрос (сразу GET)")
+  parser.add_argument("--strict", action="store_true", help="Строгая проверка через ffprobe (только реально играющие каналы)")
   args = parser.parse_args()
 
   log = setup_logging(args.verbose)
@@ -570,6 +612,7 @@ async def main():
   CONFIG["MIN_WORKING"] = args.min_channels
   CONFIG["MAX_WORKING"] = args.max_channels
   CONFIG["OUTPUT_FILE"] = args.output
+  CONFIG["STRICT_CHECK"] = args.strict
 
   start = time.time()
   log.info("="*70)
@@ -595,7 +638,7 @@ async def main():
   log.info(f"После дедупликации: {len(unique)} уникальных URL")
 
   log.info(f"Начинаем проверку (до {args.max_channels} рабочих)...")
-  working = await smart_check(unique, args.max_channels, args.min_channels, args.workers)
+  working = await smart_check(unique, args.max_channels, args.min_channels, args.workers, strict=args.strict)
 
   working = await asyncio.to_thread(deduplicate_by_url, working)
 

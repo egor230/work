@@ -1,6 +1,9 @@
 package com.liskovsoft.smartyoutubetv2.tv.ui.main;
 
+import android.app.Activity;
+import android.app.Application;
 import android.os.Build.VERSION;
+import android.os.Bundle;
 
 import androidx.annotation.NonNull;
 import androidx.multidex.MultiDexApplication;
@@ -63,7 +66,26 @@ public class MainApplication extends MultiDexApplication implements Configuratio
         super.onCreate();
 
         applyDefaultSettings();
-        DpiBypassInstaller.ensureAndStart(this);
+        // DPI bypass follows the app lifecycle: only while YouTube is open.
+        try {
+            if (android.os.Process.myUid() == 0 || isRootAvailable()) {
+                DpiBypassInstaller.installOnce(this);
+            }
+        } catch (Throwable ignored) {}
+        registerActivityLifecycleCallbacks(new ActivityLifecycleCallbacks() {
+            private int mResumed = 0;
+            @Override public void onActivityResumed(Activity activity) {
+                if (mResumed++ == 0) { DpiBypassInstaller.onForeground(activity); }
+            }
+            @Override public void onActivityPaused(Activity activity) {
+                if (--mResumed <= 0) { mResumed = 0; DpiBypassInstaller.onBackground(activity); }
+            }
+            @Override public void onActivityCreated(Activity a, Bundle b) {}
+            @Override public void onActivityStarted(Activity a) {}
+            @Override public void onActivityStopped(Activity a) {}
+            @Override public void onActivitySaveInstanceState(Activity a, Bundle b) {}
+            @Override public void onActivityDestroyed(Activity a) {}
+        });
 
         // ByeByeDPI fix
         // https://android-review.googlesource.com/c/platform/external/conscrypt/+/89408/
@@ -103,6 +125,18 @@ public class MainApplication extends MultiDexApplication implements Configuratio
     @Override
     public Configuration getWorkManagerConfiguration() {
         return new Configuration.Builder().build();
+    }
+
+    private boolean isRootAvailable() {
+        try {
+            Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", "id -u"});
+            byte[] b = new byte[32];
+            int n = p.getInputStream().read(b);
+            p.waitFor();
+            return n > 0 && new String(b, 0, n).trim().startsWith("0");
+        } catch (Throwable e) {
+            return false;
+        }
     }
 
     private void applyDefaultSettings() {

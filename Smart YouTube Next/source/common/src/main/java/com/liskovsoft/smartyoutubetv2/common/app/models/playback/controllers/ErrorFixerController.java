@@ -16,6 +16,7 @@ import com.liskovsoft.smartyoutubetv2.common.exoplayer.selector.FormatItem;
 import com.liskovsoft.smartyoutubetv2.common.misc.BufferingDetector;
 import com.liskovsoft.smartyoutubetv2.common.misc.BufferingDetector.OnLongBuffering;
 import com.liskovsoft.smartyoutubetv2.common.misc.ErrorLog;
+import com.liskovsoft.smartyoutubetv2.common.misc.PlaybackStateHolder;
 import com.liskovsoft.smartyoutubetv2.common.prefs.PlayerData;
 import com.liskovsoft.smartyoutubetv2.common.prefs.PlayerTweaksData;
 import com.liskovsoft.smartyoutubetv2.common.utils.Utils;
@@ -128,6 +129,7 @@ public class ErrorFixerController extends BasePlayerController implements OnLong
 
     @Override
     public void onPlay() {
+        PlaybackStateHolder.setActive(true);
         mBufferingDetector.onStopBuffering();
         mSabrErrorFixAttempts = 0;
         mStuckHandler.removeCallbacks(mStuckWatchdog);
@@ -136,6 +138,7 @@ public class ErrorFixerController extends BasePlayerController implements OnLong
 
     @Override
     public void onPause() {
+        PlaybackStateHolder.setActive(false);
         mBufferingDetector.onStopBuffering();
     }
 
@@ -149,6 +152,7 @@ public class ErrorFixerController extends BasePlayerController implements OnLong
 
     @Override
     public void onFinish() {
+        PlaybackStateHolder.setActive(false);
         mBufferingDetector.reset();
         mStuckHandler.removeCallbacks(mStuckWatchdog);
     }

@@ -61,7 +61,7 @@ fi
 cd "{0}"
 
 #export MANGOHUD="1" # Включаем MangoHud
-export WINEPREFIX="/home/egor/PortProton/data/prefixes/DEFAULT" # winetricks dxvk
+#export WINEPREFIX="/home/egor/PortProton/data/prefixes/DEFAULT" # winetricks dxvk
 #DXVK_HUD=fps gamescope $GAMESCOPE_ARGS wine \"{1}\" -skipintro 1 # --dx11 -skipintro 1
 #gamescope $GAMESCOPE_ARGS -- env MANGOHUD=1 wine \"{1}\" -skipintro 1 # --dx11 -skipintro 1
 #gamescope $GAMESCOPE_ARGS -- wine \"{1}\" -skipintro 1 #--dx11 -skipintro 1

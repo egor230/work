@@ -108,6 +108,33 @@
 остаются последние 4 МиБ). Внешний `capture_errors.py` дублирует важные строки из
 `logcat` в `error_log.txt`.
 
+### 4.3.2 Фоновое воспроизведение (исправлено 21.11)
+Раньше при выходе на главный экран ТВ обход выключался, а фоновое
+воспроизведение продолжалось — поток обрывался (`Unknown part encountered:
+id=…, size=-50…`), видео тормозило и могли быть вылеты.
+
+Теперь добавлен `PlaybackStateHolder` (в common):
+- `ErrorFixerController.onPlay()` выставляет `playback active = true`;
+- `onPause()`/`onFinish()` — `false`;
+- `DpiBypassInstaller.onBackground()` при активном воспроизведении **не**
+  останавливает `zaprett`, а пишет в лог `app background, but playback active — keep nfqws`;
+- когда воспроизведение фактически заканчивается (или нажата пауза), слушатель
+  состояния останавливает обход.
+
+Проверено на приставке: играет → HOME → `zaprett is working` → пауза →
+`zaprett is stopped`.
+
+### 4.3.1 Обход включается только вместе с приложением (с 20.11)
+`DpiBypassInstaller` зарегистрирован как `ActivityLifecycleCallbacks`:
+- при первом `onActivityResumed` (вход в приложение) — `zaprett start`;
+- при последнем `onActivityPaused` (выход на главный экран ТВ) — `zaprett stop`.
+
+Проверено на приставке: `zaprett is working` → HOME → `zaprett is stopped` →
+снова открыли приложение → `zaprett is working`. В логе `autofix_errors.log`
+появляются записи `nfqws START (app foreground)` и `nfqws STOP (app background)`.
+Установка файлов/strategies делается один раз при первом запуске и при обновлении
+не перетирается.
+
 ### 4.3 DPI-обход (nfqws / zaprett) — главное решение сетевых ошибок
 В приложение встроен движок **nfqws 1 из zaprett 7.1.0** и ваша сохранённая стратегия
 **`general_alt12`** (из `/home/egor/Downloads/zapret-discord-youtube-linux`).
@@ -127,6 +154,18 @@ payload `tls_clienthello_www_sferum_ru.bin` + `stun.bin`.
 
 ⚠️ Обход системный (iptables/NFQUEUE), требует root. Если root недоступен — приложение
 работает как обычно (тихий fallback).
+
+### 4.5 Wink «недоступно на этой территории» (OTT Navigator)
+Плашка Wink появляется, если провайдер отдает поток с геоблоком и плеер шлет
+«не тот» User-Agent. Лечение (найдено в FAQ OTT Navigator и тематических обсуждениях):
+у активного плейлиста в `Свойствах провайдера` выставить **User-Agent**:
+```
+WINK/1.28.2 (AndroidTV/9) HlsWinkPlayer
+```
+На приставке это выставлено напрямую в
+`studio.scillarium.ottnavigator_preferences.xml` у провайдера `все` (id 232303082),
+после чего приложение перезапущено. Альтернативные значения, которые тоже
+упоминаются: `IPTV` (для стоп-каналов в РФ) и `IPTVPLAYER`.
 
 ### 4.4 Другие исправления
 - Имя приложения и `browse_title` → **Smart YouTube Next TV** (в `values/strings.xml` и `ststable`).
