@@ -785,7 +785,7 @@ public class PlayerData extends DataChangeBase implements PlayerConstants, Profi
         String[] split = Helpers.splitData(data);
 
         int yellowOnSemiBgSubIdx = 4;
-        mOKButtonBehavior = Helpers.parseInt(split, 0, OK_ONLY_UI);
+        mOKButtonBehavior = Helpers.parseInt(split, 0, OK_UI_AND_PAUSE);
         mUiHideTimeoutSec = Helpers.parseInt(split, 1, 3);
         // mIsAbsoluteDateEnabled
         mSeekPreviewMode = Helpers.parseInt(split, 3, SEEK_PREVIEW_SINGLE);

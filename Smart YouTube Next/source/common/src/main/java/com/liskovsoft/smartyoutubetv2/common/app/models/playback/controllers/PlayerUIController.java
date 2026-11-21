@@ -732,22 +732,12 @@ public class PlayerUIController extends BasePlayerController {
         boolean controlsShown = getPlayer().isOverlayShown();
 
         if (KeyHelpers.isConfirmKey(keyCode) && !controlsShown) {
-            switch (getPlayerData().getOKButtonBehavior()) {
-                case PlayerData.OK_ONLY_UI:
-                    getPlayer().showOverlay(true);
-                    return true; // don't show ui
-                case PlayerData.OK_UI_AND_PAUSE:
-                    // NOP
-                    break;
-                case PlayerData.OK_ONLY_PAUSE:
-                    getPlayer().setPlayWhenReady(!getPlayer().getPlayWhenReady());
-                    return true; // don't show ui
-                case PlayerData.OK_TOGGLE_SPEED:
-                    getMainController().onButtonClicked(R.id.action_video_speed, getPlayer().getButtonState(R.id.action_video_speed));
-                    float speed = getPlayerData().getSpeed();
-                    MessageHelpers.showMessage(getContext(), String.format("%sx", speed));
-                    return true;
-            }
+            // OK shows the player controls AND pauses/resumes the video on this build.
+            // Upstream default is OK_ONLY_UI (panel only), and the stored preference
+            // overrides any default change — so handle both actions here explicitly.
+            getPlayer().showOverlay(true);
+            getPlayer().setPlayWhenReady(!getPlayer().getPlayWhenReady());
+            return true; // handled: don't let the framework re-show the ui
         }
 
         return false;
