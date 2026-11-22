@@ -38,17 +38,41 @@ public class ErrorFixerController extends BasePlayerController implements OnLong
     private final BufferingDetector mBufferingDetector = new BufferingDetector(this);
     private VideoLoaderController mVideoLoaderController;
     private final android.os.Handler mStuckHandler = new android.os.Handler(android.os.Looper.getMainLooper());
-    private static final long STUCK_PLAYBACK_TIMEOUT_MS = 30_000;
-    private final Runnable mStuckWatchdog = () -> {
-        boolean playing = getPlayer() != null && getPlayer().getPositionMs() > 0;
-        if (!playing && !getPlayerTweaksData().isNetworkErrorFixingDisabled()) {
-            Log.w(TAG, "Auto-fix: playback stuck (no error). Switching YouTube client…");
-            MessageHelpers.showLongMessage(getContext(), "Auto-fix: stalled client, switching…");
-            ErrorLog.log(getContext(), TAG, "watchdog: stalled playback, switching client", null);
-            YouTubeServiceManager.instance().switchNextClientNow();
-            mVideoLoaderController.reloadVideo();
+    private static final long STUCK_PLAYBACK_TIMEOUT_MS = 12_000;
+    private int mStuckCount = 0;
+    private long mLastWatchdogPosition = -1;
+    private int mPoTokenRetries = 0;
+    private final Runnable mStuckWatchdog = () -> checkStalledPlayback();
+
+    private void checkStalledPlayback() {
+        // isPlaying() stays true while BUFFERING, and position may be restored from
+        // watch history. Detect a real stall by checking that the position advanced.
+        long pos = getPlayer() != null ? getPlayer().getPositionMs() : -1;
+        boolean progressed = mLastWatchdogPosition < 0 || pos > mLastWatchdogPosition + 500;
+        mLastWatchdogPosition = pos;
+        if (!progressed && !getPlayerTweaksData().isNetworkErrorFixingDisabled()) {
+            mStuckCount++;
+            if (mStuckCount == 1) {
+                // First: ask YouTube for a fresh player response (new CDN node).
+                Log.w(TAG, "Auto-fix: playback stuck. Refreshing player response…");
+                ErrorLog.log(getContext(), TAG, "watchdog: stalled playback, refreshing player response", null);
+                YouTubeServiceManager.instance().invalidateFormatCache();
+                mVideoLoaderController.reloadVideo();
+            } else {
+                Log.w(TAG, "Auto-fix: playback still stuck. Switching YouTube client…");
+                MessageHelpers.showLongMessage(getContext(), "Auto-fix: stalled client, switching…");
+                ErrorLog.log(getContext(), TAG, "watchdog: still stalled, switching client", null);
+                YouTubeServiceManager.instance().switchNextClientNow();
+                mVideoLoaderController.reloadVideo();
+                mStuckCount = 0;
+            }
         }
-    };
+        // Keep watching: ExoPlayer may swallow chunk errors, so the only reliable
+        // signal is that the position stops advancing.
+        mStuckHandler.removeCallbacks(mStuckWatchdog);
+        mStuckHandler.postDelayed(mStuckWatchdog, STUCK_PLAYBACK_TIMEOUT_MS);
+    }
+
     private String mSabrErrorFixVideoId;
     private int mSabrErrorFixAttempts;
 
@@ -117,6 +141,10 @@ public class ErrorFixerController extends BasePlayerController implements OnLong
     @Override
     public void onBuffering() {
         mBufferingDetector.onStartBuffering();
+        // Reschedule the stuck detector on every buffering event: a video that
+        // never leaves BUFFERING must trigger recovery even without onEngineError.
+        mStuckHandler.removeCallbacks(mStuckWatchdog);
+        mStuckHandler.postDelayed(mStuckWatchdog, STUCK_PLAYBACK_TIMEOUT_MS);
     }
 
     @Override
@@ -132,6 +160,9 @@ public class ErrorFixerController extends BasePlayerController implements OnLong
         PlaybackStateHolder.setActive(true);
         mBufferingDetector.onStopBuffering();
         mSabrErrorFixAttempts = 0;
+        mStuckCount = 0;
+        mPoTokenRetries = 0;
+        mLastWatchdogPosition = -1;
         mStuckHandler.removeCallbacks(mStuckWatchdog);
         resetAutoDnsStep();
     }
@@ -145,6 +176,9 @@ public class ErrorFixerController extends BasePlayerController implements OnLong
     @Override
     public void onNewVideo(Video item) {
         mBufferingDetector.start();
+        mStuckCount = 0;
+        mPoTokenRetries = 0;
+        mLastWatchdogPosition = -1;
         mStuckHandler.removeCallbacks(mStuckWatchdog);
         mStuckHandler.postDelayed(mStuckWatchdog, STUCK_PLAYBACK_TIMEOUT_MS);
         resetAutoDnsStep();
@@ -330,7 +364,21 @@ public class ErrorFixerController extends BasePlayerController implements OnLong
             restartEngine = false;
         } else if (type == PlayerEventListener.ERROR_TYPE_UNEXPECTED) {
             if (error instanceof SabrPoTokenError) {
-                YouTubeServiceManager.instance().switchNextClient();
+                if (String.valueOf(errorContent).contains("PENDING") && mPoTokenRetries < 2) {
+                    mPoTokenRetries++;
+                    restartEngine = false;
+                    showMessage = false;
+                    ErrorLog.log(getContext(), TAG, "PoToken PENDING: retry " + mPoTokenRetries + " with fresh response", null);
+                    final int retryNo = mPoTokenRetries;
+                    new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                        ErrorLog.log(getContext(), TAG, "PoToken retry " + retryNo + ": invalidating format cache", null);
+                        YouTubeServiceManager.instance().invalidateFormatCache();
+                        mVideoLoaderController.reloadVideo();
+                    }, 4_000);
+                } else {
+                    mPoTokenRetries = 0;
+                    YouTubeServiceManager.instance().switchNextClient();
+                }
             } else if (error instanceof NullPointerException) {
                 // SABR extractor throws NPE on subtitle error
                 // NOTE: the engine should be restarted
@@ -485,7 +533,33 @@ public class ErrorFixerController extends BasePlayerController implements OnLong
         long last = autoDnsPrefs().getLong(KEY_DNS_LAST_MS, 0);
         if (now - last < AUTO_DNS_RETRY_DELAY_MS) { return; }
         int step = autoDnsPrefs().getInt(KEY_DNS_STEP, 0);
-        if (step == DNS_FALLBACK_ORDER.length) {
+
+        // NEW step 0: get a fresh player response before touching DNS/codec/client.
+        // This returns a new googlevideo CDN node and fixes node-specific timeouts.
+        if (step == 0) {
+            ErrorLog.log(getContext(), TAG, "step 0: refreshing player response (new CDN node)", null);
+            YouTubeServiceManager.instance().invalidateFormatCache();
+            mVideoLoaderController.reloadVideo();
+            setAutoDnsStep(1);
+            return;
+        }
+
+        // Steps 1..3: DNS fallback
+        if (step <= DNS_FALLBACK_ORDER.length) {
+            int dnsType = DNS_FALLBACK_ORDER[step - 1];
+            String dnsName = dnsType == PlayerTweaksData.DNS_TYPE_GOOGLE ? "Google (8.8.8.8)" :
+                    dnsType == PlayerTweaksData.DNS_TYPE_IPV4 ? "IPv4 (system)" : "System default";
+            getPlayerTweaksData().setPlayerDataSource(PlayerTweaksData.PLAYER_DATA_SOURCE_OKHTTP);
+            getPlayerTweaksData().setPreferredDnsType(dnsType);
+            setAutoDnsStep(step + 1);
+            MessageHelpers.showLongMessage(getContext(), "Auto-fix: DNS -> " + dnsName + ". Restarting app…");
+            ErrorLog.log(getContext(), TAG, "step " + step + ": DNS -> " + dnsName, null);
+            Utils.restartTheApp(getContext());
+            return;
+        }
+
+        // Step 4: H.264 + software decoder
+        if (step == DNS_FALLBACK_ORDER.length + 1) {
             MessageHelpers.showLongMessage(getContext(), "Auto-fix: forcing H.264 codec (SW decoder)…");
             ErrorLog.log(getContext(), TAG, "step " + step + ": forcing H.264 + SW decoder", null);
             getPlayerData().setTempVideoFormat(FormatItem.VIDEO_HD_AVC_30);
@@ -494,23 +568,13 @@ public class ErrorFixerController extends BasePlayerController implements OnLong
             mVideoLoaderController.restartEngine();
             return;
         }
-        if (step > DNS_FALLBACK_ORDER.length) {
-            MessageHelpers.showLongMessage(getContext(), "Auto-fix: codec/DNS exhausted, switching YouTube client…");
-            ErrorLog.log(getContext(), TAG, "step " + step + ": switching client", null);
-            YouTubeServiceManager.instance().switchNextClientNow();
-            setAutoDnsStep(0);
-            mVideoLoaderController.restartEngine();
-            return;
-        }
-        int dnsType = DNS_FALLBACK_ORDER[step];
-        String dnsName = dnsType == PlayerTweaksData.DNS_TYPE_GOOGLE ? "Google (8.8.8.8)" :
-                dnsType == PlayerTweaksData.DNS_TYPE_IPV4 ? "IPv4 (system)" : "System default";
-        getPlayerTweaksData().setPlayerDataSource(PlayerTweaksData.PLAYER_DATA_SOURCE_OKHTTP);
-        getPlayerTweaksData().setPreferredDnsType(dnsType);
-        setAutoDnsStep(step + 1);
-        MessageHelpers.showLongMessage(getContext(), "Auto-fix: DNS -> " + dnsName + ". Restarting app…");
-        ErrorLog.log(getContext(), TAG, "step " + step + ": DNS -> " + dnsName, null);
-        Utils.restartTheApp(getContext());
+
+        // Step 5: switch YouTube client and start over
+        MessageHelpers.showLongMessage(getContext(), "Auto-fix: codec/DNS exhausted, switching YouTube client…");
+        ErrorLog.log(getContext(), TAG, "step " + step + ": switching client", null);
+        YouTubeServiceManager.instance().switchNextClientNow();
+        setAutoDnsStep(0);
+        mVideoLoaderController.restartEngine();
     }
 
     private android.content.SharedPreferences autoDnsPrefs() {

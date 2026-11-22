@@ -51,7 +51,15 @@ public final class ErrorLog {
         } catch (Throwable ex) { Log.e(TAG, "log failed: " + ex.getMessage()); }
     }
     private static String signature(String tag, String message, Throwable error) {
-        StringBuilder sb = new StringBuilder(tag).append('|');
+        // A unique incident = date + videoId + exception class + top stack frames.
+        // Same error in the same video on the same day is logged only once, but a
+        // different video or a different day counts as a NEW error.
+        StringBuilder sb = new StringBuilder();
+        sb.append(new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date())).append('|');
+        java.util.regex.Matcher vm = java.util.regex.Pattern.compile("video=([A-Za-z0-9_-]+)")
+                .matcher(String.valueOf(message));
+        if (vm.find()) sb.append("vid=").append(vm.group(1)).append('|');
+        sb.append(tag).append('|');
         if (error != null) {
             sb.append(error.getClass().getName());
             StackTraceElement[] st = error.getStackTrace();
