@@ -16,15 +16,38 @@
 */
 importScripts("config.js");
 
-// === efyt-backup: auto-restore config-backup.json on install/update ===
-// Reads config-backup.json from the extension folder (if present) and
-// merges it into chrome.storage.local. In unpacked mode the file is
-// directly readable via chrome.runtime.getURL().
+// === efyt-defaults: настройки из Яндекс.Браузера по умолчанию (§14) ===
+// values вшиты в config.js (defaultSettings) и работают даже в CRX-сборке,
+// где config-backup.json исключён из архива. Досыпаем только ОТСУТСТВУЮЩИЕ
+// ключи — пользовательские правки при обновлении не перетираются.
+(async function _efytSeedDefaults(){
+  try {
+    const stored = await chrome.storage.local.get(null);
+    const missing = {};
+    for (const k in defaultSettings) {
+      if (!Object.hasOwn(stored, k)) missing[k] = defaultSettings[k];
+    }
+    if (Object.keys(missing).length > 0) {
+      // свежая таблица скоростей не должна выглядеть как «ручная правка файла»
+      if (Object.hasOwn(missing, "channelspeeds") && !Object.hasOwn(stored, "channelspeedsUpdatedAt")) {
+        missing.channelspeedsUpdatedAt = Date.now();
+      }
+      await chrome.storage.local.set(missing);
+      console.info(`[efyt-defaults] seeded ${Object.keys(missing).length} keys: ${Object.keys(missing).join(", ")}`);
+    }
+  } catch (e) {
+    console.warn("[efyt-defaults] seed failed:", e.message);
+  }
+})();
+
+// === efyt-backup: auto-restore config-backup.json (unpacked-режим) ===
+// Архив из папки расширения (если есть) восстанавливается поверх значений
+// по умолчанию — прежнее поведение сохранено.
 (async function _efytAutoRestore(){
   try {
     const url = chrome.runtime.getURL("config-backup.json");
     const res = await fetch(url);
-    if (!res.ok) return; // file not found — normal on first install
+    if (!res.ok) return; // file not found — normal in CRX build
     const data = await res.json();
     const restore = {};
     for (const k in data) if (k !== "_meta") restore[k] = data[k];
@@ -33,7 +56,7 @@ importScripts("config.js");
       console.info(`[efyt-backup] auto-restored ${Object.keys(restore).length} keys from config-backup.json`);
     }
   } catch (e) {
-    console.info("[efyt-backup] no config-backup.json found (first install) — skip:", e.message);
+    console.info("[efyt-backup] no config-backup.json found — skip:", e.message);
   }
 })();
 
@@ -73,7 +96,7 @@ chrome.runtime.getManifest().version,active:!0}),chrome.storage.local.set({date:
 var e="blur brightness contrast grayscale huerotate invert saturate sepia".split(" ");e.forEach(d=>{a[d]&&("huerotate"===d?b.videofilters.rotation=a[d]:"invert"===d?b.videofilters.inversion=a[d]:"saturate"===d?b.videofilters.saturation=a[d]:b.videofilters[d]=a[d])});a.backgroundcolor&&(b.backdropcolor=a.backgroundcolor,e.push("backgroundcolor"));a.backgroundopacity&&(b.backdropopacity=a.backgroundopacity,e.push("backgroundopacity"));a.customcssrules&&(b.customcss=a.customcssrules,e.push("customcssrules"));
 await chrome.storage.local.remove(e);a.miniplayersize&&(b.miniplayersize=a.miniplayersize.replace("_",""));a.miniplayerposition&&(b.miniplayerposition=a.miniplayerposition.replace("_",""));a.themevariant&&(b.vendorthemevariant=a.themevariant.replace("-youtube-light",""),b.themevariant=f.themevariant)}/3\.0\.1[0-4]/.test(c.previousVersion)&&Array.isArray(a.controls)&&0<a.controls.length&&(b.controls=[...a.controls,"experiments"]);c.previousVersion!==chrome.runtime.getManifest().version&&(b.reload=
 !0,b.previousversion=c.previousVersion,b.update=Date.now(),/3\.0\.1[0-4]/.test(c.previousVersion)&&(b.whatsnew=!0));0<Object.keys(b).length&&chrome.storage.local.set(b)}});chrome.runtime.onMessage.addListener(async(c,a)=>{switch(c.request){case "pop-up-player":chrome.windows.create(c.options,b=>{chrome.windows.update(b.id,{drawAttention:!0})});break;case "options-page":chrome.runtime.openOptionsPage();break;case "whats-new":await chrome.storage.local.set({whatsnew:!1});chrome.tabs.create({url:"html/whats-new.html",
-active:!0});break;case "dark-theme-off":chrome.storage.local.set({darktheme:!1});break;case "open-options":chrome.runtime.openOptionsPage();break;case "keyboard-shortcuts":chrome.tabs.create({url:"https://www.mrfdev.com/youtube-keyboard-shortcuts",active:!0});break;case "configure-keyboard-shortcuts":chrome.tabs.create({url:"chrome://extensions/shortcuts",active:!0})}});chrome.storage.onChanged.addListener(c=>{for(const a in c)void 0!==c[a].newValue&&"customscript"!==a&&"popuplayersize"!==a&&chrome.tabs.query({url:"*://www.youtube.com/*"},b=>{b.forEach(e=>
+active:!0});break;case "dark-theme-off":chrome.storage.local.set({darktheme:!1});break;case "open-options":chrome.runtime.openOptionsPage();break;case "efyt-error-sync":efytErrorLogSchedule();break;case "keyboard-shortcuts":chrome.tabs.create({url:"https://www.mrfdev.com/youtube-keyboard-shortcuts",active:!0});break;case "configure-keyboard-shortcuts":chrome.tabs.create({url:"chrome://extensions/shortcuts",active:!0})}});chrome.storage.onChanged.addListener(c=>{for(const a in c)void 0!==c[a].newValue&&"customscript"!==a&&"popuplayersize"!==a&&chrome.tabs.query({url:"*://www.youtube.com/*"},b=>{b.forEach(e=>
 {chrome.tabs.sendMessage(e.id,{message:"preference-changed",name:a,value:c[a].newValue,oldvalue:c[a].oldValue}).catch(()=>{})})})});chrome.commands.onCommand.addListener(c=>{var a={"c070-toggle-loop":"loop","c080-stop-video":"stop","c090-reverse-playlist":"reverse-playlist","c100-toggle-volume-booster":"volume-booster","c130-toggle-annotations":"cards-end-screens","c140-toggle-cinema-mode":"cinema-mode","c150-toggle-player-size":"size","c160-center-video-player":"size","c170-pop-up-player":"pop-up-player","c180-decrease-speed":"speed-minus",
 "c190-increase-speed":"speed-plus","c200-default-speed":"speed","c210-normal-speed":"speed","c220-toggle-video-filters":"video-filters","c230-flip-horizontally":"flip-horizontally","c240-flip-vertically":"flip-vertically","c250-take-screenshot":"screenshot","c260-keyboard-shortcuts":"keyboard-shortcuts","c270-custom-script":"custom-script"};switch(c){case "c000-options-page":chrome.runtime.openOptionsPage();break;case "c020-theme-youtube-dark":chrome.storage.local.set({darktheme:!0,theme:"default-dark"});
 break;case "c025-theme-enhanced-dark":chrome.storage.local.set({darktheme:!0,theme:"enhanced-dark"});break;case "c030-theme-youtube-deep-dark":chrome.storage.local.set({darktheme:!0,theme:"youtube-deep-dark"});break;case "c040-theme-youtube-deep-dark-custom":chrome.storage.local.set({darktheme:!0,theme:"youtube-deep-dark-custom"});break;case "c050-theme-custom-theme":chrome.storage.local.get({customtheme:f.customtheme},b=>{chrome.storage.local.set({customtheme:!b.customtheme})});break;default:chrome.tabs.query({lastFocusedWindow:!0,
@@ -271,3 +294,94 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
 chrome.runtime.onStartup.addListener(() => { efytSpdJsonSig = ""; setTimeout(efytSpdJsonSync, 800); });
 chrome.runtime.onInstalled.addListener(() => { efytSpdJsonSig = ""; setTimeout(efytSpdJsonSync, 800); });
+
+// === efyt-errorlog: лог ошибок воспроизведения в JSON-файл (§15) ===
+//
+// Дедупликация сделана в js/error-logger-bridge.js: повторной записи в
+// chrome.storage.local.errorlog просто не возникает. Здесь только экспорт
+// уже уникального лога на диск тем же native host'ом, что и channelspeeds
+// (com.efyt.channelspeeds), с fallback через chrome.downloads.
+const EFYT_ERR_HOST = "com.efyt.channelspeeds";
+const EFYT_ERR_FALLBACK_REL = "расширения/Enhancer for YouTube/errorlog.json";
+
+let efytErrBusy = !1, efytErrDirty = !1, efytErrTimer = 0;
+
+function efytErrorLogBuild(entries) {
+  const now = new Date().toISOString();
+  return JSON.stringify({
+    _meta: {
+      about: "Лог ошибок воспроизведения YouTube — Enhancer for YouTube (кастом, §15)",
+      note: "Одна запись на уникальную ошибку (тип+код+сообщение+videoId). Повторы не добавляются.",
+      generatedAt: now,
+      count: entries.length
+    },
+    entries: entries
+  }, null, 2) + "\n";
+}
+
+function efytErrHostRequest(msg) {
+  return new Promise((resolve, reject) => {
+    let settled = !1, port;
+    try { port = chrome.runtime.connectNative(EFYT_ERR_HOST); }
+    catch (e) { reject(e); return; }
+    const t = setTimeout(() => {
+      if (settled) return;
+      settled = !0;
+      try { port.disconnect(); } catch (e) {}
+      reject(new Error("host timeout"));
+    }, 5000);
+    port.onMessage.addListener(m => {
+      if (settled) return;
+      settled = !0;
+      clearTimeout(t);
+      try { port.disconnect(); } catch (e) {}
+      resolve(m);
+    });
+    port.onDisconnect.addListener(() => {
+      if (settled) return;
+      settled = !0;
+      clearTimeout(t);
+      reject(new Error(chrome.runtime.lastError ? chrome.runtime.lastError.message : "host disconnected"));
+    });
+    port.postMessage(msg);
+  });
+}
+
+async function efytErrorLogSync() {
+  if (efytErrBusy) { efytErrDirty = !0; return; }
+  efytErrBusy = !0;
+  try {
+    const st = await chrome.storage.local.get({ errorlog: [] });
+    const entries = Array.isArray(st.errorlog) ? st.errorlog : [];
+    const data = efytErrorLogBuild(entries);
+
+    try {
+      const ping = await efytErrHostRequest({ type: "ping" });
+      if (ping && ping.ok && ping.path) {
+        // тот же каталог, что и channelspeeds.json, но файл errorlog.json
+        const dir = String(ping.path).replace(/[^/\\]+$/, "");
+        const res = await efytErrHostRequest({ type: "write", path: dir + "errorlog.json", data: data });
+        if (res && res.ok) return;
+      }
+    } catch (e) { /* хост не установлен — fallback */ }
+
+    const url = "data:application/json;charset=utf-8," + encodeURIComponent(data);
+    chrome.downloads.download({ url, filename: EFYT_ERR_FALLBACK_REL, conflictAction: "overwrite", saveAs: !1 },
+      () => void chrome.runtime.lastError);
+  } finally {
+    efytErrBusy = !1;
+    if (efytErrDirty) { efytErrDirty = !1; setTimeout(efytErrorLogSync, 300); }
+  }
+}
+
+function efytErrorLogSchedule() {
+  if (!efytErrTimer) efytErrorLogSync();
+  clearTimeout(efytErrTimer);
+  efytErrTimer = setTimeout(() => { efytErrTimer = 0; efytErrorLogSync(); }, 1500);
+}
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && changes.errorlog) efytErrorLogSchedule();
+});
+chrome.runtime.onStartup.addListener(() => setTimeout(efytErrorLogSync, 1000));
+chrome.runtime.onInstalled.addListener(() => setTimeout(efytErrorLogSync, 1000));

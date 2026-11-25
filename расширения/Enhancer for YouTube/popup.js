@@ -28,6 +28,15 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
+  // === efyt-errorlog: просмотр лога ошибок воспроизведения ===
+  var logBtn = document.getElementById('open-errorlog');
+  if (logBtn) {
+    logBtn.addEventListener('click', function () {
+      chrome.tabs.create({ url: chrome.runtime.getURL('html/errorlog.html') });
+      window.close();
+    });
+  }
+
   // === efyt-backup: save/restore ===
   var status = document.getElementById('backup-status');
   function setStatus(msg) {

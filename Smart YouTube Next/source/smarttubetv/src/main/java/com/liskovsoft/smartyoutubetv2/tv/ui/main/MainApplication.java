@@ -68,6 +68,9 @@ public class MainApplication extends MultiDexApplication implements Configuratio
         applyDefaultSettings();
         // DPI bypass follows the app lifecycle: only while YouTube is open.
         DpiBypassInstaller.initialize(this);
+        // Start the built-in bypass as early as possible: the video may be opened
+        // by an external intent immediately, before the first Activity resumes.
+        DpiBypassInstaller.start(this);
         registerActivityLifecycleCallbacks(new ActivityLifecycleCallbacks() {
             private int mResumed = 0;
             @Override public void onActivityResumed(Activity activity) {

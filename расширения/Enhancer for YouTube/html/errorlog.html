@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Лог ошибок YouTube — Enhancer</title>
+  <style>
+    body { margin: 0; padding: 16px; background: #181818; color: #eee;
+           font: 13px/1.5 system-ui, sans-serif; }
+    h1 { font-size: 18px; margin: 0 0 12px; }
+    .bar { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+    button { border: 1px solid #555; background: #333; color: #eee;
+             padding: 5px 10px; border-radius: 4px; cursor: pointer;
+             font: 12px/1.4 system-ui, sans-serif; }
+    button:hover { background: #444; }
+    #status { color: #aaa; font-size: 12px; }
+    .entry { border: 1px solid #333; border-left: 3px solid #ff0033;
+             background: #202020; padding: 8px 10px; margin-bottom: 8px; border-radius: 4px; }
+    .entry .head { color: #ff6b81; font-weight: 600; }
+    .entry .meta { color: #999; font-size: 11px; margin-top: 3px; word-break: break-all; }
+    .entry .msg { margin-top: 4px; color: #ddd; word-break: break-word; }
+    .empty { color: #888; padding: 20px 0; }
+    code { color: #9ad; }
+  </style>
+</head>
+<body>
+  <h1>Лог ошибок воспроизведения</h1>
+  <div class="bar">
+    <button id="refresh" type="button">Обновить</button>
+    <button id="export" type="button">Записать в файл</button>
+    <button id="clear" type="button">Очистить</button>
+    <span id="status"></span>
+  </div>
+  <div id="list" class="empty">Загрузка…</div>
+  <script src="../js/errorlog.js"></script>
+</body>
+</html>
