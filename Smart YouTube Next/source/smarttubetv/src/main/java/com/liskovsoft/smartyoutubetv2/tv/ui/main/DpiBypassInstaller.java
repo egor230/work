@@ -22,6 +22,10 @@ public final class DpiBypassInstaller {
     private static final String DATA = "/storage/emulated/0/zaprett";
     private static final String BIN = MODULE + "/system/bin/zaprett";
     private static final String LIBDIR = MODULE + "/system/lib/arm64-v8a";
+    // SELinux forbids the nfqws daemon from reading lists under /storage/emulated/0.
+    // Keep a copy inside the Magisk module dir, which the daemon can read.
+    private static final String MODULE_LISTS = MODULE + "/lists";
+    private static final String MODULE_BIN = MODULE + "/bin";
 
     private static volatile boolean sAppForeground = true;
     // All root shell work runs on a background thread. Running `su` on the main
@@ -55,6 +59,35 @@ public final class DpiBypassInstaller {
         });
     }
 
+    private static void shQuiet(String command) {
+        try { Runtime.getRuntime().exec(suArgs(command)).waitFor(); } catch (Throwable ignored) {}
+    }
+
+    /** nfqws cannot read /storage/emulated/0 under Android SELinux: copy lists to module dir. */
+    private static void ensureAccessiblePaths() {
+        try {
+            sh("mkdir -p " + MODULE_LISTS + " " + MODULE_BIN);
+            sh("cp " + DATA + "/files/lists/*.txt " + MODULE_LISTS + "/");
+            sh("cp " + DATA + "/files/bin/*.bin " + MODULE_BIN + "/");
+            sh("chmod -R 755 " + MODULE_LISTS + " " + MODULE_BIN);
+            String strat = DATA + "/strategies/general_alt12.txt";
+            sh("sed -i 's#" + DATA + "/files/lists#" + MODULE_LISTS + "#g; s#"
+                    + DATA + "/files/bin#" + MODULE_BIN + "#g' " + strat);
+        } catch (Throwable e) {
+            ErrorLog.log(null, TAG, "cannot prepare nfqws lists", e);
+        }
+    }
+
+    /** Same as PC zapret: don't re-queue already marked fake packets. */
+    private static void ensureFirewall() {
+        String rules = runRootWithOutput("iptables -t mangle -S");
+        if (rules != null && rules.contains("0x40000000")) return;
+        shQuiet("iptables -t mangle -A PREROUTING -m mark ! --mark 0x40000000/0x40000000 "
+                + "-m conntrack --ctstate NEW -j NFQUEUE --queue-num 200 --queue-bypass");
+        shQuiet("iptables -t mangle -A POSTROUTING -m mark ! --mark 0x40000000/0x40000000 "
+                + "-m conntrack --ctstate NEW -j NFQUEUE --queue-num 200 --queue-bypass");
+    }
+
     public static void start(final Context context) {
         sExecutor.execute(() -> {
             try {
@@ -63,6 +96,7 @@ public final class DpiBypassInstaller {
                     return;
                 }
                 installOnce(context);
+                ensureAccessiblePaths();
                 if (sRunning) return; // already started, avoid another `su` roundtrip
                 String status = runRootWithOutput("LD_LIBRARY_PATH=" + LIBDIR + " " + BIN + " status");
                 if (status != null && status.contains("working")) {
@@ -70,6 +104,7 @@ public final class DpiBypassInstaller {
                     return;
                 }
                 String out = runRootWithOutput("LD_LIBRARY_PATH=" + LIBDIR + " " + BIN + " start");
+                ensureFirewall();
                 sRunning = true;
                 ErrorLog.log(context, TAG, "nfqws START (app foreground): " + out.trim(), null);
             } catch (Throwable e) {
@@ -140,11 +175,22 @@ public final class DpiBypassInstaller {
 
         // root part (Magisk module paths)
         sh("mkdir -p " + MODULE + "/system/bin " + LIBDIR);
-        sh("cp " + new File(staging, "zaprett-aarch64").getAbsolutePath() + " " + BIN);
-        sh("chmod 755 " + BIN);
-        sh("cp " + new File(staging, "libnfqws.so").getAbsolutePath() + " " + LIBDIR + "/libnfqws.so");
-        sh("cp " + new File(staging, "libnfqws2.so").getAbsolutePath() + " " + LIBDIR + "/libnfqws2.so");
-        sh("chmod 644 " + LIBDIR + "/libnfqws.so " + LIBDIR + "/libnfqws2.so");
+        boolean isX86 = android.os.Build.CPU_ABI != null && android.os.Build.CPU_ABI.startsWith("x86");
+        if (isX86) {
+            // x86_64 emulator/root devices: static nfqws + a tiny `zaprett` wrapper
+            // that accepts the same start/stop/status commands as the arm64 binary.
+            sh("cp " + new File(staging, "nfqws-x86_64").getAbsolutePath() + " "
+                    + MODULE + "/system/bin/nfqws");
+            sh("chmod 755 " + MODULE + "/system/bin/nfqws");
+            sh("cp " + new File(staging, "zaprett-x86_64").getAbsolutePath() + " " + BIN);
+            sh("chmod 755 " + BIN);
+        } else {
+            sh("cp " + new File(staging, "zaprett-aarch64").getAbsolutePath() + " " + BIN);
+            sh("chmod 755 " + BIN);
+            sh("cp " + new File(staging, "libnfqws.so").getAbsolutePath() + " " + LIBDIR + "/libnfqws.so");
+            sh("cp " + new File(staging, "libnfqws2.so").getAbsolutePath() + " " + LIBDIR + "/libnfqws2.so");
+            sh("chmod 644 " + LIBDIR + "/libnfqws.so " + LIBDIR + "/libnfqws2.so");
+        }
 
         marker.createNewFile();
         ErrorLog.log(context, TAG, "installed nfqws + general_alt12 strategy", null);
@@ -191,13 +237,44 @@ public final class DpiBypassInstaller {
         }
     }
 
+    private static volatile Boolean sSuStyle = null; // true = Magisk `su -c`, false = AOSP `su 0 sh -c`
+
+
+    private static String suProbe(String[] argv) {
+        try {
+            Process p = Runtime.getRuntime().exec(argv);
+            java.io.InputStream in = p.getInputStream();
+            java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+            byte[] buf = new byte[256];
+            int r;
+            while ((r = in.read(buf)) != -1) bos.write(buf, 0, r);
+            p.waitFor();
+            return bos.toString("UTF-8").trim();
+        } catch (Throwable e) {
+            return "";
+        }
+    }
+
+    private static String[] suArgs(String command) {
+        if (sSuStyle == null) {
+            sSuStyle = "0".equals(suProbe(new String[]{"su", "-c", "id -u"}));
+            if (!sSuStyle && "0".equals(suProbe(new String[]{"su", "0", "sh", "-c", "id -u"}))) {
+                sSuStyle = Boolean.FALSE;
+            }
+        }
+        if (sSuStyle) {
+            return new String[]{"su", "-c", command};
+        }
+        return new String[]{"su", "0", "sh", "-c", command};
+    }
+
     private static boolean hasRoot() {
         return runRootWithOutput("id -u").trim().equals("0");
     }
 
     private static boolean runRoot(String command) {
         try {
-            Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", command});
+            Process p = Runtime.getRuntime().exec(suArgs(command));
             return p.waitFor() == 0;
         } catch (Throwable e) {
             return false;
@@ -206,7 +283,7 @@ public final class DpiBypassInstaller {
 
     private static String runRootWithOutput(String command) {
         try {
-            Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", command});
+            Process p = Runtime.getRuntime().exec(suArgs(command));
             byte[] buf = new byte[4096];
             StringBuilder sb = new StringBuilder();
             InputStream in = p.getInputStream();
@@ -222,7 +299,7 @@ public final class DpiBypassInstaller {
     }
 
     private static void sh(String command) throws Exception {
-        Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", command});
+        Process p = Runtime.getRuntime().exec(suArgs(command));
         int code = p.waitFor();
         if (code != 0) {
             throw new Exception("shell failed: " + command + " (code " + code + ")");

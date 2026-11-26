@@ -8,7 +8,6 @@ TIFF/изображения, комиксы (CBZ/CBR), DOCX/ODT/RTF, HTML, Markd
 import os
 import re
 import sys
-import io
 import json
 import zipfile
 import tempfile
@@ -23,17 +22,15 @@ from PyQt5.QtCore import (
     QPropertyAnimation, QEasingCurve,
 )
 from PyQt5.QtGui import (
-    QImage, QPixmap, QIcon, QFont, QTransform, QPainter, QColor,
-    QKeySequence, QStandardItem, QCursor, QPalette, QBrush, QPen,
-    QDesktopServices,
+    QImage, QPixmap, QIcon, QTransform, QPainter, QColor,
+    QKeySequence, QCursor, QPalette, QPen, QDesktopServices,
 )
 from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QTabWidget, QToolBar, QMenuBar, QMenu,
+    QApplication, QMainWindow, QWidget, QTabWidget, QToolBar, QMenu,
     QAction, QDockWidget, QTreeWidget, QTreeWidgetItem, QListWidget,
     QListWidgetItem, QScrollArea, QLabel, QVBoxLayout, QHBoxLayout,
     QStatusBar, QSpinBox, QSlider, QLineEdit, QFileDialog, QMessageBox,
-    QSplitter, QTextBrowser, QAbstractItemView, QFrame, QSizePolicy,
-    QStyle, QToolButton, QInputDialog, QComboBox,
+    QTextBrowser, QStyle, QToolButton, QInputDialog, QComboBox, QScrollBar,
 )
 from PyQt5.QtPrintSupport import QPrinter, QPrintDialog
 
@@ -51,6 +48,10 @@ PDF_EXTS = {'.pdf'}
 DJVU_EXTS = {'.djvu', '.djv'}
 JBIG2_EXTS = {'.jb2', '.jbig2'}
 PALM_EXTS = {'.pdb', '.wwf'}
+
+# Сколько «условных единиц» ползунка отведено одной странице. Глобальный
+# ползунок документы отображает весь документ, а не только текущую страницу.
+PAGE_SCROLL_UNITS = 1000
 
 # Значок оригинала (тот же .ico, что и у STDU Viewer под Wine)
 ICON_FILE = os.environ.get(
@@ -903,6 +904,10 @@ class PageView(QScrollArea):
     автоматически открывается следующая/предыдущая страница, и прокрутка
     продолжается уже на ней. Благодаря этому весь документ можно листать
     одним непрерывным движением колеса, не нажимая «Вперёд/Назад».
+
+    Видимый вертикальный ползунок (`docbar`) охватывает весь документ: его
+    можно перетащить к нужной странице. Встроенный ползунок `QScrollArea`
+    скрыт и служит только для прокрутки внутри одной страницы.
     """
 
     def __init__(self, tab):
@@ -916,8 +921,92 @@ class PageView(QScrollArea):
         self.label.setBackgroundRole(QPalette.Dark)
         self.setWidget(self.label)
         self.setWidgetResizable(False)
+        # Внутренний ползунок QScrollArea отвечает только за прокрутку внутри
+        # страницы и скрыт. Видимый ползунок — собственный, на весь документ.
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.verticalScrollBar().setSingleStep(48)
+        self.verticalScrollBar().valueChanged.connect(self._sync_docbar)
         self._scroll_anim = None
+
+        self.docbar = QScrollBar(Qt.Vertical, self)
+        self.docbar.setObjectName('docScrollBar')
+        self.docbar.setToolTip(
+            'Прокрутка по всему документу — перетащите ползунок к нужной странице')
+        self.docbar.valueChanged.connect(self._on_docbar_changed)
+        self._syncing_docbar = False
+        self._applying_docbar = False
+        self._docbar_range()
+
+    # -- ползунок всего документа --------------------------------------
+    def _native_bar(self):
+        """Скрытый ползунок QScrollArea (прокрутка внутри одной страницы)."""
+        return QScrollArea.verticalScrollBar(self)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._place_docbar()
+
+    def _place_docbar(self):
+        """Размещаем глобальный ползунок там, где обычно стоит вертикальный."""
+        w = self.docbar.sizeHint().width()
+        h = self.height()
+        hbar = self.horizontalScrollBar()
+        if hbar.isVisible():
+            h -= hbar.height()
+        self.docbar.setGeometry(max(0, self.width() - w), 0, w, max(0, h))
+        self.docbar.raise_()
+
+    def _docbar_range(self):
+        """Диапазон ползунка — все страницы документа, по PAGE_SCROLL_UNITS на каждую."""
+        n = max(1, int(self.tab.doc.page_count))
+        self.docbar.setRange(0, n * PAGE_SCROLL_UNITS - 1)
+        self.docbar.setPageStep(PAGE_SCROLL_UNITS)
+        self.docbar.setSingleStep(48)
+
+    def _sync_docbar(self, *args):
+        """Привести глобальный ползунок в соответствие с текущей страницей."""
+        if self._syncing_docbar or self._applying_docbar:
+            return
+        self._syncing_docbar = True
+        try:
+            self._docbar_range()
+            native = self._native_bar()
+            span = native.maximum() - native.minimum()
+            frac = ((native.value() - native.minimum()) / span) if span > 0 else 0.0
+            frac = max(0.0, min(1.0, frac))
+            value = (int(self.tab.page) * PAGE_SCROLL_UNITS +
+                     int(frac * (PAGE_SCROLL_UNITS - 1)))
+            self.docbar.setValue(max(0, min(self.docbar.maximum(), value)))
+            self.docbar.setToolTip('Страница %d из %d — перетащите ползунок '
+                                   'к нужной странице'
+                                   % (int(self.tab.page) + 1,
+                                      max(1, int(self.tab.doc.page_count))))
+            self._place_docbar()
+        finally:
+            self._syncing_docbar = False
+
+    def _on_docbar_changed(self, value):
+        """Перетаскивание ползунка: переходим на страницу и место внутри неё."""
+        if self._syncing_docbar or self._applying_docbar:
+            return
+        n = int(self.tab.doc.page_count)
+        if n <= 0:
+            return
+        self._stop_anim()   # ручное перетаскивание отменяет плавную прокрутку
+        page, rem = divmod(int(value), PAGE_SCROLL_UNITS)
+        page = max(0, min(n - 1, page))
+        frac = rem / float(PAGE_SCROLL_UNITS - 1)
+
+        if page != self.tab.page:
+            self._applying_docbar = True
+            try:
+                self.tab.goto(page)   # рендер новой страницы и прокрутка наверх
+            finally:
+                self._applying_docbar = False
+        native = self._native_bar()
+        if native.maximum() > 0:
+            native.setValue(int(frac * native.maximum()))
+        self._sync_docbar()
 
     # -- служебные методы прокрутки ------------------------------------
     def _stop_anim(self):
@@ -952,9 +1041,11 @@ class PageView(QScrollArea):
         self.label.set_links(links or [])
         if qimage.isNull():
             self.label.clear()
+            self._sync_docbar()
             return
         self.label.setPixmap(QPixmap.fromImage(qimage))
         self.label.resize(self.label.pixmap().size())
+        self._sync_docbar()
 
     # -- колесо мыши ----------------------------------------------------
     def wheelEvent(self, event):

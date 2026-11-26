@@ -757,7 +757,16 @@ class LocalToolAgent:
         return 1, f"grep error: {e}"
     return 1, f"Неизвестный инструмент: {name}"
 
-  def execute(self, instruction: str) -> dict[str, Any]:
+  def verbatim_instruction(self, command: str) -> str:
+   """Жёсткая инструкция: выполнить команду ДОСЛОВНО, без переформулирований."""
+   return (
+    "Run exactly this bash command with exec_shell_command.\n"
+    f"command = {json.dumps(command, ensure_ascii=False)}\n"
+    "Do not modify, shorten, translate or re-quote the command. "
+    "Use the string value of command as the tool argument."
+   )
+
+  def execute(self, instruction: str, single_shot: bool = False) -> dict[str, Any]:
     system = LOCAL_TOOL_SYSTEM_PROMPT.format(workdir=self.work_dir) + LOCAL_TOOL_JSON_PROMPT
     messages: list[dict[str, Any]] = [
       {"role": "system", "content": system},
@@ -767,7 +776,20 @@ class LocalToolAgent:
     final = instruction
     try:
       for i in range(self.max_iters):
-        resp = self._post_chat(messages)
+        try:
+          resp = self._post_chat(messages)
+        except Exception as e:
+          # llama_cpp.server иногда отвергает историю с role:"tool" (HTTP 500).
+          # Если инструменты уже отработали — возвращаем их реальный вывод,
+          # а не роняем всю задачу.
+          if tool_log:
+            LOG.warning("[LOCAL-TOOL] следующий запрос к модели упал, "
+                        "использую сырой вывод инструментов: %s", str(e)[:300])
+            parts = [f"[{c.get('name')} rc={c.get('rc')}]\n{c.get('output','')}"
+                     for c in tool_log]
+            final = "DONE: инструменты выполнены\n" + "\n".join(parts)
+            break
+          raise
         choice = (resp.get("choices") or [{}])[0]
         msg = choice.get("message", {}) or {}
         tool_calls = msg.get("tool_calls") or []
@@ -812,6 +834,12 @@ class LocalToolAgent:
                            "rc": rc, "output": out[:500]})
           messages.append({"role": "tool", "tool_call_id": tc_id, "name": tname,
                            "content": f"rc={rc}\n{out}"})
+        # Повторный запрос к llama_cpp.server с историей tool-calls часто падает
+        # HTTP 500. Для одиночной команды он и не нужен: результат уже есть.
+        if single_shot and tool_log:
+          last = tool_log[-1]
+          final = f"DONE: {last['name']} rc={last['rc']}\n{last.get('output') or ''}"
+          break
       else:
         final = "(бюджет tool-loop исчерпан)"
     except Exception as e:
@@ -1920,35 +1948,32 @@ class ZaiWorker(threading.Thread):
     return True
    self.page.wait_for_timeout(200)
   return False
- 
+
  # Отладка: сохраняет HTML узла ответа для анализа селекторов.
  def _dump_last_answer_html(self) -> None:
-  """Debug: dump the last assistant/message node HTML for DOM inspection."""
   try:
    html = self.page.evaluate(r"""
-          () => {
-            const all = document.querySelectorAll('[class*="assistant" i], [class*="message" i], [class*="bot" i]');
-            for (let k = all.length - 1; k >= 0; k--) {
-              const cls = (typeof all[k].className === 'string') ? all[k].className : '';
-              if (!cls.toLowerCase().includes('user')) return all[k].outerHTML;
-            }
-            return '<no-node>';
-          }
-          """)
+         () => {
+           const all = document.querySelectorAll('[class*="assistant" i], [class*="message" i], [class*="bot" i]');
+           for (let k = all.length - 1; k >= 0; k--) {
+             const cls = (typeof all[k].className === 'string') ? all[k].className : '';
+             if (!cls.toLowerCase().includes('user')) return all[k].outerHTML;
+           }
+           return '<no-node>';
+         }
+         """)
    if html:
     Path("zai_last_answer.html").write_text(html, encoding="utf-8")
     LOG.info("[DUMP-ANSWER] written zai_last_answer.html (%d bytes)", len(html))
   except Exception as e:
    LOG.warning("[DUMP-ANSWER] failed: %s", e)
- 
+
  # 15: _get_last_assistant_message — забирает ответ модели из DOM (thinking/answer/code)
- #     + флаг генерации (объединено с бывшим _is_generating: один вызов вместо двух)
  def _get_last_assistant_message(self) -> dict[str, Any] | None:
-  # print("15: _get_last_assistant_message — забирает ответ модели из DOM (thinking/answer/code) + флаг генерации")
   try:
    data = self.page.evaluate(EXTRACT_JS)
    if not data:
-    LOG.debug("[EXTRACT] no .user-message / no data")
+    LOG.debug("[EXTRACT] no answer node")
     return None
    LOG.debug("[EXTRACT] thinking.len=%d answer.len=%d generating=%s",
              len(data.get("thinking", "")), len(data.get("answer", "")),
@@ -1957,7 +1982,8 @@ class ZaiWorker(threading.Thread):
   except Exception as e:
    LOG.warning("[EXTRACT] evaluate failed: %s", e)
    return None
- 
+
+
  # ---- Core ask (non-stream) ----
  # Отправляет сообщение и ждёт стабильного ответа модели.
  # 28: _ask_raw — нестрим: отправка и ожидание ответа модели
@@ -1967,12 +1993,14 @@ class ZaiWorker(threading.Thread):
   composer = self._wait_composer()
   self._send_reliably(composer, message)
   LOG.info("[ASK] sent, extracting...")
-  
+
   deadline = time.time() + timeout
   last_answer = ""
   stable_since = 0.0
+  last_dbg = 0.0
   appeared = False
-  
+  empty_since = 0.0
+
   while time.time() < deadline:
    if self.page is None or self.page.is_closed():
     LOG.warning("[ANSWER] page closed during extraction")
@@ -1982,44 +2010,114 @@ class ZaiWorker(threading.Thread):
              "answer": self.collapse_tool_tags(last_answer), "code": [], "complete": False}
     raise RuntimeError("Chat page was closed during answer extraction")
    self.page.wait_for_timeout(600)
-   data = self._get_last_assistant_message()
-   if not data:
-    continue
-   candidate = data.get("answer", "")
-   if not candidate:
-    continue
-   appeared = True
-   # Qwen иногда перерисовывает ответ и длина «прыгает» (59 → 56 → 84).
-   # Считаем рост ТОЛЬКО по удлинению текста, иначе таймер стабильности
-   # сбрасывается зря и ответ никогда не финализируется.
-   if len(candidate) > len(last_answer):
-    LOG.info("[ANSWER] grew to %d chars", len(candidate))
-    last_answer = candidate
-    stable_since = time.time()
-    continue
+   data = self._get_last_assistant_message() or {}
+   candidate = data.get("answer", "") or ""
    generating = data.get("generating", False)
    stable_for = time.time() - stable_since if stable_since else 0
-   if stable_for >= 2.0 and not generating:
-    LOG.info("[ANSWER] FINAL %d chars", len(candidate))
-    return {"model": self.selected_model or DEFAULT_MODEL,
-            "answer": self.collapse_tool_tags(candidate), "code": data.get("code", [])}
-   # Qwen не всегда убирает стоп-кнопку / generating=true после конца ответа.
-   # Если текст НЕ растёт 20 сек — считаем ответ готовым, иначе запрос висит
-   # до полного timeout и клиент получает ничего.
-   if stable_for >= 20.0:
-    LOG.warning("[ANSWER] no growth %.1fs (generating=%s), finalizing", stable_for, generating)
-    return {"model": self.selected_model or DEFAULT_MODEL,
-            "answer": self.collapse_tool_tags(candidate), "code": data.get("code", []),
-            "complete": not generating}
-  
+   # Логируем КАЖДЫЙ опрос, включая пустые — так видно, если экстрактор
+   # потерял узел ответа и тихо крутится 5 минут без единой строки в логе.
+   if time.time() - last_dbg >= 15:
+    LOG.info("[ANSWER] stable=%.1fs generating=%s len=%d best=%d",
+             stable_for, generating, len(candidate), len(last_answer))
+    last_dbg = time.time()
+   if candidate:
+    appeared = True
+    empty_since = 0.0
+    # Никогда не уменьшаем ответ: Qwen может на время показать обрывок.
+    # Лучший (самый длинный) текст сохраняем в last_answer.
+    if len(candidate) > len(last_answer):
+     LOG.info("[ANSWER] grew to %d chars", len(candidate))
+     last_answer = candidate
+     stable_since = time.time()
+     continue
+   elif appeared and not empty_since:
+    empty_since = time.time()
+   if last_answer:
+    # Qwen сначала показывает служебные ~10 символов («Thinking…»), причём
+    # generating может рано сброситься. Не финализируем короткий ответ:
+    # ждём либо настоящий текст (>=40 символов), либо долгое отсутствие роста.
+    if stable_for >= 3.0 and not generating and len(last_answer) >= 40:
+     LOG.info("[ANSWER] FINAL %d chars", len(last_answer))
+     return {"model": self.selected_model or DEFAULT_MODEL,
+             "answer": self.collapse_tool_tags(last_answer), "code": data.get("code", [])}
+    # generating у Qwen часто не сбрасывается — не ждём 900 секунд зря.
+    if stable_for >= 30.0:
+     LOG.warning("[ANSWER] no growth %.1fs (generating=%s), finalizing best %d chars",
+                 stable_for, generating, len(last_answer))
+     return {"model": self.selected_model or DEFAULT_MODEL,
+             "answer": self.collapse_tool_tags(last_answer), "code": data.get("code", []),
+             "complete": not generating}
+    if empty_since and time.time() - empty_since >= 30.0:
+     LOG.warning("[ANSWER] answer node disappeared, finalizing best %d chars", len(last_answer))
+     return {"model": self.selected_model or DEFAULT_MODEL,
+             "answer": self.collapse_tool_tags(last_answer), "code": [], "complete": False}
   if appeared and last_answer:
    LOG.warning("[ANSWER] timeout, returning partial %d chars", len(last_answer))
    return {"model": self.selected_model or DEFAULT_MODEL,
-           "answer": self.collapse_tool_tags(last_answer), "code": (data or {}).get("code", []), "complete": False}
+           "answer": self.collapse_tool_tags(last_answer), "code": [], "complete": False}
   raise TimeoutError("No answer from the chat page")
  
  # Нестриминговый запрос с инструментами и циклом правок файлов.
  # 29: _ask — нестриминговый запрос с инструментами
+ def _extract_shell_command(self, text: str) -> str:
+  """Достаёт из ответа сайта КОНКРЕТНУЮ команду, которую надо выполнить."""
+  def clean(c: str) -> str:
+   c = (c or "").strip().split("\n")[0].strip()
+   # Qwen дописывает после команды прозу:
+   # ls -la "/mnt/.../работа"Передать пользователю полный вывод...
+   if c.count('"') >= 2:
+    c = c[:c.rfind('"') + 1]
+   elif c.count("'") >= 2:
+    c = c[:c.rfind("'") + 1]
+   return c.strip()
+  ops = self._parse_tools(text or "")
+  if ops["cmds"]:
+   return clean(ops["cmds"][0])
+  for c in re.findall(r"`([^`\n]+)`", text or ""):
+   c = clean(c)
+   if len(c) > 2 and re.search(
+     r"\b(ls|cat|find|grep|echo|mkdir|cp|mv|rm|pwd|python3?|bash|wc|head|tail|"
+     r"du|df|stat|file|chmod|curl|wget|git|sed|awk|tar|unzip|zip)\b|[/\~]", c):
+    return c
+  m = re.search(r"(?:команд[уы]?|command)\s*[:\-]?\s*[`\"']*(.+)", text or "", re.I)
+  if m:
+   c = clean(m.group(1).strip().strip("`\"' "))
+   if c:
+    return c
+  return ""
+
+ def _run_local_command(self, command: str, timeout: float) -> dict[str, Any]:
+  """Локальная модель исполняет команду ДОСЛОВНО. Если она исказила
+  команду — выполняем исходную команду с сайта напрямую."""
+  agent = self.local_tools
+  expected = command.strip()
+  local_result = None
+  used_local = False
+  if agent is not None and agent.ready:
+   try:
+    local_result = agent.execute(agent.verbatim_instruction(expected), single_shot=True)
+   except Exception as e:
+    LOG.warning("[EXEC] локальная модель не справилась: %s", e)
+  if local_result and local_result.get("tool_calls"):
+   call = local_result["tool_calls"][0]
+   got = str((call.get("args") or {}).get("command", "")).strip()
+   if got == expected:
+    used_local = True
+    answer = ("[LOCAL RESULT]\nDONE: команда выполнена локальной моделью\n\n"
+              f"[RAW OUTPUT]\n{call.get('output') or ''}\n[/LOCAL RESULT]")
+    rc = int(call.get("rc", 1))
+   else:
+    LOG.warning("[EXEC] локальная модель изменила команду: %r -> %r; исполняю точную",
+                got[:200], expected[:200])
+  if not used_local:
+   rc, out = ZaiWorker.exec_tool_command(expected, self.work_dir, self.tool_timeout)
+   answer = ("[LOCAL RESULT]\nDONE: команда выполнена напрямую "
+             "(локальная модель не сохранила команду дословно)\n\n"
+             f"[RAW OUTPUT]\n{out}\n[/LOCAL RESULT] (rc={rc})")
+  return {"model": agent.model if agent else "local", "answer": answer,
+          "tool_calls": local_result.get("tool_calls", []) if local_result else [],
+          "tool_count": 1, "complete": rc == 0, "command": expected}
+
  def _ask(self, message: str, model: str | None, timeout: float) -> dict[str, Any]:
   print("29: _ask — нестриминговый запрос (планировщик → локальный исполнитель)")
   if self._first_message:
@@ -2031,7 +2129,12 @@ class ZaiWorker(threading.Thread):
    # Облачная модель — «мозги» (планировщик), локальная — «руки» (исполнитель).
    message = LOCAL_PLANNER_INSTRUCTION + message
    raw = self._ask_raw(message, model, timeout)
-   local = self._run_local_executor(raw["answer"], timeout)
+   command = self._extract_shell_command(raw["answer"])
+   if command:
+    LOG.info("[ASK] точная команда от сайта: %s", command[:200])
+    local = self._run_local_command(command, timeout)
+   else:
+    local = self._run_local_executor(raw["answer"], timeout)
    # Возвращаем результат локальных рук обратно в чат (как в arena_agent.py):
    # облачная модель даёт итоговый ответ, уже опираясь на реальный rc/stdout.
    try:
@@ -2738,19 +2841,16 @@ def main():
  if _local_model_process is not None:
   atexit.register(_shutdown_local_model)
 
- # 2) Затем браузер и воркер чата.
- if args.cdp_port > 0:
-  ZaiWorker.launch_chrome(BrowserSettings(profile, args.model, args.cdp_port,
-                                         not args.headless, args.url))
- 
+ # 2) Создаём воркер (пока без браузера). HTTP API поднимется РАНЬШЕ браузера,
+ # чтобы адрес подключения был виден сразу, а запросы до готовности чата
+ # получали честный 503 вместо тишины.
  worker = ZaiWorker(
   BrowserSettings(profile, args.model, args.cdp_port, not args.headless, args.url),
   work_dir=work_dir,
   tool_timeout=args.tool_timeout,
   max_tool_iters=args.max_tool_iters,
  )
- # Подключаем «руки» к воркеру. Проба делает ещё одну проверку /v1/models:
- # модель могла подняться за время запуска Chrome.
+ # Подключаем «руки» к воркеру. Проба ещё раз проверяет /v1/models.
  worker.local_tools = LocalToolAgent(
   local_tool_url, local_tool_model, work_dir, worker,
   tool_timeout=args.tool_timeout, max_iters=args.max_exec_iters)
@@ -2762,17 +2862,9 @@ def main():
   worker.local_model_optional = True
   threading.Thread(target=_local_model_watchdog, args=(worker,),
                    name="local-model-watchdog", daemon=True).start()
- worker.start()
- if not worker.ready.wait(90):
-  raise RuntimeError("Worker not ready")
- if worker.start_error:
-  raise worker.start_error
- 
+
+ # 3) Поднимаем API и сразу печатаем адрес в консоль.
  import uvicorn
- 
- # Глушим только «Started server process / Waiting for application startup /
- # Application startup complete» — это логгер uvicorn.error.
- # Лог запросов (127.0.0.1 - "POST /v1/...") остаётся: его пишет uvicorn.access.
  _uv_log_config = {
   "version": 1,
   "disable_existing_loggers": False,
@@ -2799,8 +2891,40 @@ def main():
  api_thread = threading.Thread(target=server.run, name="api-server", daemon=True)
  api_thread.start()
  time.sleep(1.5)
+ _display_host = "127.0.0.1" if args.host in ("0.0.0.0", "::") else args.host
+ if args.host in ("0.0.0.0", "::"):
+  try:
+   _ips = [x for x in subprocess.run(
+    ["hostname", "-I"], capture_output=True, text=True, timeout=3
+   ).stdout.split() if x and not x.startswith("127.")]
+   for _ip in _ips:
+    print(f"[QWEN-AGENT] Из локальной сети: http://{_ip}:{args.port}/v1/chat/completions",
+          flush=True)
+  except Exception:
+   pass
+ print("\n" + "=" * 64, flush=True)
+ print(f"[QWEN-AGENT] АДРЕС ПОДКЛЮЧЕНИЯ: http://{_display_host}:{args.port}/v1/chat/completions",
+       flush=True)
+ print(f"[QWEN-AGENT] Проверка готовности: http://{_display_host}:{args.port}/health",
+       flush=True)
+ print(f"[QWEN-AGENT] Локальная модель: {local_tool_url} "
+       f"({'готова' if worker.local_tools.ready else 'ещё грузится'})", flush=True)
+ print("[QWEN-AGENT] Сейчас запускается браузер и открывается чат Qwen...", flush=True)
+ print("=" * 64 + "\n", flush=True)
  LOG.info("[SERVER] ready at http://%s:%s", args.host, args.port)
- 
+
+ # 4) Затем браузер и воркер чата.
+ if args.cdp_port > 0:
+  ZaiWorker.launch_chrome(BrowserSettings(profile, args.model, args.cdp_port,
+                                         not args.headless, args.url))
+ worker.start()
+ if not worker.ready.wait(300):
+  raise RuntimeError("Worker not ready")
+ if worker.start_error:
+  raise worker.start_error
+ print(f"[QWEN-AGENT] ГОТОВО. Чат и локальная модель подключены. "
+       f"Задавайте вопросы на http://{_display_host}:{args.port}/v1/chat/completions",
+       flush=True)
  try:
   api_thread.join()
  except KeyboardInterrupt:

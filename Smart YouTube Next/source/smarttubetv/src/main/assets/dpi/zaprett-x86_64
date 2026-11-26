@@ -1,0 +1,29 @@
+#!/system/bin/sh
+NFQWS=/data/adb/modules/zaprett/system/bin/nfqws
+STRAT=/storage/emulated/0/zaprett/strategies/general_alt12.txt
+PIDF=/data/local/tmp/nfqws.pid
+case "$1" in
+status)
+  if [ -f "$PIDF" ] && kill -0 $(cat "$PIDF") 2>/dev/null; then
+    echo "zaprett is working"
+  else
+    echo "zaprett is stopped"
+  fi
+  ;;
+start)
+  if ! iptables -t mangle -S 2>/dev/null | grep -q "queue-num 200"; then
+    iptables -t mangle -A PREROUTING -j NFQUEUE --queue-num 200 --queue-bypass
+    iptables -t mangle -A POSTROUTING -j NFQUEUE --queue-num 200 --queue-bypass
+  fi
+  ARGS=$(cat "$STRAT")
+  nohup "$NFQWS" --qnum=200 $ARGS >/dev/null 2>&1 &
+  echo $! > "$PIDF"
+  echo "Starting zaprett service..."
+  ;;
+stop)
+  if [ -f "$PIDF" ]; then kill $(cat "$PIDF") 2>/dev/null; rm -f "$PIDF"; fi
+  iptables -t mangle -D PREROUTING -j NFQUEUE --queue-num 200 --queue-bypass 2>/dev/null
+  iptables -t mangle -D POSTROUTING -j NFQUEUE --queue-num 200 --queue-bypass 2>/dev/null
+  echo "zaprett service stopped"
+  ;;
+esac

@@ -14,6 +14,12 @@ efyt-json-host.py — native messaging host для Enhancer for YouTube (кас�
   {"type": "read"}                                  -> {"ok": true, "data": <строка|null>, "mtimeMs": int, "path": ...}
   {"type": "write", "data": "<текст JSON>"}          -> {"ok": true, "mtimeMs": int, "path": ...}
 
+Скриншоты (PNG передаётся кусками, т.к. лимит одного сообщения — 1 МБ):
+  {"type": "shot_begin", "id": "...", "path": "...", "total": N}
+  {"type": "shot_chunk", "id": "...", "index": i, "data": "<base64 chunk>"}
+  {"type": "shot_end", "id": "..."}                  -> {"ok": true, "path": <файл>, "mtimeMs": int}
+  Имя файла при конфликте получает суффикс " (1)", " (2)" и т.д.
+
 Путь к JSON-файлу: native-host/path.txt (первая строка, абсолютный путь).
 Если файла конфигурации нет — пишется channelspeeds.json рядом с папкой
 расширения ( ../channelspeeds.json от каталога native-host ).
@@ -22,6 +28,7 @@ efyt-json-host.py — native messaging host для Enhancer for YouTube (кас�
 NativeMessagingHosts установленных браузеров и path.txt).
 """
 
+import base64
 import json
 import os
 import struct
@@ -31,6 +38,34 @@ HOST_NAME = "com.efyt.channelspeeds"
 HERE = os.path.dirname(os.path.abspath(__file__))
 CONFIG = os.path.join(HERE, "path.txt")
 DEFAULT_TARGET = os.path.normpath(os.path.join(HERE, os.pardir, "channelspeeds.json"))
+
+# Промежуточные куски скриншотов: chrome ограничивает одно сообщение 1 МБ,
+# поэтому PNG (base64) передаётся последовательностью shot_begin/shot_chunk/shot_end.
+_PENDING_SHOTS = {}
+
+
+def unique_path(path):
+    """Не перезаписывать существующий файл: in.png -> in (1).png -> in (2).png."""
+    if not os.path.exists(path):
+        return path
+    root, ext = os.path.splitext(path)
+    i = 1
+    while True:
+        candidate = "%s (%d)%s" % (root, i, ext)
+        if not os.path.exists(candidate):
+            return candidate
+        i += 1
+
+
+def write_binary(path, data):
+    directory = os.path.dirname(path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "wb") as f:
+        f.write(data)
+    os.replace(tmp, path)
+    return {"ok": True, "path": path, "mtimeMs": int(os.path.getmtime(path) * 1000)}
 
 
 def target_path():
@@ -95,6 +130,40 @@ def handle(msg):
             return {"ok": True, "mtimeMs": int(os.path.getmtime(path) * 1000), "path": path}
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": str(exc), "path": path}
+
+    if kind == "shot_begin":
+        ident = str(msg.get("id") or "")
+        target = msg.get("path")
+        if not ident or not isinstance(target, str) or not target:
+            return {"ok": False, "error": "shot_begin: no id/path"}
+        _PENDING_SHOTS[ident] = {
+            "path": target,
+            "total": int(msg.get("total") or 0),
+            "parts": {}
+        }
+        return {"ok": True}
+
+    if kind == "shot_chunk":
+        ident = str(msg.get("id") or "")
+        shot = _PENDING_SHOTS.get(ident)
+        if not shot:
+            return {"ok": False, "error": "shot_chunk: unknown id"}
+        shot["parts"][int(msg.get("index") or 0)] = str(msg.get("data") or "")
+        return {"ok": True}
+
+    if kind == "shot_end":
+        ident = str(msg.get("id") or "")
+        shot = _PENDING_SHOTS.pop(ident, None)
+        if not shot:
+            return {"ok": False, "error": "shot_end: unknown id"}
+        try:
+            b64 = "".join(shot["parts"][i] for i in range(shot["total"]))
+            data = base64.b64decode(b64, validate=False)
+            if not data:
+                return {"ok": False, "error": "shot_end: empty image"}
+            return write_binary(unique_path(shot["path"]), data)
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "error": str(exc)}
 
     return {"ok": False, "error": "unknown type: %r" % (kind,)}
 

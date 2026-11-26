@@ -10,7 +10,6 @@
 подменены, а QDesktopServices.openUrl записывает адрес в список URLS.
 """
 import importlib.util
-import os
 import shutil
 import sys
 import tempfile
@@ -20,9 +19,9 @@ from pathlib import Path
 
 import pymupdf
 from PyQt5.QtCore import Qt, QPoint, QUrl
-from PyQt5.QtGui import QCursor, QDesktopServices
+from PyQt5.QtGui import QCursor
 from PyQt5.QtTest import QTest
-from PyQt5.QtWidgets import QApplication, QFileDialog, QInputDialog, QMessageBox
+from PyQt5.QtWidgets import QApplication
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / 'STDUViewer-Native-source.py'
@@ -277,7 +276,7 @@ class Test03NavigationAndZoom(Base):
         self.assertPage(0)
 
     def test_thumbnails(self):
-        t = self.open(self.pdf)
+        self.open(self.pdf)
         self.assertEqual(self.w.thumb_list.count(), 10)
         self.w.on_thumb_clicked(self.w.thumb_list.item(4)); pump()
         self.assertPage(4)
@@ -546,7 +545,7 @@ class Test05TocBookmarksSearch(Base):
         self.assertFalse(self.w.toc_tree.topLevelItem(1).isHidden())
 
     def test_bookmarks_lifecycle(self):
-        t = self.open(self.pdf)
+        self.open(self.pdf)
         self.w.next_page(); self.w.next_page(); pump()
         self.w.add_bookmark(); pump()
         self.assertEqual(self.w.bookmark_list.count(), 1)

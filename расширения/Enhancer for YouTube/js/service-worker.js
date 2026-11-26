@@ -96,7 +96,7 @@ chrome.runtime.getManifest().version,active:!0}),chrome.storage.local.set({date:
 var e="blur brightness contrast grayscale huerotate invert saturate sepia".split(" ");e.forEach(d=>{a[d]&&("huerotate"===d?b.videofilters.rotation=a[d]:"invert"===d?b.videofilters.inversion=a[d]:"saturate"===d?b.videofilters.saturation=a[d]:b.videofilters[d]=a[d])});a.backgroundcolor&&(b.backdropcolor=a.backgroundcolor,e.push("backgroundcolor"));a.backgroundopacity&&(b.backdropopacity=a.backgroundopacity,e.push("backgroundopacity"));a.customcssrules&&(b.customcss=a.customcssrules,e.push("customcssrules"));
 await chrome.storage.local.remove(e);a.miniplayersize&&(b.miniplayersize=a.miniplayersize.replace("_",""));a.miniplayerposition&&(b.miniplayerposition=a.miniplayerposition.replace("_",""));a.themevariant&&(b.vendorthemevariant=a.themevariant.replace("-youtube-light",""),b.themevariant=f.themevariant)}/3\.0\.1[0-4]/.test(c.previousVersion)&&Array.isArray(a.controls)&&0<a.controls.length&&(b.controls=[...a.controls,"experiments"]);c.previousVersion!==chrome.runtime.getManifest().version&&(b.reload=
 !0,b.previousversion=c.previousVersion,b.update=Date.now(),/3\.0\.1[0-4]/.test(c.previousVersion)&&(b.whatsnew=!0));0<Object.keys(b).length&&chrome.storage.local.set(b)}});chrome.runtime.onMessage.addListener(async(c,a)=>{switch(c.request){case "pop-up-player":chrome.windows.create(c.options,b=>{chrome.windows.update(b.id,{drawAttention:!0})});break;case "options-page":chrome.runtime.openOptionsPage();break;case "whats-new":await chrome.storage.local.set({whatsnew:!1});chrome.tabs.create({url:"html/whats-new.html",
-active:!0});break;case "dark-theme-off":chrome.storage.local.set({darktheme:!1});break;case "open-options":chrome.runtime.openOptionsPage();break;case "efyt-error-sync":efytErrorLogSchedule();break;case "keyboard-shortcuts":chrome.tabs.create({url:"https://www.mrfdev.com/youtube-keyboard-shortcuts",active:!0});break;case "configure-keyboard-shortcuts":chrome.tabs.create({url:"chrome://extensions/shortcuts",active:!0})}});chrome.storage.onChanged.addListener(c=>{for(const a in c)void 0!==c[a].newValue&&"customscript"!==a&&"popuplayersize"!==a&&chrome.tabs.query({url:"*://www.youtube.com/*"},b=>{b.forEach(e=>
+active:!0});break;case "dark-theme-off":chrome.storage.local.set({darktheme:!1});break;case "open-options":chrome.runtime.openOptionsPage();break;case "efyt-error-sync":efytErrorLogSchedule();break;case "efyt-screenshot-save":efytScreenshotSaveSafe(c.data);break;case "keyboard-shortcuts":chrome.tabs.create({url:"https://www.mrfdev.com/youtube-keyboard-shortcuts",active:!0});break;case "configure-keyboard-shortcuts":chrome.tabs.create({url:"chrome://extensions/shortcuts",active:!0})}});chrome.storage.onChanged.addListener(c=>{for(const a in c)void 0!==c[a].newValue&&"customscript"!==a&&"popuplayersize"!==a&&chrome.tabs.query({url:"*://www.youtube.com/*"},b=>{b.forEach(e=>
 {chrome.tabs.sendMessage(e.id,{message:"preference-changed",name:a,value:c[a].newValue,oldvalue:c[a].oldValue}).catch(()=>{})})})});chrome.commands.onCommand.addListener(c=>{var a={"c070-toggle-loop":"loop","c080-stop-video":"stop","c090-reverse-playlist":"reverse-playlist","c100-toggle-volume-booster":"volume-booster","c130-toggle-annotations":"cards-end-screens","c140-toggle-cinema-mode":"cinema-mode","c150-toggle-player-size":"size","c160-center-video-player":"size","c170-pop-up-player":"pop-up-player","c180-decrease-speed":"speed-minus",
 "c190-increase-speed":"speed-plus","c200-default-speed":"speed","c210-normal-speed":"speed","c220-toggle-video-filters":"video-filters","c230-flip-horizontally":"flip-horizontally","c240-flip-vertically":"flip-vertically","c250-take-screenshot":"screenshot","c260-keyboard-shortcuts":"keyboard-shortcuts","c270-custom-script":"custom-script"};switch(c){case "c000-options-page":chrome.runtime.openOptionsPage();break;case "c020-theme-youtube-dark":chrome.storage.local.set({darktheme:!0,theme:"default-dark"});
 break;case "c025-theme-enhanced-dark":chrome.storage.local.set({darktheme:!0,theme:"enhanced-dark"});break;case "c030-theme-youtube-deep-dark":chrome.storage.local.set({darktheme:!0,theme:"youtube-deep-dark"});break;case "c040-theme-youtube-deep-dark-custom":chrome.storage.local.set({darktheme:!0,theme:"youtube-deep-dark-custom"});break;case "c050-theme-custom-theme":chrome.storage.local.get({customtheme:f.customtheme},b=>{chrome.storage.local.set({customtheme:!b.customtheme})});break;default:chrome.tabs.query({lastFocusedWindow:!0,
@@ -385,3 +385,84 @@ chrome.storage.onChanged.addListener((changes, area) => {
 });
 chrome.runtime.onStartup.addListener(() => setTimeout(efytErrorLogSync, 1000));
 chrome.runtime.onInstalled.addListener(() => setTimeout(efytErrorLogSync, 1000));
+
+// === efyt-screenshot: точный каталог + имя «Screenshot YouTube <дата>» (§16) ===
+//
+// chrome.downloads умеет писать только относительно папки «Загрузки», поэтому
+// кадр уходит через уже установленный native host com.efyt.channelspeeds —
+// он сохраняет PNG по АБСОЛЮТНОМУ пути. Одно сообщение native messaging
+// ограничено 1 МБ, поэтому base64 режется на куски по 200 000 символов.
+const EFYT_SHOT_DIR = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/Screenshots";
+const EFYT_SHOT_HOST = "com.efyt.channelspeeds";
+const EFYT_SHOT_CHUNK = 200000;
+
+function efytShotName() {
+  const d = new Date();
+  const p = n => String(n).padStart(2, "0");
+  return "Screenshot YouTube " + p(d.getHours()) + "-" + p(d.getMinutes()) + "-" + p(d.getSeconds()) +
+    " " + d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + ".png";
+}
+
+function efytShotAsk(port, msg) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(function () {
+      port.onMessage.removeListener(onMsg);
+      reject(new Error("host timeout"));
+    }, 20000);
+    function onMsg(m) {
+      clearTimeout(t);
+      port.onMessage.removeListener(onMsg);
+      resolve(m);
+    }
+    port.onMessage.addListener(onMsg);
+    try { port.postMessage(msg); }
+    catch (e) { clearTimeout(t); port.onMessage.removeListener(onMsg); reject(e); }
+  });
+}
+
+async function efytScreenshotSave(dataUrl) {
+  const m = /^data:[^;,]+;base64,([\s\S]*)$/.exec(String(dataUrl || ""));
+  if (!m) throw new Error("bad data URL");
+
+  let st = {};
+  try { st = await chrome.storage.local.get({ screenshotdir: EFYT_SHOT_DIR }); } catch (e) {}
+  const dir = String(st.screenshotdir || EFYT_SHOT_DIR).replace(/\/+$/, "");
+  const target = dir + "/" + efytShotName();
+  const b64 = m[1];
+  const id = Date.now() + "-" + Math.random().toString(36).slice(2);
+
+  const port = chrome.runtime.connectNative(EFYT_SHOT_HOST);
+  port.onDisconnect.addListener(() => { void chrome.runtime.lastError; });
+  try {
+    const total = Math.max(1, Math.ceil(b64.length / EFYT_SHOT_CHUNK));
+    let r = await efytShotAsk(port, { type: "shot_begin", id: id, path: target, total: total });
+    if (!r || !r.ok) throw new Error((r && r.error) || "begin failed");
+    for (let i = 0; i < total; i++) {
+      r = await efytShotAsk(port, {
+        type: "shot_chunk", id: id, index: i,
+        data: b64.slice(i * EFYT_SHOT_CHUNK, (i + 1) * EFYT_SHOT_CHUNK)
+      });
+      if (!r || !r.ok) throw new Error((r && r.error) || "chunk failed");
+    }
+    r = await efytShotAsk(port, { type: "shot_end", id: id });
+    if (!r || !r.ok) throw new Error((r && r.error) || "end failed");
+    console.info("[efyt-shot] saved:", r.path);
+    return r.path;
+  } finally {
+    try { port.disconnect(); } catch (e) {}
+  }
+}
+
+/** Native host недоступен — старый путь через папку загрузок браузера. */
+async function efytScreenshotSaveSafe(dataUrl) {
+  try { return await efytScreenshotSave(dataUrl); }
+  catch (e) {
+    console.warn("[efyt-shot] native host недоступен, fallback в Загрузки:", e.message);
+    try {
+      await new Promise(resolve => chrome.downloads.download({
+        url: dataUrl, filename: efytShotName(), conflictAction: "uniquify", saveAs: false
+      }, () => { void chrome.runtime.lastError; resolve(); }));
+    } catch (x) {}
+    return null;
+  }
+}

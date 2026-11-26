@@ -82,6 +82,8 @@ zapret размножен: 24 зависших процесса вместо о�
 | 13 | 2026-11-16 | Принудительный VP9/AV1 вместо H.264 (`forcevp9`) | §13 |
 | 14 | 2026-11-22 | Настройки Яндекс.Браузера как значения по умолчанию | §14 |
 | 15 | 2026-11-22 | Лог ошибок воспроизведения без повторов | §15 |
+| 16 | 2026-11-24 | Скриншот → точная папка Screenshots, имя «Screenshot YouTube <дата>» | §16 |
+| 17 | 2026-11-25 | Диагностика: почему скриншот всё равно не сохранялся; обновление в Яндекс.Браузере | §17 |
 
 Собирается в .crx скриптом `package-crx.sh` (§5).
 
@@ -1066,3 +1068,111 @@ Harness с моком `chrome.storage`: 6 событий (3 дубля, в т.ч
 
 **Сборка:** `./package-crx.sh` → один файл `../Enhancer_for_YouTube.crx`
 (ID `ifojmbdceojdnhhagpmfnmjndpplcndi`).
+
+---
+
+## §16 Скриншот в точную папку Screenshots + имя «Screenshot YouTube <дата>» (2026-11-24)
+
+**Требование:** кнопка скриншота должна сохранять картинку не в «Загрузки»,
+а прямо в
+`/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/Project/Screenshots`,
+с именем вида `Screenshot YouTube ЧЧ-ММ-СС ГГГГ-ММ-ДД.png`.
+
+### Почему не получалось раньше
+
+`chrome.downloads.download()` принимает в `filename` только путь **относительно**
+папки загрузок браузера; абсолютные пути и `..` Chrome отбрасывает (§11).
+Поэтому расширение и сохраняло в `~/Downloads`, а документация предлагала вручную менять
+`chrome://settings/downloads`.
+
+### Решение
+
+| Файл | Изменение |
+|---|---|
+| `js/youtube-isolated.js` | Обработчик `efyt-screenshot-save` больше не зовёт `chrome.downloads` сам, а шлёт кадр (data URL) в сервис-воркер сообщением `efyt-screenshot-save`. |
+| `js/service-worker.js` | `efytScreenshotSave()` режет base64 на куски по 200 000 символов (лимит одного сообщения native messaging — 1 МБ) и шлёт их в уже установленный хост `com.efyt.channelspeeds` (`shot_begin` → `shot_chunk`… → `shot_end`). Имя файла: `Screenshot YouTube ЧЧ-ММ-СС ГГГГ-ММ-ДД.png`. Каталог берётся из `chrome.storage.local.screenshotdir` с дефолтом на папку Screenshots. Fallback — старый `chrome.downloads`, если хост недоступен. |
+| `native-host/efyt-json-host.py` | Новые типы сообщений `shot_begin` / `shot_chunk` / `shot_end`: собирают base64, декодируют в PNG и атомарно пишут по абсолютному пути. При совпадении имени добавляют ` (1)`, ` (2)` и т.д. — предыдущие скриншоты не перезаписываются. Копия в буфер обмена (§11) осталась. |
+
+Путь хост уже знает из `native-host/path.txt` (там записан путь к
+`channelspeeds.json`); для скриншотов берётся тот же каталог хоста, а абсолютный
+путь папки Screenshots передаётся расширением в `shot_begin`. Перерегистрировать
+хост **не нужно** — меняется только его `.py`-файл по тому же пути из манифеста
+`NativeMessagingHosts/com.efyt.channelspeeds.json`.
+
+### Проверено
+
+`node --check` + `py_compile` + валидность `manifest.json` — без ошибок.
+Пайп-тест хоста с настоящим 1×1 PNG, нарезанным на куски по 12 символов:
+файл записан в целевую папку, байты совпадают с исходником (70 байт), повторная
+запись создала `__efyt_test_shot (1).png`; тестовые файлы удалены.
+
+**Сборка/установка:** `./package-crx.sh` → один CRX
+`../Enhancer_for_YouTube.crx`, распакован в установленную папку расширения
+Яндекс.Браузера (как в §13–§15). Версия поднята до **3.1.2**, папка установки —
+`3.1.2_1`; причины и способ обновления — в §17.
+
+---
+
+## §17 Почему скриншот всё равно не сохранялся — диагностика и лечение (2026-11-25)
+
+### Причина 1 — не выдано разрешение `nativeMessaging`
+
+Файлы расширения менялись на диске «мимо» браузера, поэтому в
+`~/.config/yandex-browser/Default/Preferences` в записи расширения остались
+старые `active_permissions` / `granted_permissions` и старый сохранённый
+манифест: только `contextMenus`, `downloads`, `storage`. Хотя на диске манифест
+уже содержал `nativeMessaging`, во время исполнения `chrome.runtime.connectNative`
+был недоступен. Сервис-воркер ловил исключение и уходил в fallback
+`chrome.downloads` → кадр падал в «Загрузки», а не в нужную папку.
+
+### Причина 2 — Яндекс.Браузер держал старый service worker
+
+Даже после исправления прав воркер продолжал работать со старым кодом.
+Проверено через CDP в консультационном контексте воркера:
+
+| Проверка | Было |
+|---|---|
+| `config.speed` в globals воркера | `1` (старое значение) |
+| `config.qualityvideos` | `hd720` |
+| `typeof efytScreenshotSave` | `undefined` |
+| `fetch(chrome.runtime.getURL('js/config.js'))` | новый файл (`hd1440`, `defaultSettings`) |
+
+То есть файлы на диске новые, а загруженный воркер — старый: браузер кэшировал
+скрипт расширения. Очистка `Code Cache` / `Cache` не помогла.
+
+### Что сделано
+
+1. В `Preferences` (при выключенном браузере) добавлен `nativeMessaging` в
+   `active_permissions.api` и `granted_permissions.api`, сохранённый `manifest`
+   заменён на актуальный с диска, `withholding_permissions=false`.
+   Бэкап: `_backups-screenshot-20261124/Preferences.bak-20261125`.
+2. Версия в `manifest.json` поднята `3.1.0` → **3.1.2**; CRX пересобран и
+   распакован в новую папку
+   `~/.config/yandex-browser/Default/Extensions/ifojmbdceojdnhhagpmfnmjndpplcndi/3.1.2_1/`;
+   в `Preferences` обновлён `path` на `…/3.1.2_1`. Бэкап прежней установки —
+   `_backups-screenshot-20261124/yandex-installed-3.1.0_1`.
+3. Старый service worker снят с регистрации из страницы расширения:
+   `navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister()))`,
+   после чего браузер был перезапущен и зарегистрировал воркер заново — уже с
+   новым кодом.
+
+### Проверено в живом Яндекс.Браузере (headless + CDP)
+
+| Проверка | Результат |
+|---|---|
+| `typeof chrome.runtime.connectNative` | `function` |
+| `chrome.runtime.getManifest().permissions` | `contextMenus, downloads, nativeMessaging, storage` |
+| `config.speed` / `config.qualityvideos` в воркере | `1.2` / `hd1440` |
+| `typeof efytScreenshotSave` | `function` |
+| native `ping` | `{"ok":true,"host":"com.efyt.channelspeeds",…}` |
+| `efytScreenshotSave(dataURL)` из воркера | `…/Project/Screenshots/Screenshot YouTube 22-32-07 2026-11-25.png` |
+| `document.dispatchEvent(new CustomEvent('efyt-screenshot-save',{detail:{data:…}}))` на `youtube.com` | `…/Project/Screenshots/Screenshot YouTube 22-32-39 2026-11-25.png` |
+
+Оба тестовых файла (70 байт, 1×1 PNG) удалены из папки Screenshots. После
+выключения браузера `Preferences` сохранил `path=…/3.1.2_1`, версию `3.1.2` и
+все четыре разрешения.
+
+**Важно на будущее:** при ручной замене файлов расширения в Яндекс.Браузере
+одновременно проверяйте `Preferences` (права + сохранённый манифест) и
+перерегистрируйте service worker — иначе браузер продолжает выполнять старый
+код, хотя `fetch(chrome.runtime.getURL(...))` показывает новые файлы.

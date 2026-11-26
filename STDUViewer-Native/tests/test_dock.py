@@ -8,9 +8,8 @@ import traceback
 import unittest
 from pathlib import Path
 
-from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QKeySequence
-from PyQt5.QtWidgets import QApplication, QMessageBox, QToolButton
+from PyQt5.QtWidgets import QApplication, QToolButton
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / 'STDUViewer-Native-source.py'

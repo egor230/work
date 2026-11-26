@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 
 import pymupdf
-from PyQt5.QtWidgets import QApplication, QMessageBox
+from PyQt5.QtWidgets import QApplication
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / 'STDUViewer-Native-source.py'
