@@ -16,12 +16,14 @@ import argparse
 import atexit
 import json
 import logging
+import logging.handlers
 import os
 import queue
 import re
 import shlex
 import shutil
 import signal
+import socket
 import subprocess
 import sys
 import threading
@@ -53,6 +55,8 @@ DEFAULT_MODEL = "Qwen3.7-Plus"
 DEFAULT_PROFILE = ("/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/"
                    "python_linux/work/google-chrome")
 DEFAULT_CDP_PORT = 9224
+SCRIPT_DIR = Path(__file__).resolve().parent
+AGENT_PID_FILE = SCRIPT_DIR / "qwen_агент.pid"
 DEFAULT_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
               "(KHTML, like Gecko) Chrome/124.0.6367.118 Safari/537.36")
 LOG = logging.getLogger("qwen-agent")
@@ -589,6 +593,51 @@ def _shutdown_local_model() -> None:
     except Exception:
       proc.kill()
   _local_model_process = None
+
+
+def _another_agent_running() -> int | None:
+  """PID уже работающего агента с этим же скриптом (или None)."""
+  try:
+   pid = int(AGENT_PID_FILE.read_text(encoding="utf-8").strip())
+  except Exception:
+   return None
+  if pid == os.getpid():
+   return None
+  try:
+   os.kill(pid, 0)
+   cmdline = Path(f"/proc/{pid}/cmdline").read_bytes().decode("utf-8", "replace")
+  except Exception:
+   return None
+  if "qwen_агент.py" in cmdline or "qwen_agent.py" in cmdline:
+   return pid
+  return None
+
+
+def _claim_agent_pid() -> None:
+  AGENT_PID_FILE.write_text(str(os.getpid()), encoding="utf-8")
+
+  def _release() -> None:
+   try:
+    if AGENT_PID_FILE.read_text(encoding="utf-8").strip() == str(os.getpid()):
+     AGENT_PID_FILE.unlink()
+   except Exception:
+    pass
+
+  atexit.register(_release)
+
+
+def _find_free_port(host: str, start: int, count: int = 20) -> int:
+  bind_host = "127.0.0.1" if host in ("0.0.0.0", "::") else host
+  for port in range(start, start + count):
+   s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+   try:
+    s.bind((bind_host, port))
+    return port
+   except OSError:
+    continue
+   finally:
+    s.close()
+  raise RuntimeError(f"Не найден свободный порт в диапазоне {start}-{start + count - 1}")
 
 
 def _local_model_watchdog(worker: Any, interval: float = 15.0) -> None:
@@ -1283,8 +1332,11 @@ class ZaiWorker(threading.Thread):
     return False
    file_input.set_input_files(str(p))
    LOG.info("[ATTACH] set_input_files %s", path)
-   for _ in range(10):
-    self.page.wait_for_timeout(500)
+   # Раньше было 10 × 500 мс = 5 сек на файл при отсутствии чипа в Qwen —
+   # это добавляло ~20 сек к первому запросу. Этого достаточно: сам факт
+   # set_input_files уже означает, что файл передан в поле ввода.
+   for _ in range(4):
+    self.page.wait_for_timeout(250)
     for sel in (
      f'text="{p.name}"',
      f'.message-input >> text="{p.name}"',
@@ -1879,7 +1931,7 @@ class ZaiWorker(threading.Thread):
    LOG.warning("[DUMP] content failed: %s", e)
    return ""
   if path is None:
-   path = Path.cwd() / "zai_page_source.html"
+   path = Path(__file__).resolve().parent / "zai_page_source.html"
   try:
    path.write_text(html, encoding="utf-8")
    LOG.info("[DUMP] written %s (%d bytes)", path, len(html))
@@ -1992,7 +2044,8 @@ class ZaiWorker(threading.Thread):
          }
          """)
    if html:
-    Path("zai_last_answer.html").write_text(html, encoding="utf-8")
+    (Path(__file__).resolve().parent / "zai_last_answer.html").write_text(
+     html, encoding="utf-8")
     LOG.info("[DUMP-ANSWER] written zai_last_answer.html (%d bytes)", len(html))
   except Exception as e:
    LOG.warning("[DUMP-ANSWER] failed: %s", e)
@@ -2067,12 +2120,20 @@ class ZaiWorker(threading.Thread):
     # ждём либо настоящий текст (>=40 символов), либо долгое отсутствие роста.
     if stable_for >= 3.0 and not generating and len(last_answer) >= 40:
      LOG.info("[ANSWER] FINAL %d chars", len(last_answer))
+     try:
+      self._dump_last_answer_html()  # реальный DOM ответа — для точных селекторов
+     except Exception:
+      pass
      return {"model": self.selected_model or DEFAULT_MODEL,
              "answer": self.collapse_tool_tags(last_answer), "code": data.get("code", [])}
     # generating у Qwen часто не сбрасывается — не ждём 900 секунд зря.
     if stable_for >= 30.0:
      LOG.warning("[ANSWER] no growth %.1fs (generating=%s), finalizing best %d chars",
                  stable_for, generating, len(last_answer))
+     try:
+      self._dump_last_answer_html()
+     except Exception:
+      pass
      return {"model": self.selected_model or DEFAULT_MODEL,
              "answer": self.collapse_tool_tags(last_answer), "code": data.get("code", []),
              "complete": not generating}
@@ -2116,18 +2177,35 @@ class ZaiWorker(threading.Thread):
   return ""
 
  def _command_from_user_request(self, text: str) -> str:
-  """Если пользователь спросил «что в папке <путь>» — команда известна заранее.
-  Qwen часто обрывает генерацию на середине пути, поэтому путь берём из
-  ИСХОДНОГО вопроса, а не из ответа сайта."""
+  """Детерминированная команда для частых запросов — без участия LLM.
+  Qwen часто обрывает путь на середине, поэтому путь и намерение берём из
+  ИСХОДНОГО вопроса пользователя, а не из ответа сайта."""
   t = text or ""
   m = re.search(r"(?:/mnt|/home|/tmp|/root|/media|/opt|/var)/[^\s\"'<>]+", t)
   if not m:
    return ""
-  if not re.search(r"(что|список|покажи|посмотри|содержим|папк|команд|"
-                   r"what|list|show|inspect|folder|directory|command)", t, re.I):
-   return ""
   path = m.group(0).rstrip(".,;:")
-  return f'ls -la "{path}"'
+  low = t.lower()
+  # «сколько файлов» / «how many files»
+  if re.search(r"(сколько|count|how many).{0,40}(файл|file|элемент)", low):
+   return f'find "{path}" -maxdepth 1 -type f | wc -l'
+  # поиск по расширению: «найди *.txt в <путь>»
+  if re.search(r"(найди|найти|поиск|найди все|find|search)", low):
+   ext = re.search(r"\.([a-z0-9]{1,6})\b", low)
+   if ext:
+    return f'find "{path}" -maxdepth 3 -type f -iname "*.{ext.group(1)}" | head -100'
+  # «прочитай файл <путь>»
+  if re.search(r"(прочитай|открой|содержимое файла|read|cat|show content)", low) and \
+     re.search(r"\.[a-z0-9]{1,6}$", path, re.I):
+   return f'cat "{path}"'
+  # «сколько места занимает»
+  if re.search(r"(место на диске|свободн|disk space|df\b|размер папки)", low):
+   return f'df -h "{path}"'
+  # «что в папке» / «список файлов» / «what is in folder»
+  if re.search(r"(что|список|покажи|посмотри|содержим|папк|каталог|команд|"
+               r"what|which|list|show|inspect|folder|directory|command)", low):
+   return f'ls -la "{path}"'
+  return ""
 
  def _run_local_command(self, command: str, timeout: float) -> dict[str, Any]:
   """Локальная модель исполняет команду ДОСЛОВНО. Если она исказила
@@ -2851,19 +2929,34 @@ def main():
  parser.add_argument("--max-exec-iters", type=int, default=12)
  args = parser.parse_args()
  
- log_file = Path.cwd() / "zai_agent.log"
- # INFO идёт только в файл zai_agent.log, чтобы не засорять консоль (print-трассировка читается чисто).
+ # Лог ВСЕГДА лежит рядом со скриптом, независимо от текущей папки запуска.
+ # Ротация 5 МБ × 3, чтобы файл не рос бесконечно.
+ log_file = Path(__file__).resolve().parent / "zai_agent.log"
+ # INFO идёт только в файл, чтобы не засорять консоль (print-трассировка читается чисто).
  # На консоль выводим только WARNING и выше.
  _console = logging.StreamHandler()
  _console.setLevel(logging.WARNING)
- _file = logging.FileHandler(log_file, encoding="utf-8")
+ _file = logging.handlers.RotatingFileHandler(
+  log_file, maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8")
  _file.setLevel(logging.INFO)
  logging.basicConfig(level=logging.INFO,
                      format="%(asctime)s %(levelname)s %(message)s",
                      handlers=[_console, _file])
  logging.getLogger("playwright").setLevel(logging.WARNING)
  LOG.info("[BOOT] logs -> %s", log_file)
- 
+
+ # Защита от второго агента: два воркера на одну вкладку Qwen ломают ответы.
+ other = _another_agent_running()
+ if other is not None:
+  print(f"[QWEN-AGENT] УЖЕ ЗАПУЩЕН агент PID {other}. "
+        f"Остановите его перед повторным запуском.", flush=True)
+  return
+ _claim_agent_pid()
+ requested_port = args.port
+ args.port = _find_free_port(args.host, args.port)
+ if args.port != requested_port:
+  print(f"[QWEN-AGENT] Порт {requested_port} занят — использую {args.port}", flush=True)
+
  profile = Path(args.profile).expanduser()
  work_dir = Path(args.work_dir).expanduser()
 
