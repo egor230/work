@@ -208,7 +208,7 @@ APK: `apk/ByeByeDPI-nfqws-general_alt12.apk`. **Не устанавливалс�
 `jniStartProxy` / `jniStopProxy` / `jniForceClose` сохранены.
 
 Проверено: `classes.dex` побайтово совпадает с исходным APK (MD5
-`f8ce4def85124121a81d1d27c5818`), ассеты — те же (11 файлов). Интерфейс и
+`f8ce4def85124121a81d1d35d27c5818`), ассеты — те же (11 файлов). Интерфейс и
 принцип работы **не изменены**.
 
 APK: `apk/ByeByeDPI-original-UI-updated-libs.apk`. Переподписан отладочным
