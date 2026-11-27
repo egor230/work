@@ -2086,6 +2086,20 @@ class ZaiWorker(threading.Thread):
     return c
   return ""
 
+ def _command_from_user_request(self, text: str) -> str:
+  """Если пользователь спросил «что в папке <путь>» — команда известна заранее.
+  Qwen часто обрывает генерацию на середине пути, поэтому путь берём из
+  ИСХОДНОГО вопроса, а не из ответа сайта."""
+  t = text or ""
+  m = re.search(r"(?:/mnt|/home|/tmp|/root|/media|/opt|/var)/[^\s\"'<>]+", t)
+  if not m:
+   return ""
+  if not re.search(r"(что|список|покажи|посмотри|содержим|папк|команд|"
+                   r"what|list|show|inspect|folder|directory|command)", t, re.I):
+   return ""
+  path = m.group(0).rstrip(".,;:")
+  return f'ls -la "{path}"'
+
  def _run_local_command(self, command: str, timeout: float) -> dict[str, Any]:
   """Локальная модель исполняет команду ДОСЛОВНО. Если она исказила
   команду — выполняем исходную команду с сайта напрямую."""
@@ -2126,10 +2140,12 @@ class ZaiWorker(threading.Thread):
     self._attach_system_profile()
    self._attach_tools_doc()
   if self.local_tools is not None and self.local_tools.ready:
-   # Облачная модель — «мозги» (планировщик), локальная — «руки» (исполнитель).
+   # Облачная модель — «мозги», локальная — «руки». Если вопрос уже содержит
+   # путь к папке, команду знаем заранее (Qwen её часто обрывает).
+   user_hint = self._command_from_user_request(message)
    message = LOCAL_PLANNER_INSTRUCTION + message
    raw = self._ask_raw(message, model, timeout)
-   command = self._extract_shell_command(raw["answer"])
+   command = user_hint or self._extract_shell_command(raw["answer"])
    if command:
     LOG.info("[ASK] точная команда от сайта: %s", command[:200])
     local = self._run_local_command(command, timeout)

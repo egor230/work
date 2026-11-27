@@ -398,6 +398,25 @@ pkgFlags=[ HAS_CODE ALLOW_CLEAR_USER_DATA ALLOW_BACKUP LARGE_HEAP ]
 **Сохранены upstream-механизмы.**
 Playback recovery, SABR backoff, обработка 403/poToken и decoder errors из оригинала не тронуты — мы их не заменяли, а только добавили свои шаги.
 
+### 4.12. ByeByeDPI с встроенным nfqws (27.11)
+На основе официального репозитория `romanvht/ByeByeDPI` (ветка master) собрана
+версия с тем же пакетом `io.github.romanvht.byedpi`, тем же интерфейсом и
+настройками, но **вместо старого движка ByeDPI** используется встроенный
+**nfqws из zaprett 7.1.0 со стратегией `general_alt12`** — как в SmartTube.
+
+Что изменено:
+- в `assets/dpi/` добавлены бинарники nfqws, списки и стратегия из нашего проекта;
+- новый класс `services/NfqwsEngine.kt` раскладывает списки в каталог модуля
+  (обход ошибки SELinux `Permission denied`), пишет config/manifest и стартует
+  `zaprett`;
+- `NativeSession.startNative()`/_stop()_ переведены с `ByeDpiProxy` на `NfqwsEngine`;
+- сборка нативной части ByeDPI отключена (движок больше не используется).
+
+APK: `apk/ByeByeDPI-nfqws-general_alt12.apk`. Подпись отладочная — при установке
+поверх原来 приложения его нужно сначала удалить (`pm uninstall`).
+
+---
+
 ### 4.11. ПОЧЕМУ СТРАТЕГИЯ НЕ РАБОТАЛА И КАК ЭТО ИСПРАВЛЕНО (26.11)
 Точная причина найдена в логе самого движка
 `/data/adb/modules/zaprett/tmp/nfqws.err`:
