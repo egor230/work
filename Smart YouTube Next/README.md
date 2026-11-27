@@ -412,9 +412,10 @@ Playback recovery, SABR backoff, обработка 403/poToken и decoder error
 - `NativeSession.startNative()`/_stop()_ переведены с `ByeDpiProxy` на `NfqwsEngine`;
 - сборка нативной части ByeDPI отключена (движок больше не используется).
 
-APK: `apk/ByeByeDPI-nfqws-general_alt12.apk` (versionName 1.7.7). Подпись отладочная —
-при установке поверх другой подписи старое приложение удаляется; при той же подписи
-используется `adb install -r -d`. Проверено: видео в Smart YouTube Next идёт.
+APK: `apk/ByeByeDPI-nfqws-general_alt12.apk` (versionName 1.7.7, интерфейс original).
+При作用是 стратегия стартует автоматически при открытии приложения — кнопка становится
+зелёной («Подключено»). Первый запуск требует разрешения root в Magisk для нового UID.
+Проверено: `zaprett is working`, видео в Smart YouTube Next идёт без сетевых ошибок.
 
 ---
 
