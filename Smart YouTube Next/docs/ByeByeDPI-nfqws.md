@@ -204,7 +204,7 @@ APK: `apk/ByeByeDPI-nfqws-general_alt12.apk`. **Не устанавливалс�
 | `libbyedpi.so` (arm64) | 83 960 | **88 480** (hufrea/byedpi `e268477`) |
 | `libhev-socks5-tunnel.so` (arm64) | 350 048 | **365 328** (heiher `d8a32b2`) |
 
-Также обновлены библиотеки для armeabi-v7a, x86 и x86_64. JNI-символы
+Также обновлён `libbyedpi.so` для armeabi-v7a, x86 и x86_64. JNI-символы
 `jniStartProxy` / `jniStopProxy` / `jniForceClose` сохранены.
 
 Проверено: `classes.dex` побайтово совпадает с исходным APK (MD5
@@ -213,3 +213,11 @@ APK: `apk/ByeByeDPI-nfqws-general_alt12.apk`. **Не устанавливалс�
 
 APK: `apk/ByeByeDPI-original-UI-updated-libs.apk`. Переподписан отладочным
 ключом (исходный приватный ключ недоступен). **Не устанавливался**.
+
+### Важное уточнение (после установки)
+
+Обновлённый `libhev-socks5-tunnel.so` (d8a32b2) оказался несовместим с JNI этого
+приложения: при запуске падал `UnsatisfiedLinkError: JNI_ERR returned from
+JNI_OnLoad`. Поэтому в финальном APK **hev-socks5-tunnel оставлен оригинальным**,
+а обновлён только `libbyedpi.so`. Приложение установлено на приставку, работает,
+одна кнопка зелёная,.Fatal-ошибок нет.

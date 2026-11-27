@@ -343,14 +343,14 @@
             "LEFT_SHOULDER": "KEY_Q",
             "RIGHT_SHOULDER": "KEY_W",
             "LEFT_TRIGGER": "KEY_KP7",
-            "RIGHT_TRIGGER": "KEY_KP9",
+            "RIGHT_TRIGGER": "KEY_KPDOT",
             "GUIDE": "KEY_LEFTMETA",
             "BACK": "KEY_BACKSPACE",
             "START": "KEY_KPENTER",
-            "DPAD_UP": "KEY_UP",
-            "DPAD_DOWN": "KEY_DOWN",
-            "DPAD_LEFT": "KEY_LEFT",
-            "DPAD_RIGHT": "KEY_RIGHT",
+            "DPAD_UP": "KEY_W",
+            "DPAD_DOWN": "KEY_S",
+            "DPAD_LEFT": "KEY_A",
+            "DPAD_RIGHT": "KEY_D",
             "LEFT_THUMB_PRESSED": "KEY_L",
             "RIGHT_THUMB_PRESSED": "KEY_R",
             "LEFT_THUMB_UP": "KEY_UP",
@@ -375,7 +375,12 @@
             }
         },
         "gta": {},
-        "Obscure": {}
+        "Obscure": {
+            "RIGHT_THUMB_PRESSED": {
+                "key": "KEY_KPDOT",
+                "mode": "hold"
+            }
+        }
     },
     "mouse_on": true,
     "sens": 7,
