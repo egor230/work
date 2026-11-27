@@ -2,7 +2,7 @@ import os, json, string
 
 
 class XemuConfigManager:
- PROFILES_FILE = "xemu_profiles.json"
+ PROFILES_FILE = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/xbox/xemu_profiles.json"
 
  def __init__(self):
   self.profiles = {"last_profile": "Default"}

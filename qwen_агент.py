@@ -1342,6 +1342,17 @@ class ZaiWorker(threading.Thread):
   job = Job("stream", {"prompt": prompt, "model": model, "queue": chunk_queue}, threading.Event())
   self.jobs.put(job)
  
+ # Закрывает любую вкладку, кроме рабочей. Вызывается на событии "page",
+ # поэтому новая вкладка/popup не успевает остаться в окне браузера.
+ def _close_extra_tab(self, page: Any) -> None:
+  if getattr(self, "page", None) is None or page is self.page:
+   return
+  try:
+   LOG.info("[WORKER] closing new extra tab: %s", page.url)
+   page.close()
+  except Exception as e:
+   LOG.debug("[WORKER] close new tab failed: %s", e)
+
  # ---- Main loop ----
  # Основной цикл воркера: Playwright+Chrome и обработка задач из очереди.
  # 2: run — цикл воркера: Playwright+Chrome, обработка задач из очереди
@@ -1352,21 +1363,31 @@ class ZaiWorker(threading.Thread):
    self.pw = sync_playwright().start()
    self.browser = self.pw.chromium.connect_over_cdp(
     f"http://127.0.0.1:{self.settings.cdp_port}")
-   ctx = self.browser.contexts[0]
-   # Берём вкладку, уже открывшую нужный сайт: Chrome запускается с URL чата,
-   # поэтому page.goto() по тому же адресу только прерывает загрузку SPA.
    host = urlparse(self.settings.url).netloc
-   chat_pages = [p for p in ctx.pages if urlparse(p.url).netloc == host]
-   self.page = chat_pages[0] if chat_pages else (ctx.pages[0] if ctx.pages else ctx.new_page())
-   # Работаем ровно с одной вкладкой: остальные (от прошлых запусков) закрываем,
-   # чтобы воркер не перепутал страницу и чтобы окно было чистым.
-   for p in list(ctx.pages):
+   all_contexts = list(self.browser.contexts)
+   # Ищем вкладку с чатом во ВСЕХ контекстах профиля (не только в первом):
+   # Chrome может открыть другое имя профиля после session restore.
+   chat_pages = [p for c in all_contexts for p in c.pages
+                 if urlparse(p.url).netloc == host]
+   all_pages = [p for c in all_contexts for p in c.pages]
+   self.page = chat_pages[0] if chat_pages else (
+    all_pages[0] if all_pages else all_contexts[0].new_page())
+   # Гарантия: в браузере ВСЕГДА ровно одна вкладка. Закрываем все остальные
+   # (в т.ч. восстановленные из прошлого сеанса) во всех контекстах.
+   for p in all_pages:
     if p is not self.page:
      try:
       p.close()
       LOG.info("[WORKER] closed extra tab: %s", p.url)
      except Exception as e:
       LOG.debug("[WORKER] close tab failed: %s", e)
+   # Если сайт/扩展 откроет новую вкладку или popup — тут же закрываем её.
+   for c in all_contexts:
+    try:
+     c.on("page", self._close_extra_tab)
+    except Exception as e:
+     LOG.debug("[WORKER] tab guard failed: %s", e)
+   ctx = self.page.context
    ctx.add_init_script("""
               Object.defineProperty(navigator,'webdriver',{get:()=>false});
               Object.defineProperty(navigator,'languages',{get:()=>['en-US','en']});
@@ -1514,6 +1535,14 @@ class ZaiWorker(threading.Thread):
   if ctx is None:
    raise RuntimeError("No browser context")
   self.page = next((p for p in ctx.pages if not p.is_closed()), None) or ctx.new_page()
+  # Снова оставляем ровно одну вкладку после восстановления.
+  for c in self.browser.contexts:
+   for p in list(c.pages):
+    if p is not self.page:
+     try:
+      p.close()
+     except Exception:
+      pass
   self._ensure_chat_page()
   if not self._wait_page_ready():
    raise RuntimeError("Chat page elements are not ready")
@@ -2848,12 +2877,15 @@ def main():
   os.environ.get("QWEN_LOCAL_AUTOSTART", "1") != "0" and
   os.environ.get("LOCAL_MODEL_AUTOSTART", "1") != "0"
  )
+ print("[QWEN-AGENT] 1/3 Сначала локальная модель-исполнитель...", flush=True)
  local_ready = False
  if autostart_enabled:
   LOG.info("[BOOT] автозапуск локальной модели: %s", local_tool_url)
   local_ready = autostart_local_model(local_tool_url, args.local_autostart_timeout)
  else:
   LOG.info("[BOOT] автозапуск локальной модели отключён")
+ print(f"[QWEN-AGENT] 1/3 Локальная модель: "
+       f"{'готова' if local_ready else 'ещё грузится — работает watchdog'}", flush=True)
  if _local_model_process is not None:
   atexit.register(_shutdown_local_model)
 
@@ -2925,7 +2957,7 @@ def main():
        flush=True)
  print(f"[QWEN-AGENT] Локальная модель: {local_tool_url} "
        f"({'готова' if worker.local_tools.ready else 'ещё грузится'})", flush=True)
- print("[QWEN-AGENT] Сейчас запускается браузер и открывается чат Qwen...", flush=True)
+ print("[QWEN-AGENT] 2/3 Браузер: запуск чата Qwen (ровно 1 вкладка)...", flush=True)
  print("=" * 64 + "\n", flush=True)
  LOG.info("[SERVER] ready at http://%s:%s", args.host, args.port)
 
@@ -2938,7 +2970,7 @@ def main():
   raise RuntimeError("Worker not ready")
  if worker.start_error:
   raise worker.start_error
- print(f"[QWEN-AGENT] ГОТОВО. Чат и локальная модель подключены. "
+ print(f"[QWEN-AGENT] 3/3 ГОТОВО. Чат открыт в одной вкладке, локальная модель подключена. "
        f"Задавайте вопросы на http://{_display_host}:{args.port}/v1/chat/completions",
        flush=True)
  try:

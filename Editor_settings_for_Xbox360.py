@@ -10,8 +10,9 @@ from PyQt6.QtGui import QKeySequence, QPalette, QColor, QAction
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
 from Ui_Editor_settings_for_Xbox360 import MainWindow, VirtualKeyboard, ZONE_DEFINITIONS, KEY_MAPPER
 
-IMAGE_PATH = os.path.join(os.getcwd(), "gamepad xbox 360.png")
-SETTINGS_FILE = Path.cwd() / "editor_for_Xbox360_app_settings.json"  # Файл настроек
+_SCRIPT_DIR = Path(__file__).resolve().parent
+IMAGE_PATH = str(_SCRIPT_DIR / "gamepad xbox 360.png")
+SETTINGS_FILE = _SCRIPT_DIR / "editor_for_Xbox360_app_settings.json"  # Файл настроек
 
 # Маппинг логических имен кнопок геймпада в коды ecodes
 GAMEPAD_EC = { "A": ecodes.BTN_A, "B": ecodes.BTN_B, "X": ecodes.BTN_X, "Y": ecodes.BTN_Y,
@@ -511,6 +512,47 @@ class ProfileManager:
 
 
 # ======================================================================
+# ГЛОБАЛЬНАЯ ГОРЯЧАЯ КЛАВИША End БЕЗ ROOT
+# Библиотека keyboard на Linux требует root, поэтому если её не удалось
+# запустить — слушаем клавиатуру через evdev (пользователь в группе input).
+# ======================================================================
+class EndKeyMonitor(QThread):
+ end_pressed = pyqtSignal()
+
+ def __init__(self, parent=None):
+  super().__init__(parent)
+  self.running = True
+  self.devices = []
+
+ def run(self):
+  for path in evdev.list_devices():
+   try:
+    dev = evdev.InputDevice(path)
+    caps = dev.capabilities()
+    if ecodes.EV_KEY in caps and ecodes.KEY_END in caps[ecodes.EV_KEY]:
+     self.devices.append(dev)
+   except Exception:
+    pass
+  while self.running:
+   try:
+    readable, _, _ = select([d.fd for d in self.devices], [], [], 0.2)
+    for fd in readable:
+     dev = next((d for d in self.devices if d.fd == fd), None)
+     if not dev:
+      continue
+     for event in dev.read():
+      if (event.type == ecodes.EV_KEY and
+              event.code == ecodes.KEY_END and event.value == 1):
+       self.end_pressed.emit()
+   except Exception:
+    time.sleep(0.2)
+
+ def stop(self):
+  self.running = False
+  self.wait(1000)
+
+
+# ======================================================================
 # КОНТРОЛЛЕР ПРИЛОЖЕНИЯ — связывает UI с логикой профилей и воркером
 # ======================================================================
 class AppController:
@@ -539,10 +581,21 @@ class AppController:
   self.window.addAction(sc)
 
   # Глобальная горячая клавиша End: остановить эмуляцию геймпада.
-  # Используем библиотеку keyboard (ловит клавишу даже когда окно не в фокусе,
-  # например когда Condemned 2 запущен через gamescope на весь экран).
-  # respect_all=False не нужен: End не является модификатором.
-  keyboard.on_press_key("end", lambda _e: self._stop_emulation_hotkey())
+  # keyboard ловит клавишу даже когда окно не в фокусе, но на Linux требует
+  # root. Если прав нет — fallback на evdev (группа input) + Qt-шорткат.
+  self.end_monitor = None
+  try:
+   keyboard.on_press_key("end", lambda _e: self._stop_emulation_hotkey())
+  except Exception as exc:
+   print(f"[WARN] keyboard hotkey недоступен ({exc}); включён evdev-монитор")
+   self.end_monitor = EndKeyMonitor()
+   self.end_monitor.end_pressed.connect(self._stop_emulation_hotkey)
+   self.end_monitor.start()
+   end_action = QAction(self.window)
+   end_action.setShortcut(QKeySequence(Qt.Key.Key_End))
+   end_action.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
+   end_action.triggered.connect(self._stop_emulation_hotkey)
+   self.window.addAction(end_action)
 
   # Сигналы панели триггерных режимов
   self.window.trigger_button_combo.currentIndexChanged.connect(self._on_trigger_button_changed)
