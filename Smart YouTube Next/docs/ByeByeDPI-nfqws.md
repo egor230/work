@@ -220,4 +220,4 @@ APK: `apk/ByeByeDPI-original-UI-updated-libs.apk`. Переподписан от
 приложения: при запуске падал `UnsatisfiedLinkError: JNI_ERR returned from
 JNI_OnLoad`. Поэтому в финальном APK **hev-socks5-tunnel оставлен оригинальным**,
 а обновлён только `libbyedpi.so`. Приложение установлено на приставку, работает,
-одна кнопка зелёная,.Fatal-ошибок нет.
+одна кнопка зелёная, FATAL-ошибок нет.
