@@ -399,8 +399,8 @@ pkgFlags=[ HAS_CODE ALLOW_CLEAR_USER_DATA ALLOW_BACKUP LARGE_HEAP ]
 Playback recovery, SABR backoff, обработка 403/poToken и decoder errors из оригинала не тронуты — мы их не заменяли, а только добавили свои шаги.
 
 ### 4.12. ByeByeDPI с встроенным nfqws (27.11)
-На основе официального репозитория `romanvht/ByeByeDPI` (ветка master) собрана
-версия с тем же пакетом `io.github.romanvht.byedpi`, тем же интерфейсом и
+На основе официального репозитория `romanvht/ByeByeDPI`, **тег v.1.7.7** (точная
+версия вашего APK — внешний вид и меню не изменены) собрана версия с тем же пакетом `io.github.romanvht.byedpi`, тем же интерфейсом и
 настройками, но **вместо старого движка ByeDPI** используется встроенный
 **nfqws из zaprett 7.1.0 со стратегией `general_alt12`** — как в SmartTube.
 
@@ -412,8 +412,9 @@ Playback recovery, SABR backoff, обработка 403/poToken и decoder error
 - `NativeSession.startNative()`/_stop()_ переведены с `ByeDpiProxy` на `NfqwsEngine`;
 - сборка нативной части ByeDPI отключена (движок больше не используется).
 
-APK: `apk/ByeByeDPI-nfqws-general_alt12.apk`. Подпись отладочная — при установке
-поверх原来 приложения его нужно сначала удалить (`pm uninstall`).
+APK: `apk/ByeByeDPI-nfqws-general_alt12.apk` (versionName 1.7.7). Подпись отладочная —
+при установке поверх другой подписи старое приложение удаляется; при той же подписи
+используется `adb install -r -d`. Проверено: видео в Smart YouTube Next идёт.
 
 ---
 
