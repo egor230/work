@@ -285,7 +285,7 @@
             "A": "KEY_UP",
             "B": "KEY_KP3",
             "X": "KEY_KP1",
-            "Y": "KEY_?",
+            "Y": "",
             "LEFT_SHOULDER": "KEY_Q",
             "RIGHT_SHOULDER": "KEY_E",
             "LEFT_TRIGGER": "KEY_DOWN",
@@ -293,7 +293,7 @@
             "GUIDE": "KEY_INSERT",
             "BACK": "KEY_BACKSPACE",
             "START": "KEY_SPACE",
-            "DPAD_UP": "KEY_?",
+            "DPAD_UP": "",
             "DPAD_DOWN": "KEY_DOWN",
             "DPAD_LEFT": "KEY_LEFT",
             "DPAD_RIGHT": "KEY_RIGHT",
@@ -380,20 +380,8 @@
                 "key": "KEY_KPDOT",
                 "mode": "hold"
             },
-            "RIGHT_TRIGGER": {
-                "key": "KEY_?",
-                "mode": "hold"
-            },
-            "RIGHT_SHOULDER": {
-                "key": "KEY_?",
-                "mode": "hold"
-            },
             "LEFT_TRIGGER": {
-                "key": "KEY_?",
-                "mode": "hold"
-            },
-            "LEFT_SHOULDER": {
-                "key": "KEY_?",
+                "key": "KEY_SLASH",
                 "mode": "hold"
             }
         }

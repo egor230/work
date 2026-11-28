@@ -21,7 +21,16 @@ class KeyMapper:
    'Ctrl': 'KEY_LEFTCTRL', 'Ctrl_r': 'KEY_RIGHTCTRL', 'Alt_L': 'KEY_LEFTALT', 'Alt_r': 'KEY_RIGHTALT',
    'Windows': 'KEY_LEFTMETA', 'Menu': 'KEY_MENU', 'space': 'KEY_SPACE',
    'up': 'KEY_UP', 'down': 'KEY_DOWN', 'left': 'KEY_LEFT', 'right': 'KEY_RIGHT',
-   'KEnter': 'KEY_KPENTER'
+   'KEnter': 'KEY_KPENTER',
+   '~': 'KEY_GRAVE', '_': 'KEY_MINUS', '+': 'KEY_EQUAL', '=': 'KEY_EQUAL',
+   '{': 'KEY_LEFTBRACE', '[': 'KEY_LEFTBRACE',
+   '}': 'KEY_RIGHTBRACE', ']': 'KEY_RIGHTBRACE',
+   '|': 'KEY_BACKSLASH', '\\': 'KEY_BACKSLASH',
+   ':': 'KEY_SEMICOLON', ';': 'KEY_SEMICOLON',
+   '"': 'KEY_APOSTROPHE', "'": 'KEY_APOSTROPHE',
+   '<': 'KEY_COMMA', ',': 'KEY_COMMA',
+   '>': 'KEY_DOT', '.': 'KEY_DOT',
+   '?': 'KEY_SLASH', '/': 'KEY_SLASH'
   }
   # Словарь для красивого отображения в UI (KEY_LEFTSHIFT -> LShift)
   self.display_names = {
