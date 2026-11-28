@@ -4854,6 +4854,17 @@ GAMEPAD_EC = { "A": ecodes.BTN_A, "B": ecodes.BTN_B, "X": ecodes.BTN_X, "Y": eco
  "RIGHT_THUMB_DOWN": ecodes.ABS_RY, "RIGHT_THUMB_LEFT": ecodes.ABS_RX, "RIGHT_THUMB_RIGHT": ecodes.ABS_RX,
  "LEFT_THUMB_PRESSED": ecodes.BTN_THUMBL, "RIGHT_THUMB_PRESSED": ecodes.BTN_THUMBR}
 
+# Кнопки мыши и колесо как «виртуальные клавиши» для маппингов.
+# Отрицательные коды не пересекаются с настоящими evdev KEY_*.
+MOUSE_ACTION_CODES = {"LBUTTON": -1, "RBUTTON": -2, "MBUTTON": -3,
+                      "XBUTTON1": -4, "XBUTTON2": -5,
+                      "SCROLL_UP": -6, "SCROLL_DOWN": -7}
+EV_TO_MOUSE_ACTION = {
+    ecodes.BTN_LEFT: "LBUTTON", ecodes.BTN_RIGHT: "RBUTTON",
+    ecodes.BTN_MIDDLE: "MBUTTON", ecodes.BTN_SIDE: "XBUTTON1",
+    ecodes.BTN_EXTRA: "XBUTTON2",
+}
+
 # Кнопки, для которых применим комбинированный режим (hold/repeat + обычное нажатие)
 # D-pad и стики обрабатываются немедленно (несколько логических кнопок на одну ось)
 SIMPLE_BUTTONS = {"A", "B", "X", "Y", "LEFT_SHOULDER", "RIGHT_SHOULDER",
@@ -5007,8 +5018,10 @@ class Worker(QThread):
    # Пропускаем пустые строки и не-строки (на случай старого формата)
    if not isinstance(val, str) or not val:
     continue
-   if hasattr(ecodes, val):
+   k_code = MOUSE_ACTION_CODES.get(val)
+   if k_code is None and hasattr(ecodes, val):
     k_code = getattr(ecodes, val)
+   if k_code is not None:
     normal_inv.setdefault(k_code, []).append(logical)
 
   for logical, info in self.tm.items():
@@ -5016,9 +5029,15 @@ class Worker(QThread):
     continue
    key_str = info.get("key", "")
    mode = info.get("mode", "")
-   if key_str and hasattr(ecodes, key_str):
+   k_code = MOUSE_ACTION_CODES.get(key_str) if key_str else None
+   if k_code is None and key_str and hasattr(ecodes, key_str):
     k_code = getattr(ecodes, key_str)
+   if k_code is not None:
     trigger_inv.setdefault(k_code, []).append((logical, mode))
+
+  # Доступно _mouse_ev: если кнопка мыши назначена на действие геймпада.
+  self.normal_inv = normal_inv
+  self.trigger_inv = trigger_inv
 
   # Обратный маппинг: logical -> [key_codes] для обычных нажатий
   self.normal_logical_to_keys = {}
@@ -5052,29 +5071,8 @@ class Worker(QThread):
         self.running = False
         break
 
-       # Обновляем множество физически нажатых клавиш
-       if ev.value == 1 or ev.value == 2:
-        self.physically_pressed.add(ev.code)
-       elif ev.value == 0:
-        self.physically_pressed.discard(ev.code)
-
-       # === Триггерные режимы (hold/repeat) — приоритет ===
-       if ev.code in trigger_inv:
-        for logical, mode in trigger_inv[ev.code]:
-         self._handle_trigger_key(logical, mode, ev.value)
-
-       # === Обычные маппинги ===
-       # Отдельный if: клавиша может быть одновременно и триггером, и
-       # обычной привязкой к другой кнопке геймпада.
-       if ev.code in normal_inv:
-        for logical in normal_inv[ev.code]:
-         if logical in self.combined_set:
-          # Кнопка с триггерным режимом — НЕ отправляем сразу,
-          # состояние будет вычислено ниже в комбинированной логике
-          pass
-         else:
-          # Обычная кнопка без триггерного режима — немедленная отправка
-          self._dispatch(logical, p)
+       # Единая обработка и для клавиатуры, и для кнопок мыши.
+       self._handle_input_code(ev.code, ev.value)
 
       elif d is self.m_dev:
        self._mouse_ev(ev)
@@ -5142,6 +5140,25 @@ class Worker(QThread):
 
   self._clean()
 
+ def _handle_input_code(self, code, value):
+  """Обработать код как клавишу: обычный маппинг, hold/repeat и физическое состояние.
+
+  Используется и для клавиатуры, и для виртуальных кодов кнопок мыши.
+  """
+  p = value in (1, 2)
+  if p:
+   self.physically_pressed.add(code)
+  else:
+   self.physically_pressed.discard(code)
+  if code in self.trigger_inv:
+   for logical, mode in self.trigger_inv[code]:
+    self._handle_trigger_key(logical, mode, value)
+  if code in self.normal_inv:
+   for logical in self.normal_inv[code]:
+    if logical in self.combined_set:
+     continue   # состояние посчитает комбинированная логика ниже
+    self._dispatch(logical, p)
+
  def _handle_trigger_key(self, logical, mode, ev_value):
   """Обрабатывает нажатие клавиши для триггерного режима (hold/repeat).
      НЕ отправляет события напрямую — это делает комбинированная логика."""
@@ -5161,8 +5178,14 @@ class Worker(QThread):
  def _mouse_ev(self, ev):
   """Преобразует движение мыши в оси правого стика и её кнопки в действия геймпада."""
   if ev.type == ecodes.EV_REL:
-   # Игнорируем колесо и прочие относительные события: иначе они добавляли
-   # нулевые значения в сглаживание и временно ухудшали отклик стика.
+   # Колесо — отдельная «клавиша», если она назначена на действие геймпада.
+   if ev.code == ecodes.REL_WHEEL and ev.value:
+    code = MOUSE_ACTION_CODES["SCROLL_UP" if ev.value > 0 else "SCROLL_DOWN"]
+    if code in getattr(self, "normal_inv", {}) or code in getattr(self, "trigger_inv", {}):
+     self._handle_input_code(code, 1)
+     self._handle_input_code(code, 0)
+    return
+   # Прочие относительные события не должны портить сглаживание стика.
    if ev.code not in (ecodes.REL_X, ecodes.REL_Y):
     return
    dx = ev.value * self.sens_x if ev.code == ecodes.REL_X else 0
@@ -5175,6 +5198,12 @@ class Worker(QThread):
    self.m_ry = max(-32767, min(32767, self.m_ry + dy * 40))
   elif ev.type == ecodes.EV_KEY:
    pressed = 1 if ev.value else 0
+   # Кнопка мыши может быть назначена на действие геймпада как обычная клавиша.
+   action = EV_TO_MOUSE_ACTION.get(ev.code)
+   if action:
+    code = MOUSE_ACTION_CODES[action]
+    if code in getattr(self, "normal_inv", {}) or code in getattr(self, "trigger_inv", {}):
+     self._handle_input_code(code, ev.value)
    if ev.code == ecodes.BTN_LEFT:
     self.ui.write(ecodes.EV_ABS, ecodes.ABS_RZ, 255 if pressed else 0)
     # Комбинированная логика hold/repeat сверяется с last_output. Без

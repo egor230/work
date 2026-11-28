@@ -175,10 +175,11 @@ class TestDocScroll(Base):
         native = self.tab.view._native_bar()
         self.tab.view._animate_scroll(native.maximum())
         pump(2)
-        self.assertIsNotNone(self.tab.view._scroll_anim)
+        self.assertTrue(self.tab.view._scroll_timer.isActive())
         self.bar.setValue(2 * m.PAGE_SCROLL_UNITS)
         pump(3)
-        self.assertIsNone(self.tab.view._scroll_anim)
+        self.assertFalse(self.tab.view._scroll_timer.isActive())
+        self.assertIsNone(self.tab.view._scroll_target)
 
     def test_position_survives_docbar_drag(self):
         self.bar.setValue(5 * m.PAGE_SCROLL_UNITS + 300)

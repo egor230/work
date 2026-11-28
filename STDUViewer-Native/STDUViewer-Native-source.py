@@ -19,7 +19,6 @@ from pathlib import Path
 
 from PyQt5.QtCore import (
     Qt, QSize, QTimer, QUrl, QFileInfo, pyqtSignal, QRectF, QPointF,
-    QPropertyAnimation, QEasingCurve,
 )
 from PyQt5.QtGui import (
     QImage, QPixmap, QIcon, QTransform, QPainter, QColor,
@@ -52,6 +51,18 @@ PALM_EXTS = {'.pdb', '.wwf'}
 # Сколько «условных единиц» ползунка отведено одной странице. Глобальный
 # ползунок документы отображает весь документ, а не только текущую страницу.
 PAGE_SCROLL_UNITS = 1000
+
+# Зазор между страницами в «сшитом» полотне при переходе со страницы на
+# страницу. Благодаря ему прокрутка через границу идёт непрерывно, без рывка.
+PAGE_GAP = 12
+
+# Период тиков плавной прокрутки (мс) и доля остатка, проходимая за тик.
+SCROLL_TICK_MS = 16
+SCROLL_EASE = 0.30
+
+# Ограничение скорости: длинный переход между страницами должен проезжать
+# плавно, а не проскакивать всё полотно за два-три тика.
+SCROLL_MAX_STEP = 90
 
 # Значок оригинала (тот же .ico, что и у STDU Viewer под Wine)
 ICON_FILE = os.environ.get(
@@ -926,7 +937,15 @@ class PageView(QScrollArea):
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.verticalScrollBar().setSingleStep(48)
         self.verticalScrollBar().valueChanged.connect(self._sync_docbar)
-        self._scroll_anim = None
+        # Плавная прокрутка: одно целевое положение и один таймер на всё
+        # колесо мыши. Раньше каждое событие колеса создавало новую анимацию
+        # и начинало её заново — от этого движение было «рваным».
+        self._scroll_target = None
+        self._scroll_velocity = 0.0
+        self._scroll_timer = QTimer(self)
+        self._scroll_timer.setInterval(SCROLL_TICK_MS)
+        self._scroll_timer.timeout.connect(self._scroll_tick)
+        self._transition = None
 
         self.docbar = QScrollBar(Qt.Vertical, self)
         self.docbar.setObjectName('docScrollBar')
@@ -959,9 +978,13 @@ class PageView(QScrollArea):
     def _docbar_range(self):
         """Диапазон ползунка — все страницы документа, по PAGE_SCROLL_UNITS на каждую."""
         n = max(1, int(self.tab.doc.page_count))
-        self.docbar.setRange(0, n * PAGE_SCROLL_UNITS - 1)
-        self.docbar.setPageStep(PAGE_SCROLL_UNITS)
-        self.docbar.setSingleStep(48)
+        new_max = n * PAGE_SCROLL_UNITS - 1
+        if self.docbar.maximum() != new_max:
+            self.docbar.setRange(0, new_max)
+        if self.docbar.pageStep() != PAGE_SCROLL_UNITS:
+            self.docbar.setPageStep(PAGE_SCROLL_UNITS)
+        if self.docbar.singleStep() != 48:
+            self.docbar.setSingleStep(48)
 
     def _sync_docbar(self, *args):
         """Привести глобальный ползунок в соответствие с текущей страницей."""
@@ -971,19 +994,32 @@ class PageView(QScrollArea):
         try:
             self._docbar_range()
             native = self._native_bar()
-            span = native.maximum() - native.minimum()
-            frac = ((native.value() - native.minimum()) / span) if span > 0 else 0.0
+            top, height = self.tab.page_geometry()
+            frac = ((native.value() - top) / height) if height > 0 else 0.0
             frac = max(0.0, min(1.0, frac))
-            value = (int(self.tab.page) * PAGE_SCROLL_UNITS +
+            page = self._displayed_page()
+            value = (int(page) * PAGE_SCROLL_UNITS +
                      int(frac * (PAGE_SCROLL_UNITS - 1)))
-            self.docbar.setValue(max(0, min(self.docbar.maximum(), value)))
+            value = max(0, min(self.docbar.maximum(), value))
+            if self.docbar.value() != value:
+                self.docbar.setValue(value)
             self.docbar.setToolTip('Страница %d из %d — перетащите ползунок '
                                    'к нужной странице'
-                                   % (int(self.tab.page) + 1,
+                                   % (page + 1,
                                       max(1, int(self.tab.doc.page_count))))
-            self._place_docbar()
         finally:
             self._syncing_docbar = False
+
+    def _displayed_page(self):
+        """Какой странице соответствует верх видимой области прямо сейчас."""
+        tr = self._transition
+        if tr and tr['dir'] > 0:
+            native = self._native_bar()
+            return tr['page'] if native.value() >= tr['neighbor_top'] else self.tab.page
+        if tr and tr['dir'] < 0:
+            native = self._native_bar()
+            return self.tab.page if native.value() >= tr['cur_top'] else tr['page']
+        return self.tab.page
 
     def _on_docbar_changed(self, value):
         """Перетаскивание ползунка: переходим на страницу и место внутри неё."""
@@ -1003,38 +1039,189 @@ class PageView(QScrollArea):
                 self.tab.goto(page)   # рендер новой страницы и прокрутка наверх
             finally:
                 self._applying_docbar = False
-        native = self._native_bar()
-        if native.maximum() > 0:
-            native.setValue(int(frac * native.maximum()))
+            # Прямое manipulation ползунком должно быть мгновенным: анимация
+            # здесь только мешала бы и «тянула» ползунок назад.
+            native = self._native_bar()
+            top, height = self.tab.page_geometry()
+            if height > 0:
+                native.setValue(int(max(native.minimum(),
+                                        min(native.maximum(), top + frac * height))))
         self._sync_docbar()
 
     # -- служебные методы прокрутки ------------------------------------
     def _stop_anim(self):
-        if self._scroll_anim is not None:
-            if self._scroll_anim.state() == QPropertyAnimation.Running:
-                self._scroll_anim.stop()
-            self._scroll_anim = None
+        """Остановить плавную прокрутку и убрать «сшитое» полотно."""
+        if self._scroll_timer.isActive():
+            self._scroll_timer.stop()
+        self._scroll_target = None
+        self._scroll_velocity = 0.0
+        if self._transition is not None:
+            self._cancel_transition()
 
     def _animate_scroll(self, target):
-        """Плавная (сглаженная) прокрутка к заданному положению ползунка."""
-        bar = self.verticalScrollBar()
-        target = max(bar.minimum(), min(bar.maximum(), int(target)))
-        self._stop_anim()
-        if target == bar.value():
+        """Плавно ехать к положению ползунка, складывая быстрые колеса мыши."""
+        bar = self._native_bar()
+        self._scroll_target = max(bar.minimum(), min(bar.maximum(), int(target)))
+        if not self._scroll_timer.isActive():
+            self._scroll_timer.start()
+
+    def _scroll_tick(self):
+        """Один шаг плавной прокрутки (16 мс)."""
+        bar = self._native_bar()
+        target = self._scroll_target
+        if target is None:
+            self._scroll_timer.stop()
             return
-        self._scroll_anim = QPropertyAnimation(bar, b'value', self)
-        self._scroll_anim.setDuration(200)
-        self._scroll_anim.setEasingCurve(QEasingCurve.OutCubic)
-        self._scroll_anim.setEndValue(target)
-        self._scroll_anim.start()
+        value = bar.value()
+        pages = max(1, int(self.tab.doc.page_count))
+        continuous = getattr(self.tab, 'continuous', True) and pages > 1
+        tr = self._transition
+
+        # Смена направления посреди перехода: возвращаемся к одной странице,
+        # не дёргая картинку (сдвигаем ползунок на ширину «сшитого» куска).
+        if tr and tr['dir'] > 0 and target < tr['entry_target'] - 2 \
+                and value < tr['neighbor_top'] - 2:
+            resume = tr['resume_target'] + (target - tr['entry_target'])
+            self._cancel_transition()
+            bar = self._native_bar()
+            self._scroll_target = max(bar.minimum(), min(bar.maximum(), resume))
+            target = self._scroll_target
+        elif tr and tr['dir'] < 0 and target > tr['entry_target'] + 2 \
+                and value > tr['cur_top'] + 2:
+            resume = tr['resume_target'] + (target - tr['entry_target'])
+            self._cancel_transition(tr['cur_shift'])
+            bar = self._native_bar()
+            self._scroll_target = max(bar.minimum(), min(bar.maximum(), resume))
+            target = self._scroll_target
+
+        # За пределами документа прокручиваться некуда.
+        if self._transition is None:
+            if self.tab.page == 0:
+                target = max(target, bar.minimum())
+            if self.tab.page >= pages - 1:
+                target = min(target, bar.maximum())
+            self._scroll_target = target
+
+        # Цель вышла за край полотна — сшиваем соседнюю страницу и продолжаем
+        # то же движение уже по ней, без мгновенной подмены картинки.
+        if self._transition is None and continuous:
+            if target > bar.maximum():
+                if not self._begin_transition(1):
+                    self._scroll_target = bar.maximum()
+            elif target < bar.minimum():
+                if not self._begin_transition(-1):
+                    self._scroll_target = bar.minimum()
+            bar = self._native_bar()
+            target = self._scroll_target
+
+        diff = target - bar.value()
+        if abs(diff) <= 2:
+            bar.setValue(target)
+            self._scroll_velocity = 0.0
+        else:
+            # Скорость тоже сглаживается: колесо приходит пачками событий,
+            # и без этого шаг прокрутки «дышит» (45/74/45/74 пикселей).
+            desired = diff * SCROLL_EASE
+            self._scroll_velocity = self._scroll_velocity * 0.45 + desired * 0.55
+            step = int(self._scroll_velocity)
+            if step == 0:
+                step = 2 if diff > 0 else -2
+            if abs(step) > abs(diff):
+                step = int(diff)
+            step = max(-SCROLL_MAX_STEP, min(SCROLL_MAX_STEP, step))
+            bar.setValue(max(bar.minimum(), min(bar.maximum(), bar.value() + step)))
+        value = bar.value()
+
+        # Пересекли границу сшитых страниц — делаем соседнюю текущей и
+        # сохраняем точку просмотра: видимая картинка остаётся на месте.
+        for _ in range(8):
+            tr = self._transition
+            if tr is None:
+                break
+            # Вверх переключаем только когда вся видимая область уже внутри
+            # верхней страницы — иначе подмена полотна даст скачок картинки.
+            in_upper_page = (value + self.viewport().height() <= tr['cur_top'])
+            if (tr['dir'] > 0 and value >= tr['neighbor_top']) or \
+                    (tr['dir'] < 0 and in_upper_page):
+                shift = tr['commit_shift']
+                self._commit_transition(shift)
+                bar = self._native_bar()
+                self._scroll_target = max(
+                    bar.minimum(),
+                    min(bar.maximum(), self._scroll_target - shift))
+                value = bar.value()
+            else:
+                break
+
+        if self._scroll_target is not None and bar.value() == self._scroll_target:
+            self._scroll_timer.stop()
+            self._scroll_target = None
+
+    def _begin_transition(self, direction):
+        """Сшить текущую страницу с соседней для плавного перехода."""
+        bar = self._native_bar()
+        old_max = bar.maximum()
+        old_min = bar.minimum()
+        original_target = self._scroll_target
+        step = 2 if (getattr(self.tab, 'mode', 'single') in ('facing', 'facing_cover')
+                     and self.tab.doc.page_count > 1) else 1
+        info = self.tab.make_transition(direction, step)
+        if not info:
+            return False
+        info['resume_target'] = max(old_min, min(old_max, original_target))
+        if direction > 0:
+            # «Хвост» колеса приходится на соседнюю страницу так же, как
+            # раньше: N пикселей от её верха, а не от низа текущей.
+            info['commit_shift'] = info['neighbor_top']
+            self._scroll_target += info['neighbor_top'] - old_max
+        else:
+            # Сдвигаем ползунок на высоту верхней страницы: при подмене
+            # полотна видимая картинка остаётся на месте. Доехать нужно до
+            # момента, когда верхняя страница целиком вошла в область просмотра.
+            shift = info['cur_top']
+            info['commit_shift'] = 0
+            info['cur_shift'] = shift
+            overflow = old_min - original_target
+            bar.setValue(max(bar.minimum(), min(bar.maximum(), bar.value() + shift)))
+            self._scroll_target = (shift - self.viewport().height() - overflow)
+        info['entry_target'] = self._scroll_target
+        self._transition = info
+        return True
+
+    def _commit_transition(self, shift):
+        """Сделать соседнюю страницу текущей, сохранив видимую позицию."""
+        tr = self._transition
+        if tr is None:
+            return
+        self._transition = None
+        bar = self._native_bar()
+        value = bar.value()
+        self.tab.page = tr['page']
+        self.tab.render()
+        bar = self._native_bar()
+        bar.setValue(max(bar.minimum(), min(bar.maximum(), value - shift)))
+
+    def _cancel_transition(self, shift=0):
+        """Откат «сшитого» полотна к обычной одной странице."""
+        if self._transition is None:
+            return
+        self._transition = None
+        bar = self._native_bar()
+        value = bar.value()
+        self.tab.render()
+        bar = self._native_bar()
+        if shift:
+            bar.setValue(max(bar.minimum(), min(bar.maximum(), value - shift)))
 
     def scroll_to_top(self):
         self._stop_anim()
-        self.verticalScrollBar().setValue(self.verticalScrollBar().minimum())
+        bar = self._native_bar()
+        bar.setValue(bar.minimum())
 
     def scroll_to_bottom(self):
         self._stop_anim()
-        self.verticalScrollBar().setValue(self.verticalScrollBar().maximum())
+        bar = self._native_bar()
+        bar.setValue(bar.maximum())
 
     def set_image(self, qimage, links=None):
         self.label.clear_selection()
@@ -1056,44 +1243,24 @@ class PageView(QScrollArea):
             event.accept()
             return
 
-        dy = event.angleDelta().y()
+        pixel = event.pixelDelta()
+        dy = pixel.y() if not pixel.isNull() else event.angleDelta().y()
         if dy == 0:
             super().wheelEvent(event)
             return
 
-        bar = self.verticalScrollBar()
-        step = abs(dy) or 120
-        down = dy < 0        # в Qt отрицательный angleDelta — прокрутка вниз
-
-        # seamless-режим выключен: просто плавно листаем текущую страницу.
-        continuous = getattr(self.tab, 'continuous', True)
-        pages = self.tab.doc.page_count
-        can_turn = continuous and pages > 1
-
-        if down:
-            room = bar.maximum() - bar.value()
-            if room > step or not can_turn or self.tab.page >= pages - 1:
-                self._animate_scroll(bar.value() + step)
-                event.accept()
-                return
-            # Дошли до низа — переходим на следующую страницу и переносим
-            # оставшийся «хвост» прокрутки на неё, чтобы листание было непрерывным.
-            overflow = max(0, step - room)
-            self.tab.next_page()
-            self.scroll_to_top()
-            if overflow:
-                bar.setValue(min(overflow, bar.maximum()))
-        else:
-            room = bar.value() - bar.minimum()
-            if room > step or not can_turn or self.tab.page <= 0:
-                self._animate_scroll(bar.value() - step)
-                event.accept()
-                return
-            overflow = max(0, step - room)
-            self.tab.prev_page()
-            self.scroll_to_bottom()
-            if overflow:
-                bar.setValue(max(bar.minimum(), bar.maximum() - overflow))
+        bar = self._native_bar()
+        # Новая цель складывается с предыдущей: быстрые события колеса не
+        # «съедают» друг друга и не перезапускают анимацию с нуля.
+        base = self._scroll_target if self._scroll_target is not None else bar.value()
+        target = base - dy
+        continuous = getattr(self.tab, 'continuous', True) and \
+            self.tab.doc.page_count > 1
+        if not continuous:
+            target = max(bar.minimum(), min(bar.maximum(), target))
+        self._scroll_target = target
+        if not self._scroll_timer.isActive():
+            self._scroll_timer.start()
         event.accept()
 
 
@@ -1118,6 +1285,12 @@ class DocumentTab(QWidget):
         self._find_rects = []     # подсветка на текущей странице
         self._selected_text = ''  # текст, выделенный мышью на странице
         self._pages, self._imgs, self._offsets, self._z = [], [], [], 1.0
+        # Кэш отрисованных страниц: переход на соседнюю страницу не должен
+        # задерживаться на рендере, иначе прокрутка снова выглядит как рывок.
+        self._render_cache = {}
+        self._prefetch_timer = QTimer(self)
+        self._prefetch_timer.setSingleShot(True)
+        self._prefetch_timer.timeout.connect(self._prefetch_neighbors)
         self._fit_timer = QTimer(self)
         self._fit_timer.setSingleShot(True)
         self._fit_timer.timeout.connect(self._refit_after_resize)
@@ -1163,15 +1336,125 @@ class DocumentTab(QWidget):
         self.mw.remember_position(self)
 
     def _pages_to_show(self):
+        return self._spread_for(self.page)
+
+    def _render_cached(self, index, zoom, rotation):
+        """Отрисовка страницы с небольшим LRU-кэшем."""
+        key = (index, round(zoom, 4), rotation)
+        img = self._render_cache.get(key)
+        if img is None:
+            img = self.doc.render(index, zoom, rotation)
+            if img.isNull():
+                return img
+            if len(self._render_cache) >= 12:
+                self._render_cache.pop(next(iter(self._render_cache)))
+            self._render_cache[key] = img
+        return img
+
+    def _prefetch_neighbors(self):
+        """Заранее рисуем соседние страницы — переход не будет тормозить."""
+        if self._closed or self.view is None or self.doc.kind == 'flow':
+            return
+        z = self._z or self.zoom
+        step = 2 if self.mode in ('facing', 'facing_cover') else 1
+        for i in (self.page - step, self.page + step):
+            key = (i, round(z, 4), self.rotation)
+            if 0 <= i < self.doc.page_count and key not in self._render_cache:
+                self._render_cached(i, z, self.rotation)
+
+    def _spread_for(self, page):
+        """П-page: какие страницы показывает один разворот."""
         n = self.doc.page_count
         if self.mode == 'single' or n <= 1:
-            return [self.page]
-        if self.mode == 'facing_cover' and self.page == 0:
-            return [0]
-        start = self.page if self.page % 2 == 0 else self.page - 1
+            return [page]
         if self.mode == 'facing_cover':
-            start = self.page if self.page == 0 else self.page
-        return [i for i in (start, start + 1) if i < n]
+            return [page] if page == 0 else [p for p in (page, page + 1) if p < n]
+        start = page if page % 2 == 0 else page - 1
+        return [p for p in (start, start + 1) if p < n]
+
+    def _compose(self, rows, z, gap=0):
+        """Собрать полотно из строк разворотов. Возвращает плоские списки
+        страниц, картинок и смещений (x, y) — каждая строка идёт под предыдущей."""
+        placed, y = [], 0
+        for row in rows:
+            x = 0
+            row_h = 0
+            for pno in row:
+                im = self._render_cached(pno, z, self.rotation)
+                if im.isNull():
+                    continue
+                placed.append((pno, im, x, y))
+                x += im.width() + 8
+                row_h = max(row_h, im.height())
+            if placed:
+                y += row_h + gap
+        if not placed:
+            return QImage(), [], [], []
+
+        total_w = max(im.width() for _, im, _, _ in placed)
+        total_h = max(oy + im.height() for _, im, _, oy in placed)
+        if len(placed) == 1:
+            # Копия: подсветка поиска не должна испортить кэшированную картинку.
+            canvas = QImage(placed[0][1])
+        else:
+            canvas = QImage(total_w, total_h, QImage.Format_RGB32)
+            canvas.fill(QColor('#808080'))
+            p = QPainter(canvas)
+            p.setRenderHint(QPainter.SmoothPixmapTransform, True)
+            for _pno, im, ox, oy in placed:
+                p.drawImage(ox, oy, im)
+            p.end()
+
+        if self._find_rects:
+            painter = QPainter(canvas)
+            painter.setRenderHint(QPainter.Antialiasing, True)
+            painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
+            for pno, im, ox, oy in placed:
+                if pno == self.page:
+                    for fr in self._find_rects:
+                        rect = self._map_rect(pno, im, ox, oy, z, fr)
+                        if not rect.isEmpty():
+                            painter.fillRect(rect, QColor(255, 215, 0, 110))
+            painter.end()
+
+        return (canvas, [p[0] for p in placed], [p[1] for p in placed],
+                [(p[2], p[3]) for p in placed])
+
+    def make_transition(self, direction, step=1):
+        """Сшить текущий разворот со следующим для непрерывного перехода."""
+        if self.view is None or self.doc.kind == 'flow':
+            return None
+        n = self.doc.page_count
+        neighbor = self.page + direction * step
+        if neighbor < 0 or neighbor >= n:
+            return None
+        z = self._z or self.zoom
+        cur_row = self._spread_for(self.page)
+        other_row = self._spread_for(neighbor)
+        rows = [cur_row, other_row] if direction > 0 else [other_row, cur_row]
+        canvas, pages, imgs, offsets = self._compose(rows, z, PAGE_GAP)
+        if canvas.isNull():
+            return None
+        self._pages, self._imgs, self._offsets, self._z = pages, imgs, offsets, z
+        self.view.set_image(canvas, self._link_regions(pages, imgs, offsets, z))
+
+        def geometry(row):
+            ids = [i for i, p in enumerate(pages) if p in row]
+            return (min(offsets[i][1] for i in ids),
+                    max(imgs[i].height() for i in ids))
+
+        cur_top, cur_h = geometry(cur_row)
+        other_top, _other_h = geometry(other_row)
+        return {'dir': direction, 'page': neighbor, 'cur_top': cur_top,
+                'neighbor_top': other_top, 'cur_bottom': cur_top + cur_h}
+
+    def page_geometry(self):
+        """Верхняя координата и прокручиваемая высота текущей страницы."""
+        view_h = self.viewport_height()
+        for pno, (ox, oy), im in zip(self._pages, self._offsets, self._imgs):
+            if pno == self.page:
+                return oy, max(1, im.height() - view_h)
+        return 0, max(1, view_h)
 
     def render(self):
         if self.doc.kind == 'flow':
@@ -1182,65 +1465,32 @@ class DocumentTab(QWidget):
         if self.fit == 'width' or self.fit == 'page':
             probe = self.doc.render(self.page, 1.0, self.rotation)
             if not probe.isNull():
+                count = max(1, len(self._spread_for(self.page)))
                 if self.fit == 'width':
-                    z = max(0.05, (w - 24) / (probe.width() * len(self._pages_to_show())))
+                    z = max(0.05, (w - 24) / (probe.width() * count))
                 else:
-                    z = max(0.05, min((w - 24) / (probe.width() * len(self._pages_to_show())),
+                    z = max(0.05, min((w - 24) / (probe.width() * count),
                                       (h - 24) / probe.height()))
                 # Расчётный масштаб должен стать текущим: иначе строка состояния
                 # и последующие операции показывают/используют старое значение.
                 z = max(0.05, min(5.0, z))
                 self.zoom = z
 
-        pages, imgs = [], []
-        for i in self._pages_to_show():
-            im = self.doc.render(i, z, self.rotation)
-            if not im.isNull():
-                pages.append(i)
-                imgs.append(im)
-        if not imgs:
-            self.view.set_image(QImage(), [])
+        canvas, pages, imgs, offsets = self._compose([self._spread_for(self.page)], z)
+        if canvas.isNull():
+            if self.view:
+                self.view.set_image(QImage(), [])
             self.pageChanged.emit(self.page)
             return
-
-        # Собираем разворот и запоминаем горизонтальное смещение каждой страницы —
-        # оно нужно, чтобы наложить ссылки на правильное место картинки.
-        offsets, x = [], 0
-        for im in imgs:
-            offsets.append(x)
-            x += im.width() + 8
-        if len(imgs) == 1:
-            canvas = imgs[0]
-        else:
-            total_w = x - 8
-            total_h = max(im.height() for im in imgs)
-            canvas = QImage(total_w, total_h, QImage.Format_RGB32)
-            canvas.fill(QColor('#808080'))
-            p = QPainter(canvas)
-            p.setRenderHint(QPainter.SmoothPixmapTransform, True)
-            for im, ox in zip(imgs, offsets):
-                p.drawImage(ox, 0, im)
-            p.end()
-
-        if self._find_rects:
-            painter = QPainter(canvas)
-            painter.setRenderHint(QPainter.Antialiasing, True)
-            painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
-            for pno, im, ox in zip(pages, imgs, offsets):
-                if pno == self.page:
-                    for fr in self._find_rects:
-                        rect = self._map_rect(pno, im, ox, z, fr)
-                        if not rect.isEmpty():
-                            painter.fillRect(rect, QColor(255, 215, 0, 110))
-            painter.end()
 
         # Запоминаем геометрию текущей отрисовки: по ней выделение текста и
         # контекстное меню переводят пиксели картинки обратно в точки страницы.
         self._pages, self._imgs, self._offsets, self._z = pages, imgs, offsets, z
         self.view.set_image(canvas, self._link_regions(pages, imgs, offsets, z))
         self.pageChanged.emit(self.page)
+        self._prefetch_timer.start(60)
 
-    def _map_rect(self, pno, im, ox, z, fr):
+    def _map_rect(self, pno, im, ox, oy, z, fr):
         """Одна область из координат страницы в пиксели картинки."""
         pw, ph = self.doc.page_size(pno)
         if pw <= 0 or ph <= 0:
@@ -1250,8 +1500,6 @@ class DocumentTab(QWidget):
             x0, y0, x1, y1 = fr.x0 * z, fr.y0 * z, fr.x1 * z, fr.y1 * z
         except Exception:
             return QRectF()
-        # Программа может дополнительно поворачивать уже отрисованную
-        # картинку — переносим прямоугольник вместе с ней.
         rot = self.rotation % 360
         if rot == 90:
             x0, y0, x1, y1 = base_h - y1, x0, base_h - y0, x1
@@ -1261,18 +1509,18 @@ class DocumentTab(QWidget):
             x0, y0, x1, y1 = y0, base_w - x1, y1, base_w - x0
         x0, x1 = sorted((x0, x1))
         y0, y1 = sorted((y0, y1))
-        rect = QRectF(x0 + ox, y0, x1 - x0, y1 - y0)
-        return rect.intersected(QRectF(ox, 0, im.width(), im.height()))
+        rect = QRectF(x0 + ox, y0 + oy, x1 - x0, y1 - y0)
+        return rect.intersected(QRectF(ox, oy, im.width(), im.height()))
 
     def _link_regions(self, pages, imgs, offsets, z):
         """Переводит ссылки PDF из координат страницы в пиксели картинки."""
         regions = []
-        for pno, im, ox in zip(pages, imgs, offsets):
+        for pno, im, (ox, oy) in zip(pages, imgs, offsets):
             for link in self.doc.links(pno):
                 fr = link.get('from')
                 if fr is None:
                     continue
-                rect = self._map_rect(pno, im, ox, z, fr)
+                rect = self._map_rect(pno, im, ox, oy, z, fr)
                 if not rect.isEmpty():
                     regions.append((rect, link))
         return regions
@@ -1281,10 +1529,11 @@ class DocumentTab(QWidget):
     def _pixel_to_point(self, x, y):
         """Пиксель картинки → (номер страницы, X, Y) в точках PDF."""
         z = self._z or self.zoom or 1.0
-        for pno, im, ox in zip(self._pages, self._imgs, self._offsets):
-            if x < ox or x > ox + im.width() or y < 0 or y > im.height():
+        for pno, im, (ox, oy) in zip(self._pages, self._imgs, self._offsets):
+            if (x < ox or x > ox + im.width() or
+                    y < oy or y > oy + im.height()):
                 continue
-            lx, ly = x - ox, y
+            lx, ly = x - ox, y - oy
             pw, ph = self.doc.page_size(pno)
             if pw <= 0 or ph <= 0:
                 pw, ph = im.width() / z, im.height() / z
@@ -1505,11 +1754,12 @@ class DocumentTab(QWidget):
 
     def prepare_close(self):
         """Останавливает отложенные операции перед закрытием документа."""
-        self._closed = True
-        self._fit_timer.stop()
-        self._position_timer.stop()
         if self.view is not None:
             self.view._stop_anim()
+        self._closed = True
+        self._fit_timer.stop()
+        self._prefetch_timer.stop()
+        self._position_timer.stop()
 
     def goto(self, index):
         n = self.doc.page_count
@@ -1518,6 +1768,8 @@ class DocumentTab(QWidget):
         index = max(0, min(n - 1, index))
         if index == self.page and not self._dirty:
             return
+        if self.view:
+            self.view._stop_anim()
         self.page = index
         self.render()
         if self.view:
@@ -1526,6 +1778,8 @@ class DocumentTab(QWidget):
 
     def set_mode(self, mode):
         self.mode = mode
+        if self.view:
+            self.view._stop_anim()
         self.page = 0
         self.render()
         if self.view:

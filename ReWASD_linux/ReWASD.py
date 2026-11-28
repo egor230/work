@@ -14,6 +14,8 @@ import os
 import sys
 import json
 import copy
+import math
+import collections
 import traceback
 import time as time_module
 from pynput import keyboard as pynput_keyboard
@@ -32,13 +34,23 @@ from PyQt6.QtWidgets import (
     QGraphicsProxyWidget, QTextEdit, QSystemTrayIcon, QMenu, QInputDialog,
     QFormLayout, QLineEdit,
 )
-from PyQt6.QtCore import Qt, QSize, QRect, QRectF, QPointF, QPoint, pyqtSignal, QTimer, QEvent
+from PyQt6.QtCore import Qt, QSize, QRect, QRectF, QPointF, QPoint, pyqtSignal, QTimer, QEvent, QThread
 from PyQt6.QtGui import QPixmap, QFont, QFontMetrics, QIcon, QColor, QPainter, QPen, QBrush, QTextCursor
 
 HERE = Path(__file__).resolve().parent
 CORE = HERE  # данные проектов лежат в корне — отдельная папка core/ не нужна
 ASSETS = HERE / "assets"
 sys.path.insert(0, str(HERE))
+# Каталог исходного голосового скрипта: модули подключаются только при
+# запуске голоса, чтобы не тормозить старт программы тяжёлыми библиотеками.
+VOICE_PROJECT_DIR = HERE.parent.parent / "Project"
+
+
+def voice_sys_path():
+    path = str(VOICE_PROJECT_DIR)
+    if path not in sys.path:
+        sys.path.insert(0, path)
+    return path
 
 # --- функционал из исходных проектов ---
 # Импорты из двух других файлов сборки
@@ -118,12 +130,28 @@ def _migrate_json_files():
         data = {}
     changed = False
     for key, filename in (("mouse_data", "settings control mouse buttons.json"),
-                          ("gamepad_data", "editor_for_Xbox360_app_settings.json")):
+                          ("gamepad_data", "editor_for_Xbox360_app_settings.json"),
+                          ("voice_data", "settings_voice_game_control_linux.json")):
         if key not in data:
             old = HERE / filename
+            if not old.exists() and key == "voice_data":
+                old = VOICE_PROJECT_DIR / filename  # файл голосового скрипта
             if old.exists():
                 try:
-                    data[key] = json.loads(old.read_text(encoding="utf-8"), strict=False)
+                    raw = old.read_bytes()
+                    try:
+                        text = raw.decode("utf-8")
+                    except UnicodeDecodeError:
+                        text = raw.decode("cp1251")  # у голосового файла cp1251
+                    imported = json.loads(text, strict=False)
+                    if key == "voice_data":
+                        # Приводим к схеме единых настроек программы.
+                        imported = {
+                            "Gamer": imported.get("Gamer", {}),
+                            "last_pfofile": imported.get("last_pfofile", "vosk"),
+                            "start_startup": bool(imported.get("start_startup", False)),
+                        }
+                    data[key] = imported
                     changed = True
                 except Exception:
                     pass
@@ -152,7 +180,27 @@ def _normalize_scripts_file():
         pass
 
 
+def _normalize_voice_keys():
+    """Однократная нормализация голосовых команд: key1 → 1."""
+    try:
+        if not SETTINGS_FILE.exists():
+            return
+        data = json.loads(SETTINGS_FILE.read_text(encoding="utf-8"), strict=False)
+        gamer = (data.get("voice_data") or {}).get("Gamer") or {}
+        changed = False
+        for phrase, key in list(gamer.items()):
+            if isinstance(key, str) and key.lower().startswith("key") and key[3:].isdigit():
+                gamer[phrase] = key[3:]
+                changed = True
+        if changed:
+            SETTINGS_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2),
+                                     encoding="utf-8")
+    except Exception:
+        pass
+
+
 _migrate_json_files()
+_normalize_voice_keys()
 _normalize_scripts_file()
 
 GAMEPAD_IMAGE = ASSETS / "gamepad_minimal.png"
@@ -181,6 +229,96 @@ MOUSE_BUTTONS = ["LBUTTON", "RBUTTON", "MBUTTON", "SIDE_BUTTON", "EXTRA_BUTTON",
 # SIDE1, SIDE2. Без преобразования привязки колеса и боковых кнопок
 # записывались не в те слоты.
 MOUSE_INDEX_TO_ENGINE = [0, 1, 2, 5, 6, 3, 4]
+
+# Кнопки мыши в списках назначения (вкладки «Геймпад» и «Мышь»).
+# Идут первыми, чтобы их не приходилось искать в конце списка KEY_*.
+ASSIGN_MOUSE_ACTIONS = [
+    ("Left button", "LBUTTON"),
+    ("Right button", "RBUTTON"),
+    ("Middle button", "MBUTTON"),
+    ("Side button left (back)", "XBUTTON1"),
+    ("Side button right (forward)", "XBUTTON2"),
+    ("Wheel up", "SCROLL_UP"),
+    ("Wheel down", "SCROLL_DOWN"),
+]
+
+
+def enable_combo_scroll(combo):
+    """Видимая полоса прокрутки в длинном выпадающем списке."""
+    try:
+        combo.setMaxVisibleItems(12)
+        combo.view().setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+    except Exception:
+        pass
+
+
+def add_assign_items(combo):
+    """Порядок: мышь → стрелки → буквы → остальные. Без префиксов в подписях."""
+    used = set()
+    for label, value in ASSIGN_MOUSE_ACTIONS:
+        combo.addItem(label, value)
+        used.add(value)
+    for label in ("Up", "Down", "Left", "Right"):
+        value = "KEY_" + label.upper()
+        combo.addItem(label, value)
+        used.add(value)
+    for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
+        value = "KEY_" + letter
+        combo.addItem(letter, value)
+        used.add(value)
+    for key in KEY_LIST:
+        if key in used:
+            continue
+        combo.addItem(key.replace("KEY_", ""), key)
+        used.add(key)
+    enable_combo_scroll(combo)
+
+
+def assign_value(combo):
+    """Сохраняемое значение: itemData мыши или текст клавиши."""
+    return combo.currentData() or combo.currentText()
+
+
+def set_assign_combo(combo, value):
+    """Восстановить назначение по значению или старому тексту."""
+    if combo is None or not value:
+        return
+    idx = combo.findData(value)
+    if idx < 0 and str(value).startswith("KEY_"):
+        idx = combo.findText(str(value)[4:])   # старый текст без префикса
+    if idx < 0:
+        idx = combo.findText(value)
+    if idx >= 0:
+        combo.setCurrentIndex(idx)
+    else:
+        combo.addItem(value, value)
+        combo.setCurrentIndex(combo.count() - 1)
+
+
+# Клавиши для голосовых команд. Берём без импорта libs_voice: тот модуль тянет
+# torch/whisper и тормозил бы запуск программы. Список покрывает команды из
+# исходного файла настроек (key1..key4, E, C, R, F, G, F5, F8).
+VOICE_KEYS = (
+    # Стрелки сразу после мыши, затем буквы, потом цифры и служебные клавиши.
+    ["Up", "Down", "Left", "Right"] +
+    [chr(c) for c in range(ord("A"), ord("Z") + 1)] +
+    [str(i) for i in range(10)] +
+    [f"F{i}" for i in range(1, 13)] +
+    ["SPACE", "RETURN", "ESC", "BACK", "TAB",
+     "HOME", "END", "INSERT", "DELETE", "SHIFT", "CONTROL", "ALT"]
+)
+# Действия мыши в выпадающем списке голосовых команд: видимая подпись и
+# внутреннее значение, которое сохраняется в JSON и обрабатывается движком.
+VOICE_MOUSE_ACTIONS = [
+    ("No action", "NONE"),
+    ("Left button", "LBUTTON"),
+    ("Right button", "RBUTTON"),
+    ("Middle button", "MBUTTON"),
+    ("Side button left (back)", "XBUTTON1"),
+    ("Side button right (forward)", "XBUTTON2"),
+    ("Wheel up", "SCROLL_UP"),
+    ("Wheel down", "SCROLL_DOWN"),
+]
 
 # Зоны поверх контура геймпада из реWASD (координаты относительно картинки 600x530)
 # Зоны подсветки берём из единого списка appearance.py — они совпадают
@@ -525,12 +663,13 @@ class KeySelectDialog(QDialog):
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lay.addWidget(title)
         grid = QGridLayout()
-        common = [k for k in KEY_LIST if len(k) < 12]
-        for i, key in enumerate(common):
-            b = QPushButton(key.replace("KEY_", ""))
+        items = [(k.replace("KEY_", ""), k) for k in KEY_LIST if len(k) < 12]
+        items += [(label, value) for label, value in ASSIGN_MOUSE_ACTIONS]
+        for i, (display, value) in enumerate(items):
+            b = QPushButton(display)
             b.setObjectName("secondary")
             b.setFixedHeight(30)
-            b.clicked.connect(lambda _, k=key: self.accept_key(k))
+            b.clicked.connect(lambda _, v=value: self.accept_key(v))
             grid.addWidget(b, i // 8, i % 8)
         wrap = QWidget()
         wrap.setLayout(grid)
@@ -549,6 +688,161 @@ class KeySelectDialog(QDialog):
         self.accept()
 
 
+class VoiceControlThread(QThread):
+    """Голосовое управление из pytq6 volce game contol.py.
+
+    Поддерживает оффлайн-распознавание GigaAM с микрофона и онлайн-режим
+    speechtexter. Тяжёлые модули импортируются только при запуске потока.
+    """
+
+    error_sig = pyqtSignal(str)
+    status_sig = pyqtSignal(str)
+
+    def __init__(self, profile, commands, parent=None):
+        super().__init__(parent)
+        self.profile = profile
+        self.words = {}
+        for phrase, key in (commands or {}).items():
+            for part in [p.strip().lower() for p in str(phrase).split(",") if p.strip()]:
+                self.words[part] = key
+        self.running = True
+        self.driver = None
+        self._pres12 = None
+
+    def _press(self, text):
+        text = (text or "").strip().lower()
+        key = self.words.get(text)
+        if not key:
+            return
+        raw = str(key).strip()
+        action = raw.upper()
+        try:
+            if action == "NONE":
+                self.status_sig.emit(f"Распознано: {text} → без действия")
+                return
+            if action in ("LBUTTON", "RBUTTON", "MBUTTON", "XBUTTON1", "XBUTTON2",
+                          "SCROLL_UP", "SCROLL_DOWN"):
+                # Кнопки мыши и колесо — через pynput, а не через xte:
+                # work_key.key_press умеет только клавиатурные клавиши.
+                from pynput import mouse
+                ctl = mouse.Controller()
+                if action == "LBUTTON":
+                    ctl.click(mouse.Button.left)
+                elif action == "RBUTTON":
+                    ctl.click(mouse.Button.right)
+                elif action == "MBUTTON":
+                    ctl.click(mouse.Button.middle)
+                elif action in ("XBUTTON1", "XBUTTON2"):
+                    names = (("x1", "button8") if action == "XBUTTON1"
+                             else ("x2", "button9"))
+                    btn = None
+                    for name in names:
+                        btn = getattr(mouse.Button, name, None)
+                        if btn is not None:
+                            break
+                    if btn is not None:
+                        ctl.click(btn)
+                    else:
+                        self.error_sig.emit(f"Кнопка {action} недоступна в системе")
+                        return
+                elif action == "SCROLL_UP":
+                    ctl.scroll(0, 1)
+                else:
+                    ctl.scroll(0, -1)
+                self.status_sig.emit(f"Распознано: {text} → {action}")
+                return
+            voice_sys_path()
+            from libs_voice import work_key
+            if self._pres12 is None:
+                self._pres12 = work_key()
+            key_name = raw[3:] if raw.upper().startswith("KEY") else raw
+            self._pres12.key_press(key_name)
+            self.status_sig.emit(f"Распознано: {text} → {key_name}")
+        except Exception as e:
+            self.error_sig.emit(f"Ошибка выполнения команды: {e}")
+
+    def run(self):
+        try:
+            if self.profile == "internet":
+                self._run_internet()
+            else:
+                self._run_microphone()
+        except Exception as e:
+            self.error_sig.emit(f"Голосовой движок: {e}")
+
+    def _run_microphone(self):
+        # Сначала добавляем каталог Project в sys.path: модули GigaAM и
+        # libs_voice лежат там, импорт до этого шага падал с ModuleNotFoundError.
+        voice_sys_path()
+        import numpy as np
+        import sounddevice as sd
+        from ctc_sber_gegaam_without_cuda import load_model
+        cache_dir = str(VOICE_PROJECT_DIR.parent / "work" / "cache" / "gigaam")
+        self.status_sig.emit("Загрузка модели GigaAM…")
+        model = load_model("ctc", cache_dir)
+        if model is None:
+            raise RuntimeError("не удалось загрузить модель GigaAM")
+        self.status_sig.emit("Слушаю микрофон…")
+        buffer = collections.deque()
+        with sd.InputStream(samplerate=16000, channels=1, dtype="float32") as stream:
+            while self.running:
+                chunk, _ = stream.read(7096)
+                amp = math.ceil(float(np.mean(np.abs(chunk))) * 100)
+                if amp > 5:
+                    buffer.append(np.asarray(chunk, dtype="float32").flatten())
+                elif buffer and amp < 6:
+                    array = np.concatenate(list(buffer))
+                    buffer.clear()
+                    try:
+                        self._press(model.transcribe(array))
+                    except Exception as e:
+                        self.error_sig.emit(f"Распознавание: {e}")
+
+    def _run_internet(self):
+        voice_sys_path()   # на случай локальных модулей из каталога Project
+        from selenium import webdriver
+        from selenium.webdriver.chrome.service import Service
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support.ui import WebDriverWait
+        from selenium.webdriver.support import expected_conditions as EC
+        from webdriver_manager.chrome import ChromeDriverManager
+        options = webdriver.ChromeOptions()
+        options.add_argument("--use-fake-ui-for-media-stream")
+        options.add_argument("--disable-popup-blocking")
+        options.add_argument("--user-data-dir=" + str(VOICE_PROJECT_DIR / "google-chrome"))
+        options.binary_location = "/usr/bin/google-chrome"
+        self.driver = webdriver.Chrome(
+            service=Service(ChromeDriverManager().install()), options=options)
+        self.driver.get("https://www.speechtexter.com")
+        WebDriverWait(self.driver, 15).until(EC.element_to_be_clickable((By.ID, "mic")))
+        self.driver.find_element(By.ID, "mic").click()
+        self.status_sig.emit("Интернет-распознавание активно")
+        while self.running:
+            try:
+                el = WebDriverWait(self.driver, 1).until(
+                    EC.presence_of_element_located((By.ID, "speech-text")))
+                text = (el.get_attribute("value") or el.text or "").strip().lower()
+                if text:
+                    self._press(text)
+                    el.clear()
+                    time_module.sleep(1.5)
+            except Exception:
+                pass
+            self.msleep(200)
+
+    def stop(self):
+        self.running = False
+        if self.driver is not None:
+            # НЕ делаем pkill chrome — это убило бы браузер пользователя.
+            try:
+                self.driver.quit()
+            except Exception:
+                pass
+            self.driver = None
+        self.quit()
+        self.wait(3000)
+
+
 class RewasdApp(QMainWindow):
     # Сигнал для доставки глобальных хоткеев из потока pynput в GUI-поток.
     hotkey_sig = pyqtSignal(str)
@@ -557,7 +851,11 @@ class RewasdApp(QMainWindow):
         super().__init__()
         self.setWindowTitle("ReWASD Linux — Ultimate gaming experience")
         self.setWindowIcon(QIcon(str(ASSETS / "window_icon.png")))
-        self.setStyleSheet(open(HERE / "style.qss", encoding="utf-8").read())
+        style = (HERE / "style.qss").read_text(encoding="utf-8")
+        # QSS ищет картинку относительно cwd. Подставляем абсолютный путь,
+        # чтобы стрелка выпадающих списков была видна при любом запуске.
+        style = style.replace("assets/arrow_down.png", str(ASSETS / "arrow_down.png"))
+        self.setStyleSheet(style)
         self.worker = None
         self.mouse_window = None
         self.script_editor = None
@@ -566,7 +864,7 @@ class RewasdApp(QMainWindow):
         # Снимок вложенных секций: позволяет не затирать правки, сделанные
         # мышиным движком в отдельном окне, при автосохранении из ReWASD.
         self._loaded_nested = copy.deepcopy({
-            k: self.data.get(k) for k in ("mouse_data", "gamepad_data", "macro_data")})
+            k: self.data.get(k) for k in ("mouse_data", "gamepad_data", "macro_data", "voice_data")})
         # Восстанавливаем размер И положение окна с прошлого запуска
         geom = self.data.get("window_geometry")
         if geom and len(geom) == 4:
@@ -649,6 +947,8 @@ class RewasdApp(QMainWindow):
             "kb_split_sizes": [330, 340],
             "macro_splitter_sizes": [330, 340],
             "macro_data": {},
+            # Голосовое управление (перенесено из pytq6 volce game contol.py)
+            "voice_data": {"Gamer": {}, "last_pfofile": "vosk", "start_startup": False},
             "macro_column_widths": [260, 160, 300],
             "kb_column_widths": [560, 417],
             "gamepad_split_sizes": [700, 300],
@@ -721,7 +1021,7 @@ class RewasdApp(QMainWindow):
                 disk = json.loads(SETTINGS_FILE.read_text(encoding="utf-8"), strict=False)
             except Exception:
                 disk = {}
-            keys = ("mouse_data", "gamepad_data", "macro_data")
+            keys = ("mouse_data", "gamepad_data", "macro_data", "voice_data")
             loaded = getattr(self, "_loaded_nested", {})
             for key in keys:
                 # Секцию не меняли в интерфейсе — берём свежую с диска: её мог
@@ -784,7 +1084,7 @@ class RewasdApp(QMainWindow):
                 self.data = json.loads(json.dumps(self._baseline_data))
                 self._loaded_nested = copy.deepcopy({
                     k: self.data.get(k)
-                    for k in ("mouse_data", "gamepad_data", "macro_data")})
+                    for k in ("mouse_data", "gamepad_data", "macro_data", "voice_data")})
                 SETTINGS_FILE.write_text(self._baseline_text, encoding="utf-8")
             except Exception:
                 pass
@@ -823,7 +1123,7 @@ class RewasdApp(QMainWindow):
         self.nav = QListWidget()
         self.nav.setObjectName("nav")
         self.nav.setFixedHeight(252)
-        for name in ["Мышь", "Клавиатура", "Геймпад", "Макросы"]:
+        for name in ["Мышь", "Клавиатура", "Геймпад", "Макросы", "Голос"]:
             self.nav.addItem(QListWidgetItem(name))
         self.nav.setCurrentRow(0)
         self.nav.currentRowChanged.connect(self.on_nav)
@@ -920,6 +1220,7 @@ class RewasdApp(QMainWindow):
         self.stack.addWidget(self.page_keyboard())
         self.stack.addWidget(self.page_gamepad())
         self.stack.addWidget(self.page_macros())
+        self.stack.addWidget(self.page_voice())
         right.addWidget(self.stack, 1)
 
         # Статус-бар («Готово» и индикатор с %) убран из окна.
@@ -1030,9 +1331,10 @@ class RewasdApp(QMainWindow):
             lb = QLabel(f"{label}  ·  {logical}")
             lb.setObjectName("muted")
             cb = QComboBox()
-            cb.addItems(KEY_LIST)
+            add_assign_items(cb)
             cb.setMinimumWidth(160)
-            cb.currentTextChanged.connect(lambda v, lg=logical: self.on_key_changed(lg, v))
+            cb.currentTextChanged.connect(
+                lambda v, lg=logical, c=cb: self.on_key_changed(lg, assign_value(c)))
             self.gamepad_combos[logical] = cb
             grid.addWidget(lb, i, 0)
             grid.addWidget(cb, i, 1)
@@ -1207,14 +1509,12 @@ class RewasdApp(QMainWindow):
         for i, btn in enumerate(MOUSE_BUTTONS):
             label = LIST_MOUSE_BUTTONS[i] if i < len(LIST_MOUSE_BUTTONS) else btn
             self.mouse_table.setItem(i, 0, QTableWidgetItem(label))
-            cb = QComboBox(); cb.addItems(KEY_LIST)
+            cb = QComboBox(); add_assign_items(cb)
             key = self.data["mouse_map"].get(btn, "")
             if key:
-                if cb.findText(key) < 0:
-                    cb.addItem(key)
-                cb.setCurrentText(key)
+                set_assign_combo(cb, key)
             cb.currentTextChanged.connect(
-                lambda v, b=btn, idx=i: self.on_mouse_key_changed(b, idx, v))
+                lambda v, b=btn, idx=i, c=cb: self.on_mouse_key_changed(b, idx, assign_value(c)))
             self.mouse_key_combos[btn] = cb
             self.mouse_table.setCellWidget(i, 1, cb)
 
@@ -1323,6 +1623,205 @@ class RewasdApp(QMainWindow):
         self.macro_split.splitterMoved.connect(self.on_macro_split_moved)
         lay.addWidget(self.macro_split, 1)
         return page
+
+    # -------------------- голосовое управление --------------------
+    def page_voice(self):
+        """Пятая вкладка: голосовые команды из pytq6 volce game contol.py."""
+        page = self.page_frame()
+        lay = QVBoxLayout(page)
+        lay.setContentsMargins(18, 16, 18, 16)
+        h = QLabel("ГОЛОСОВОЕ УПРАВЛЕНИЕ")
+        h.setObjectName("h1")
+        lay.addWidget(h)
+        sub = QLabel("Фразы перечисляются через запятую — каждая станет командой. "
+                     "Источник: GigaAM с микрофона (оффлайн) или speechtexter (интернет).")
+        sub.setObjectName("muted")
+        sub.setWordWrap(True)
+        lay.addWidget(sub)
+
+        top = QHBoxLayout()
+        top.addWidget(QLabel("Режим:"))
+        self.voice_profile = QComboBox()
+        self.voice_profile.addItem("Онлайн", "internet")
+        self.voice_profile.addItem("Оффлайн", "vosk")
+        self.voice_profile.setToolTip(
+            "Онлайн — speechtexter через браузер; Оффлайн — GigaAM с микрофона")
+        enable_combo_scroll(self.voice_profile)
+        self.voice_profile.currentIndexChanged.connect(self.save_voice_settings)
+        top.addWidget(self.voice_profile)
+        self.voice_start_cb = QCheckBox("Старт при запуске")
+        self.voice_start_cb.toggled.connect(self.save_voice_settings)
+        top.addWidget(self.voice_start_cb)
+        top.addStretch()
+        self.voice_start_btn = QPushButton("▶ Старт")
+        self.voice_start_btn.setObjectName("primary")
+        self.voice_start_btn.clicked.connect(self.toggle_voice)
+        top.addWidget(self.voice_start_btn)
+        lay.addLayout(top)
+
+        self.voice_scroll = QScrollArea()
+        self.voice_scroll.setWidgetResizable(True)
+        # Фразы и клавиши — два виджета в одном QSplitter: граница меняет
+        # ширину колонки фраз сразу для всех строк и сохраняется в JSON.
+        self.voice_split = QSplitter(Qt.Orientation.Horizontal)
+        self.voice_phrases_widget = QWidget()
+        self.voice_phrases_layout = QVBoxLayout(self.voice_phrases_widget)
+        self.voice_phrases_layout.setContentsMargins(2, 2, 2, 2)
+        self.voice_keys_widget = QWidget()
+        self.voice_keys_layout = QVBoxLayout(self.voice_keys_widget)
+        self.voice_keys_layout.setContentsMargins(2, 2, 2, 2)
+        self.voice_split.addWidget(self.voice_phrases_widget)
+        self.voice_split.addWidget(self.voice_keys_widget)
+        self.voice_split.setStretchFactor(0, 3)
+        self.voice_split.setStretchFactor(1, 1)
+        self.voice_split.splitterMoved.connect(self.save_voice_settings)
+        self.voice_scroll.setWidget(self.voice_split)
+        self.voice_scroll.setMinimumHeight(220)
+        lay.addWidget(self.voice_scroll, 1)
+
+        btns = QHBoxLayout()
+        b_add = QPushButton("Добавить команду")
+        b_add.setObjectName("secondary")
+        b_add.clicked.connect(self.add_voice_row)
+        b_del = QPushButton("Удалить команду")
+        b_del.setObjectName("secondary")
+        b_del.clicked.connect(self.del_voice_row)
+        btns.addWidget(b_add)
+        btns.addWidget(b_del)
+        btns.addStretch()
+        lay.addLayout(btns)
+
+        self.voice_status = QLabel("Голосовой движок остановлен")
+        self.voice_status.setObjectName("muted")
+        self.voice_status.setWordWrap(True)
+        lay.addWidget(self.voice_status)
+
+        self.voice_rows = []
+        self.voice_thread = None
+        self._voice_loading = True
+        self._load_voice_rows()
+        self._voice_loading = False
+        return page
+
+    def _add_voice_row_widget(self, phrase="", key=""):
+        """Фраза — в левом виджете, выпадающий список клавиш — в правом."""
+        edit = QLineEdit(phrase)
+        edit.setPlaceholderText("например: вперёд, один, 1")
+        edit.setFixedHeight(30)
+        cb = QComboBox()
+        cb.setObjectName("voiceKey")
+        cb.setToolTip("Клавиша, кнопка мыши или колесо прокрутки")
+        cb.setFixedHeight(30)
+        # Мышь и «без действия» — в начале списка, их не надо искать внизу.
+        for label, value in VOICE_MOUSE_ACTIONS:
+            cb.addItem(label, value)
+        cb.addItems(VOICE_KEYS)
+        enable_combo_scroll(cb)
+        # Старые записи key1/key2 приводим к новым значениям 1/2.
+        if isinstance(key, str) and key.lower().startswith("key") and key[3:].isdigit():
+            key = key[3:]
+        if key:
+            idx = cb.findData(key)
+            if idx < 0:
+                idx = cb.findText(key)   # старые записи без itemData
+            if idx >= 0:
+                cb.setCurrentIndex(idx)
+            else:
+                cb.addItem(key, key)
+                cb.setCurrentIndex(cb.count() - 1)
+        edit.textChanged.connect(self.save_voice_settings)
+        cb.currentTextChanged.connect(self.save_voice_settings)
+        self.voice_phrases_layout.addWidget(edit)
+        self.voice_keys_layout.addWidget(cb)
+        self.voice_rows.append((edit, cb))
+
+    def _load_voice_rows(self):
+        for layout in (self.voice_phrases_layout, self.voice_keys_layout):
+            while layout.count():
+                item = layout.takeAt(0)
+                if item.widget():
+                    item.widget().deleteLater()
+        self.voice_rows.clear()
+        data = self.data.get("voice_data", {}) or {}
+        for phrase, key in (data.get("Gamer") or {}).items():
+            self._add_voice_row_widget(str(phrase), str(key))
+        idx = self.voice_profile.findData(data.get("last_pfofile", "vosk"))
+        if idx >= 0:
+            self.voice_profile.setCurrentIndex(idx)
+        self.voice_start_cb.blockSignals(True)
+        self.voice_start_cb.setChecked(bool(data.get("start_startup", False)))
+        self.voice_start_cb.blockSignals(False)
+        sizes = data.get("split_sizes") or []
+        if len(sizes) == 2:
+            self.voice_split.setSizes([int(sizes[0]), int(sizes[1])])
+
+    def save_voice_settings(self, *_args):
+        if getattr(self, "_voice_loading", False):
+            return
+        gamer = {}
+        for edit, cb in getattr(self, "voice_rows", []):
+            phrase = edit.text().strip()
+            key = (cb.currentData() or cb.currentText()).strip()
+            if phrase and key:
+                gamer[phrase] = key
+        data = self.data.setdefault("voice_data", {})
+        data["Gamer"] = gamer
+        data["last_pfofile"] = self.voice_profile.currentData()
+        data["start_startup"] = bool(self.voice_start_cb.isChecked())
+        data["split_sizes"] = [int(x) for x in self.voice_split.sizes()]
+        self.save_settings()
+
+    def add_voice_row(self):
+        self._add_voice_row_widget()
+        self.save_voice_settings()
+
+    def del_voice_row(self):
+        if not self.voice_rows:
+            return
+        edit, cb = self.voice_rows.pop()
+        self.voice_phrases_layout.removeWidget(edit)
+        self.voice_keys_layout.removeWidget(cb)
+        edit.deleteLater()
+        cb.deleteLater()
+        self.save_voice_settings()
+
+    def toggle_voice(self):
+        if self.voice_thread and self.voice_thread.isRunning():
+            self.stop_voice()
+            self.voice_start_btn.setText("▶ Старт")
+            self.voice_status.setText("Голосовой движок остановлен")
+            return
+        commands = {}
+        for edit, cb in self.voice_rows:
+            phrase = edit.text().strip()
+            key = (cb.currentData() or cb.currentText()).strip()
+            if phrase and key:
+                commands[phrase] = key
+        if not commands:
+            QMessageBox.information(self, "Голос", "Добавьте хотя бы одну команду")
+            return
+        self.voice_thread = VoiceControlThread(
+            self.voice_profile.currentData(), commands, self)
+        self.voice_thread.status_sig.connect(self._voice_status)
+        self.voice_thread.error_sig.connect(
+            lambda msg: self._voice_status("Ошибка: " + str(msg)))
+        self.voice_thread.start()
+        self.voice_start_btn.setText("■ Стоп")
+        self.voice_status.setText("Голосовой движок запускается…")
+
+    def _voice_status(self, msg):
+        self.voice_status.setText(str(msg))
+        self.status(str(msg))
+
+    def stop_voice(self):
+        thread = getattr(self, "voice_thread", None)
+        if thread is not None:
+            try:
+                if thread.isRunning():
+                    thread.stop()
+            except Exception:
+                pass
+        self.voice_thread = None
 
     # Устаревший page_settings() удалён: вкладка «Настройки» не показывается,
     # а её дублирующие виджеты (sx/sy/chk_grab/chk_smooth/chk_mouse) могли
@@ -1575,7 +2074,7 @@ class RewasdApp(QMainWindow):
         # из переданного root — иначе щелчок по кнопке мыши откатывал бы
         # только что изменённое значение старым значением из файла.
         merged = dict(self.data)
-        for key in ("mouse_data", "gamepad_data", "macro_data"):
+        for key in ("mouse_data", "gamepad_data", "macro_data", "voice_data"):
             if key in root:
                 merged[key] = root[key]
         SETTINGS_FILE.write_text(json.dumps(merged, ensure_ascii=False, indent=2),
@@ -1939,10 +2438,8 @@ class RewasdApp(QMainWindow):
             self.data["mouse_map"][btn] = value
             cb = self.mouse_key_combos.get(btn)
             if cb is not None:
-                if value and cb.findText(value) < 0:
-                    cb.addItem(value)
                 cb.blockSignals(True)
-                cb.setCurrentText(value)
+                set_assign_combo(cb, value)
                 cb.blockSignals(False)
         self.refresh_macro_table()
 
@@ -2305,9 +2802,7 @@ class RewasdApp(QMainWindow):
                 cb = self.gamepad_combos.get(logical)
                 if cb is not None:
                     cb.blockSignals(True)
-                    if cb.findText(key) < 0:
-                        cb.addItem(key)
-                    cb.setCurrentText(key)
+                    set_assign_combo(cb, key)
                     cb.blockSignals(False)
                 b = self.kb_buttons.get(logical)
                 if b:
@@ -2371,8 +2866,8 @@ class RewasdApp(QMainWindow):
             self._set_gamepad_binding(logical, dlg.chosen)
             self.kb_buttons[logical].setText(dlg.chosen.replace("KEY_", ""))
             cb = self.gamepad_combos.get(logical)
-            if cb and dlg.chosen in KEY_LIST:
-                cb.setCurrentText(dlg.chosen)
+            if cb:
+                set_assign_combo(cb, dlg.chosen)
 
     def open_virtual_keyboard(self):
         """Большая виртуальная клавиатура: клик по клавише открывает редактор скрипта."""
@@ -2528,8 +3023,7 @@ class RewasdApp(QMainWindow):
                 sec.setCurrentText(str(self.data.get("mouse_repeat_sec", {}).get(btn, "")))
         for logical, key in self.data["gamepad_map"].items():
             cb = self.gamepad_combos.get(logical)
-            if cb and key in KEY_LIST:
-                cb.setCurrentText(key)
+            set_assign_combo(cb, key)
             b = self.kb_buttons.get(logical)
             if b:
                 b.setText(key.replace("KEY_", ""))
@@ -2566,6 +3060,7 @@ class RewasdApp(QMainWindow):
             return
         self._closing = True
         self._stop_hotkey_listener()
+        self.stop_voice()
         self.stop_emulation()
         self.stop_mouse_engine()
         self.save_settings()
@@ -2595,6 +3090,7 @@ class RewasdApp(QMainWindow):
             return
         self._closing = True
         self._stop_hotkey_listener()
+        self.stop_voice()
         self.stop_emulation()
         self.stop_mouse_engine()
         self.save_settings()

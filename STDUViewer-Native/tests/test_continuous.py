@@ -53,13 +53,22 @@ def make_pdf(path, pages=6):
     d.close()
 
 
+def settle(view, limit=80):
+    """Прокрутить до остановки (тимер 16 мс в тестах ускорен вручную)."""
+    for _ in range(limit):
+        if not view._scroll_timer.isActive():
+            break
+        view._scroll_tick()
+    pump(2)
+
+
 def wheel(view, delta):
     """Отправляет колесо мыши с заданным angleDelta.y."""
     ev = QWheelEvent(QPointF(20, 20), QPointF(20, 20), QPoint(0, 0),
                      QPoint(0, delta), Qt.NoButton, Qt.NoModifier,
                      Qt.NoScrollPhase, False)
     view.wheelEvent(ev)
-    pump(2)
+    settle(view)
 
 
 class Base(unittest.TestCase):
@@ -113,10 +122,15 @@ class TestContinuous(Base):
 
     def test_wheel_inside_page_does_not_turn(self):
         self.bar().setValue(self.bar().minimum())
-        wheel(self.tab.view, -120)
+        ev = QWheelEvent(QPointF(20, 20), QPointF(20, 20), QPoint(0, 0),
+                         QPoint(0, -120), Qt.NoButton, Qt.NoModifier,
+                         Qt.NoScrollPhase, False)
+        self.tab.view.wheelEvent(ev)
+        self.assertTrue(self.tab.view._scroll_timer.isActive(),
+                        'прокрутка внутри страницы должна быть плавной')
+        self.assertIsNotNone(self.tab.view._scroll_target)
+        settle(self.tab.view)
         self.assertEqual(self.tab.page, 0)
-        self.assertIsNotNone(self.tab.view._scroll_anim,
-                             'прокрутка внутри страницы должна быть плавной')
 
     def test_several_wheels_walk_through_document(self):
         for expected in range(1, 6):

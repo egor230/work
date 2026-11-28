@@ -598,7 +598,7 @@ class Test05TocBookmarksSearch(Base):
         t.find_text('targetword'); pump()
         t.rotate(90); pump()
         im = t.doc.render(t.page, t.zoom, t.rotation)
-        rects = [t._map_rect(t.page, im, 0, t.zoom, fr)
+        rects = [t._map_rect(t.page, im, 0, 0, t.zoom, fr)
                  for fr in t._find_rects]
         self.assertTrue(any(not r.isEmpty() for r in rects),
                         'подсветка не пересчитана при повороте')

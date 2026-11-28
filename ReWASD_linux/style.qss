@@ -39,6 +39,15 @@ QComboBox { background:#222226; color:#F2F2F2; border:1px solid #3D3D3D; border-
 QComboBox::drop-down { subcontrol-origin:padding; subcontrol-position:top right; width:22px; border-left:1px solid #3D3D3D; }
 QComboBox::down-arrow { image:url(assets/arrow_down.png); width:14px; height:14px; margin-right:5px; }
 QComboBox QAbstractItemView { background:#222226; color:#F2F2F2; border:1px solid #3D3D3D; selection-background-color:#09518A; }
+QComboBox:hover { border-color:#F8C000; background:#2C2C31; }
+QComboBox QAbstractItemView::item { padding:6px; }
+QComboBox QAbstractItemView::item:hover { background:#F8C000; color:#141414; }
+QComboBox#voiceKey::drop-down { width:26px; }
+QComboBox QAbstractItemView QScrollBar:vertical { background:#1C1C20; width:12px; }
+QComboBox QAbstractItemView QScrollBar::handle:vertical { background:#F8C000; border-radius:6px; min-height:24px; }
+QComboBox QAbstractItemView QScrollBar::handle:vertical:hover { background:#FFD21A; }
+QComboBox QAbstractItemView QScrollBar::add-line:vertical,
+QComboBox QAbstractItemView QScrollBar::sub-line:vertical { height:0px; }
 QLineEdit { background:#222226; color:#F2F2F2; border:1px solid #3D3D3D; border-radius:4px; padding:6px; font-family:'Barlow'; }
 QCheckBox { color:#F2F2F2; font-family:'Barlow'; spacing:8px; }
 QCheckBox::indicator { width:16px; height:16px; border:1px solid #3D3D3D; border-radius:3px; background:#222226; }
@@ -58,6 +67,8 @@ QHeaderView::section { background:#2C2C31; color:#999999; border:0; border-right
 /* видимая линия разделителя между панелью мыши и таблицей */
 QSplitter::handle:vertical { height:5px; background:#3D3D3D; }
 QSplitter::handle:vertical:hover { background:#F8C000; }
+QSplitter::handle:horizontal { width:6px; background:#3D3D3D; }
+QSplitter::handle:horizontal:hover { background:#F8C000; }
 QTableWidget::item:selected { background:#09518A; }
 
 /* Прогресс и статус */
