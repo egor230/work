@@ -69,6 +69,10 @@ MOD_HOLD_SEC = STICKY_HOLD_SEC          # алиас для остального
 # ---------------------------------------------------------------------
 _COORD_LOCK = "/tmp/kb_scripts_typing.lock"
 _COORD_STICKY = "/tmp/kb_sticky_mods.json"
+# Голосовой ввод пишет сюда метку, пока печатает. Мы по
+# ней немедленно снимаем свои залипшие модификаторы — тогда диктовка не
+# ждёт полных 5 секунд и оба скрипта работают одновременно.
+_COORD_VOICE = "/tmp/kb_voice_typing.json"
 
 # ---------------------------------------------------------------------
 # ЗАЩИТА ОТ ВТОРОГО ЭКЗЕМПЛЯРА (2026-11-16, Отчёт §10).
@@ -162,17 +166,39 @@ def _typing_lock_release(fd):
   pass
 
 
-def _sticky_publish(codes, deadline):
- """Опубликовать состояние залипших модификаторов для голосового ввода:
- список evdev-кодов и дедлайн отпускания (time.time()). Пишется атомарно
- (tmp+replace); при ошибке молчим — координация не должна ломать печать."""
+def _sticky_publish(codes, deadline, ack_pid=0, ack_seq=0):
+ """Опубликовать состояние залипших модификаторов для голосового ввода.
+
+ voice_ack/voice_seq — подтверждение, что сброс сделан именно для этой
+ печати: голосовой ввод по нему продолжает сразу, без ожидания таймаута.
+ """
  try:
   tmp = _COORD_STICKY + ".tmp"
   with open(tmp, "w") as f:
-   json.dump({"codes": list(codes or []), "deadline": float(deadline or 0.0)}, f)
+   json.dump({"codes": list(codes or []),
+              "deadline": float(deadline or 0.0),
+              "voice_ack": int(ack_pid or 0),
+              "voice_seq": int(ack_seq or 0)}, f)
   os.replace(tmp, _COORD_STICKY)
  except Exception:
   pass
+
+
+def _voice_typing_active():
+  """True, пока голосовой ввод печатает. Проверяем не только дедлайн,
+  но и живость процесса по PID — после краша voice-скрипта метка не
+  должна вечно держать наши модификаторы отпущенными."""
+  try:
+   with open(_COORD_VOICE) as f:
+    st = json.load(f)
+   until = float(st.get("until") or 0.0)
+   pid = int(st.get("pid") or 0)
+   if until <= time.time() or pid <= 0:
+    return False
+   os.kill(pid, 0)   # ProcessLookupError / PermissionError = процесс мёртв
+   return True
+  except Exception:
+   return False
 
 ENTRY_NAMES = ("file_search_entry", "content_search_entry")
 SEARCH_LABEL_KEYWORDS = ("поиск файлов", "содержит", "search files", "contains", "поиск", "search", "find")
@@ -1037,7 +1063,7 @@ class SmartTyper: # Основной класс для автозамены и �
      # Эмулируем Enter (evdev, без xte/xdotool). Под блокировкой печати:
      # чужой Enter посреди печати голосового ввода разбил бы его текст.
      if self.py_typer and self.py_typer.ui:
-      fd = _typing_lock_acquire(timeout=1.0)
+      fd = _typing_lock_acquire(timeout=5.0)
       try:
        self.py_typer._press(ecodes.KEY_ENTER, False)
       finally:
@@ -1403,7 +1429,11 @@ class SmartTyper: # Основной класс для автозамены и �
    # может не сработать, если mainloop встала. Проверяем дедлайн здесь —
    # в потоке слушателя, независимо от GLib. Идемпотентно.
    try:
-    if self._mod_hold and time.time() >= self._mod_hold_deadline:
+    # Диктовка началась — снимаем залипшие модификаторы сразу, не дожидаясь
+    # GLib-таймера: его Shift меняет регистр букв, Ctrl/Alt даёт хоткеи.
+    if self._mod_hold and _voice_typing_active():
+     self._force_release_modifiers("voice typing")
+    elif self._mod_hold and time.time() >= self._mod_hold_deadline:
      self._force_release_modifiers("watchdog")
    except Exception:
     pass
@@ -1577,6 +1607,9 @@ class SmartTyper: # Основной класс для автозамены и �
   """GLib-таймер (200 мс): по истечении общего дедлайна отпускает все
   «залипшие» клавиши. Бегает в mainloop; состояние под state_lock."""
   try:
+   # При диктовке снимаем залипание немедленно (не ждём дедлайна).
+   if self._mod_hold and _voice_typing_active():
+    self._force_release_modifiers("voice typing")
    now = time.time()
    with self.state_lock:
     if not self._mod_hold or now < self._mod_hold_deadline:
@@ -1603,13 +1636,28 @@ class SmartTyper: # Основной класс для автозамены и �
   try:
    with self.state_lock:
     held = list(self._mod_hold)
-    if not held:
-     return
-    self._mod_hold.clear()
-    self._mod_hold_deadline = 0.0
-   if self.py_typer:
+    was_held = bool(held)
+    if was_held:
+     self._mod_hold.clear()
+     self._mod_hold_deadline = 0.0
+   if reason == "voice typing":
+    # Подтверждаем сброс (даже если модификаторов не было) — голосовой
+    # ввод продолжит печать немедленно, без 500 мс ожидания.
+    ack_pid = ack_seq = 0
+    try:
+     with open(_COORD_VOICE) as f:
+      mk = json.load(f)
+     ack_pid = int(mk.get("pid") or 0)
+     ack_seq = int(mk.get("seq") or 0)
+    except Exception:
+     pass
+    _sticky_publish([], 0.0, ack_pid, ack_seq)
+   elif not was_held:
+    return
+   else:
+    _sticky_publish([], 0.0)
+   if held and self.py_typer:
     self.py_typer.release_sticky(held)
-   _sticky_publish([], 0.0)
    names = sorted(MOD_HOLD.get(c, MOD_HOLD_NAME.get(c, str(c))) for c in held)
    print(f"[MOD-HOLD] принудительный сброс{(' (' + reason + ')') if reason else ''}: {names}", flush=True)
   except Exception:

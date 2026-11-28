@@ -38,6 +38,9 @@ import sounddevice as sd
 # ---------------------------------------------------------------------
 _COORD_LOCK = "/tmp/kb_scripts_typing.lock"
 _COORD_STICKY = "/tmp/kb_sticky_mods.json"
+# Метка «голосовой ввод печатает» — punto по ней сразу снимает свои
+# залипшие модификаторы и пишет подтверждение (voice_ack/voice_seq).
+_VOICE_TYPING_FILE = "/tmp/kb_voice_typing.json"
 
 
 def _typing_lock_acquire(timeout=5.0):
@@ -78,25 +81,57 @@ def _typing_lock_release(fd):
   pass
 
 
-def _wait_sticky_clear(timeout=6.0):
- """Ждать, пока punto держит залипшие модификаторы (липкие клавиши):
- чужой Shift портит регистр, чужой Ctrl/Alt превращает клавиши в хоткеи.
- False, если так и не дождались — печатаем всё равно: дедлайн залипания
- punto истекает максимум за STICKY_HOLD_SEC секунд."""
- deadline = time.time() + timeout
+_VOICE_SEQ = 0
+
+
+def _voice_typing_start():
+ global _VOICE_SEQ
+ _VOICE_SEQ += 1
+ seq = _VOICE_SEQ
+ try:
+  tmp = _VOICE_TYPING_FILE + ".tmp"
+  with open(tmp, "w") as f:
+   json.dump({"pid": os.getpid(), "until": time.time() + 3600.0,
+              "seq": seq}, f)
+  os.replace(tmp, _VOICE_TYPING_FILE)
+ except Exception:
+  pass
+ return seq
+
+
+def _voice_typing_stop():
+ try:
+  os.unlink(_VOICE_TYPING_FILE)
+ except Exception:
+  pass
+
+
+def _wait_sticky_clear(timeout=0.5, seq=None):
+ """Ждём снятия залипших модификаторов punto.
+
+ Если punto подтвердил сброс именно для этой печати (voice_ack/voice_seq
+ в /tmp/kb_sticky_mods.json), возвращаемся МГНОВЕННО — так убирается
+ задержка между началом диктовки и печатью. Опрос каждые 20 мс.
+ """
+ mypid = os.getpid()
+ end = time.time() + timeout
  while True:
   try:
    with open(_COORD_STICKY) as f:
     st = json.load(f)
    codes = st.get("codes") or []
+   if seq is not None:
+    if (st.get("voice_ack") == mypid and
+        st.get("voice_seq") == seq and not codes):
+     return True
    dl = float(st.get("deadline") or 0.0)
+   if not codes or dl <= time.time() or dl > time.time() + 30:
+    return True
   except Exception:
    return True
-  if not codes or dl <= time.time() or dl > time.time() + 30:
-   return True
-  if time.time() >= deadline:
+  if time.time() >= end:
    return False
-  time.sleep(0.1)
+  time.sleep(0.02)
 
 # Исключенные фразы
 excluded_phrases = ["С чего начнём?Нарисовать картинку", "Для звонков телефон как-то удобнее, давайте попробую там.",
@@ -580,6 +615,8 @@ ecodes.KEY_MINUS, ecodes.KEY_EQUAL, ecodes.KEY_SLASH,
    # (xset), а не из /dev/input — тогда работает и без root. Сам
    # индикатор зажигается честным нажатием KEY_NUMLOCK, XKB
    # пересинхронизирует его у всех клавиатур.
+   # self.ui должен быть уже присвоен: _ensure_numlock пишет через него.
+   self.ui = ui
    self._ensure_numlock()
 
    return ui
@@ -1122,14 +1159,16 @@ ecodes.KEY_MINUS, ecodes.KEY_EQUAL, ecodes.KEY_SLASH,
      flock освобождается ядром при смерти процесса, поэтому зависнуть
      навсегда не может (см. Отчет §5).
   """
-  _wait_sticky_clear(timeout=6.0)
-  fd = _typing_lock_acquire(timeout=5.0)
+  seq = _voice_typing_start()
+  _wait_sticky_clear(timeout=0.5, seq=seq)
+  fd = _typing_lock_acquire(timeout=10.0)
   try:
-   return self._type_text_impl(text, delay=delay)
+   return self._type_text_impl(text, delay=delay, seq=seq)
   finally:
    _typing_lock_release(fd)
+   _voice_typing_stop()
 
- def _type_text_impl(self, text, delay=0.02):
+ def _type_text_impl(self, text, delay=0.02, seq=None):
   """
   Печать текста, где русские и английские слова идут вперемешку.
 
@@ -1263,7 +1302,7 @@ ecodes.KEY_MINUS, ecodes.KEY_EQUAL, ecodes.KEY_SLASH,
    # (макс. ~5.5 с — дедлайн залипания punto всё равно истечёт).
    if time.time() - getattr(self, "_last_sticky_check", 0) > 0.3:
     self._last_sticky_check = time.time()
-    _wait_sticky_clear(timeout=5.5)
+    _wait_sticky_clear(timeout=0.3, seq=seq)
 
    # Перед любым нажатием сначала дописываем отложенные символы —
    # иначе они окажутся ПОЗЖЕ пробела/enter'а, который печатается

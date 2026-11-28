@@ -2499,6 +2499,14 @@ class RewasdApp(QMainWindow):
         if getattr(self, "_baseline_data", None) is None:
             QTimer.singleShot(150, self._take_baseline)
 
+    def toggle_tray(self, *_args):
+        """Клик по иконке в трее: свернуть окно или показать его снова."""
+        if self.isVisible():
+            self.hide()
+            self.status("Окно свёрнуто в трей")
+        else:
+            self.show_normal()
+
     def on_profile_list_row(self, row):
         if 0 <= row < len(self.data["profiles"]):
             self.data["current_profile"] = row
@@ -3133,7 +3141,7 @@ def main():
     menu.addAction("Выход").triggered.connect(w.quit_app)
     tray.setContextMenu(menu)
     tray.activated.connect(
-        lambda reason: w.show_normal()
+        lambda reason: w.toggle_tray()
         if reason in (QSystemTrayIcon.ActivationReason.Trigger,
                       QSystemTrayIcon.ActivationReason.DoubleClick)
         else None)
