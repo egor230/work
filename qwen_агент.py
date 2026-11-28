@@ -37,7 +37,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from playwright.sync_api import sync_playwright
 from openai import OpenAI
@@ -222,13 +222,21 @@ AGENT_FS_INSTRUCTION = (
 # Маленькая локальная модель (Qwen 1.5B) = исполнитель: читает инструкцию
 # и через инструменты реально пишет/читает/меняет файлы и exec'ит.
 LOCAL_PLANNER_INSTRUCTION = (
- "[SYSTEM] You are a PLANNER, not an executor. You do NOT write files, run "
- "commands, or use any tools — a local executor model performs the work.\n"
- "Given the user request below, output a CONCISE, ORDERED instruction telling "
- "the local executor exactly what to do: which files to create or modify (with "
- "full paths and the key content/outline), and which shell commands to run. "
- "Be concrete and unambiguous. Output ONLY the instruction text — no commentary, "
- "no code fences, no meta-explanation.\n"
+ "[SYSTEM] You are a PLANNER. A local executor runs EXACTLY ONE shell command "
+ "per turn. Output ONE command wrapped in [EXEC]...[/EXEC] and NOTHING else: "
+ "no prose, no explanations, no markdown fences, no numbered lists.\n"
+ "Use absolute paths and ALWAYS quote paths containing spaces or non-ASCII.\n"
+ "Examples: [EXEC]ls -la \"/path with spaces\"[/EXEC], "
+ "[EXEC]cat \"/path/file.md\"[/EXEC], "
+ "[EXEC]cat > \"/path/out.md\" <<'EOF'\n...\nEOF[/EXEC].\n"
+ "After each [RESULT], output the NEXT command in the same format. When the "
+ "task is complete, reply with plain text final answer for the user WITHOUT "
+ "any [EXEC] block. NEVER ask the user to paste files — read them yourself.\n"
+ "NEVER call fake tools such as history_retriever or search_tool. Only real "
+ "bash commands inside [EXEC] are executed: ls, cat, find, grep, python3, "
+ "mkdir, cp, sed, echo, wc. No JSON arguments.\n"
+ "For repetitive tasks (many similar files/tracks), emit ONE python3 command "
+ "that processes ALL items in a loop; do NOT emit one command per file.\n"
  "User request:\n"
 )
 
@@ -312,10 +320,11 @@ EXTRACT_JS = r"""
   // B) Qwen / универсальные явные контейнеры ассистента.
   if (!node) {
     const sels = [
+      '.response-message-content',            // точный класс ответа Qwen (проверено в DOM)
       '[class*="assistant-message" i]', '[class*="assistant_message" i]',
       '[class*="bot-message" i]', '[class*="qwen-message" i]',
       '[class*="message-answer" i]', '[class*="answer-content" i]',
-      '[class*="response-message" i]'
+      '[class*="response-message" i]', '.qwen-markdown'
     ];
     const found = Array.from(document.querySelectorAll(sels.join(',')))
       .filter(el => visible(el) && !isUser(el));
@@ -363,7 +372,8 @@ EXTRACT_JS = r"""
   const thinking = tParts.join('\n\n');
 
   // ---- 3) Ответ (исключаем блоки мышления) ----
-  const contentSel = '.text-start, .markdown-body, .ql-editor, ' +
+  const contentSel = '.qwen-markdown-text-node, .qwen-markdown-paragraph, ' +
+                     '.response-message-content, .text-start, .markdown-body, .ql-editor, ' +
                      '[class*="message-content" i], [class*="content" i], [class*="answer" i]';
   const parts = [];
   node.querySelectorAll(contentSel).forEach(el => {
@@ -1361,11 +1371,10 @@ class ZaiWorker(threading.Thread):
  # Прикрепляет системный профиль как файл в диалог.
  # 7: _attach_system_profile — прикрепляет системный профиль как файл в чат
  def _attach_system_profile(self) -> bool:
-  # print("7: _attach_system_profile — прикрепляет системный профиль как файл в чат")
-  if not self._system_profile or not Path(SYSTEM_PROFILE_PATH).exists():
-   LOG.info("[PROFILE] nothing to attach")
-   return False
-  return self._attach_file(SYSTEM_PROFILE_PATH)
+  # Профиль в чате заставляет Qwen отвечать «привет, Егор, давай обсудим
+  # разработку» вместо работы по заданию. Нужный контекст уже есть в префиксе.
+  LOG.info("[PROFILE] прикрепление системного профиля пропущено")
+  return False
  
  # Прикрепляет справку по инструментам (zai_tools.md) в диалог.
  # 9: _attach_tools_doc — прикрепляет zai_tools.md (справка по инструментам)
@@ -1949,6 +1958,8 @@ class ZaiWorker(threading.Thread):
   # текста. Исключаем кнопку голосового ввода (.omb__btn / #voice-input-button),
   # чтобы не нажать её вместо отправки.
   for sel in (
+    'button.send-button[aria-label="Отправить"]',
+    '.chat-prompt-send-button button.send-button:not([disabled])',
     '.message-input-right-button-send button:not(#voice-input-button)',
     '.message-input-right-button-send [role="button"]:not(.omb__btn)',
     '.message-input-right-button-send [class*="send" i]',
@@ -2035,10 +2046,14 @@ class ZaiWorker(threading.Thread):
   try:
    html = self.page.evaluate(r"""
          () => {
-           const all = document.querySelectorAll('[class*="assistant" i], [class*="message" i], [class*="bot" i]');
+           const all = document.querySelectorAll('[class*="assistant" i], [class*="message" i], [class*="bot" i], .markdown-body, .ql-editor');
            for (let k = all.length - 1; k >= 0; k--) {
              const cls = (typeof all[k].className === 'string') ? all[k].className : '';
-             if (!cls.toLowerCase().includes('user')) return all[k].outerHTML;
+             const low = cls.toLowerCase();
+             if (low.includes('message-input') || low.includes('send-button') ||
+                 low.includes('send')) continue;
+             if (!low.includes('user') &&
+                 (all[k].innerText || '').trim().length > 10) return all[k].outerHTML;
            }
            return '<no-node>';
          }
@@ -2126,8 +2141,10 @@ class ZaiWorker(threading.Thread):
       pass
      return {"model": self.selected_model or DEFAULT_MODEL,
              "answer": self.collapse_tool_tags(last_answer), "code": data.get("code", [])}
-    # generating у Qwen часто не сбрасывается — не ждём 900 секунд зря.
-    if stable_for >= 30.0:
+    # Пока Qwen реально думает (generating=True), сложная задача может молчать
+    # 2–3 минуты. Не обрезаем её на 30 сек. Если генерация завершена — 30 сек.
+    quiet_limit = 150.0 if generating else 30.0
+    if stable_for >= quiet_limit:
      LOG.warning("[ANSWER] no growth %.1fs (generating=%s), finalizing best %d chars",
                  stable_for, generating, len(last_answer))
      try:
@@ -2137,7 +2154,7 @@ class ZaiWorker(threading.Thread):
      return {"model": self.selected_model or DEFAULT_MODEL,
              "answer": self.collapse_tool_tags(last_answer), "code": data.get("code", []),
              "complete": not generating}
-    if empty_since and time.time() - empty_since >= 30.0:
+    if empty_since and time.time() - empty_since >= quiet_limit:
      LOG.warning("[ANSWER] answer node disappeared, finalizing best %d chars", len(last_answer))
      return {"model": self.selected_model or DEFAULT_MODEL,
              "answer": self.collapse_tool_tags(last_answer), "code": [], "complete": False}
@@ -2160,9 +2177,13 @@ class ZaiWorker(threading.Thread):
    elif c.count("'") >= 2:
     c = c[:c.rfind("'") + 1]
    return c.strip()
+  def plausible(c: str) -> bool:
+   # Qwen иногда выдумывает «инструменты» вместо bash-команды.
+   return not re.search(r"(retriever|search_tool|functions\.|\{\s*\"|^\w+_\w+\s+\{)", c, re.I)
   ops = self._parse_tools(text or "")
   if ops["cmds"]:
-   return clean(ops["cmds"][0])
+   c = clean(ops["cmds"][0])
+   return c if plausible(c) else ""
   for c in re.findall(r"`([^`\n]+)`", text or ""):
    c = clean(c)
    if len(c) > 2 and re.search(
@@ -2247,31 +2268,72 @@ class ZaiWorker(threading.Thread):
     self._attach_system_profile()
    self._attach_tools_doc()
   if self.local_tools is not None and self.local_tools.ready:
-   # Облачная модель — «мозги», локальная — «руки». Если вопрос уже содержит
-   # путь к папке, команду знаем заранее (Qwen её часто обрывает).
+   # Облачная модель — «мозги» (планировщик), локальная — «руки».
+   # Полный цикл: команда → результат → СЛЕДУЮЩАЯ команда → ... → финальный ответ.
    user_hint = self._command_from_user_request(message)
-   message = LOCAL_PLANNER_INSTRUCTION + message
-   raw = self._ask_raw(message, model, timeout)
-   command = user_hint or self._extract_shell_command(raw["answer"])
-   if command:
-    LOG.info("[ASK] точная команда от сайта: %s", command[:200])
-    local = self._run_local_command(command, timeout)
-   else:
-    local = self._run_local_executor(raw["answer"], timeout)
-   # Возвращаем результат локальных рук обратно в чат (как в arena_agent.py):
-   # облачная модель даёт итоговый ответ, уже опираясь на реальный rc/stdout.
-   try:
-    feedback = ("[RESULT]\n" + local["answer"] + "\n[/RESULT]\n"
-                "Based on the result above, give the final answer to the user. "
-                "Do NOT repeat the instruction and do NOT emit tool commands.")
-    final = self._ask_raw(feedback, model, min(timeout, 300))
-    final["local_tools"] = local
-    return final
-   except Exception as e:
-    LOG.warning("[ASK] local feedback to chat failed: %s", e)
-    local["answer"] += ("\n\n[LOCAL-TOOLS] результат исполнен локальной моделью, "
-                        "обратная связь с чатом недоступна.")
-    return local
+   raw = self._ask_raw(LOCAL_PLANNER_INSTRUCTION + message, model, timeout)
+   local_log: list[dict[str, Any]] = []
+   seen_cmds: set[str] = set()
+   nudges = 0
+   overall_deadline = time.time() + min(timeout, 900)
+   for iteration in range(self.max_tool_iters):
+    if time.time() >= overall_deadline:
+     LOG.warning("[ASK] tool-loop deadline reached")
+     break
+    command = user_hint if iteration == 0 and user_hint else ""
+    if not command:
+     command = self._extract_shell_command(raw["answer"])
+    if not command:
+     # Qwen иногда выдумывает «инструменты» вместо bash. Не обрываем задачу —
+     # делаем до двух вежливых напоминаний с требованием точного формата.
+     if nudges < 2 and time.time() < overall_deadline:
+      nudges += 1
+      LOG.warning("[ASK] no valid command, nudge %d/2", nudges)
+      remaining = max(30.0, overall_deadline - time.time())
+      nudge_msg = (
+       "[RESULT]\nNo command was executed: your reply was not a bash command. "
+       "Output ONLY ONE real bash command in [EXEC]...[/EXEC] "
+       "(ls, cat, find, grep, python3). No fake tools, no JSON.\n[/RESULT]"
+      )
+      try:
+       raw = self._ask_raw(nudge_msg, model, min(remaining, 300))
+      except Exception as e:
+       LOG.warning("[ASK] nudge failed: %s", e)
+      continue
+     LOG.info("[ASK] tool-loop done: no command on iteration %d", iteration + 1)
+     break
+    if command in seen_cmds:
+     LOG.warning("[ASK] identical command repeated -> stop")
+     break
+    seen_cmds.add(command)
+    LOG.info("[ASK] tool iter=%d command=%s", iteration + 1, command[:200])
+    local = self._run_local_command(command, min(timeout, 180))
+    local_log.append(local)
+    remaining = max(30.0, overall_deadline - time.time())
+    # Не кормим Qwen сырым выводом на тысячи символов — он теряет инструкцию.
+    result_text = local["answer"]
+    if len(result_text) > 3000:
+     result_text = result_text[:3000] + "\n…(вывод обрезан; для деталей используй head/tail/grep)"
+    feedback = (
+     "[RESULT]\n" + result_text + "\n[/RESULT]\n"
+     "If more actions are needed, output the NEXT exact command in [EXEC]...[/EXEC]. "
+     "For repetitive work emit ONE python3 command that processes all items. "
+     "If the task is COMPLETE, reply with the final answer for the user in plain text "
+     "WITHOUT any [EXEC] block. Do not ask the user for files."
+    )
+    try:
+     raw = self._ask_raw(feedback, model, min(remaining, 300))
+    except Exception as e:
+     LOG.warning("[ASK] feedback to chat failed: %s", e)
+     raw = {"answer": ""}
+   final = dict(raw)
+   final["local_tools"] = local_log[-1] if local_log else None
+   final["local_tool_calls"] = len(local_log)
+   if not final.get("answer"):
+    final["answer"] = ("Действия выполнены локальной моделью "
+                       f"({len(local_log)} команд), но чат не вернул финальный ответ.")
+   return final
+
   if not message.startswith("[RESULT]"):
    message = AGENT_FS_INSTRUCTION.format(
     max_iters=self.max_tool_iters) + message
@@ -2643,7 +2705,15 @@ class ZaiWorker(threading.Thread):
 # FastAPI app
 # ===========================================================================
 worker: ZaiWorker | None = None
-app = FastAPI(title="ZaiChat Agent", version="3.0")
+app = FastAPI(title="QwenChat Agent", version="3.1")
+
+
+# Вместо «Internal Server Error» клиент получает понятный JSON с ошибкой.
+@app.exception_handler(Exception)
+async def unhandled_error(request: Any, exc: Exception) -> JSONResponse:
+ LOG.exception("[API] unhandled error on %s", request.url.path)
+ return JSONResponse(status_code=500,
+                     content={"ok": False, "error": str(exc), "type": type(exc).__name__})
 
 
 # GET / — проверка живости сервиса.

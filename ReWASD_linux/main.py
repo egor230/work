@@ -978,8 +978,20 @@ class RewasdApp(QMainWindow):
         srow.addWidget(QLabel("Чувств. Y"))
         self.sy = QSlider(Qt.Orientation.Horizontal); self.sy.setRange(1, 15); self.sy.setFixedWidth(100)
         srow.addWidget(self.sy)
-        self.chk_grab = QCheckBox("Захват мыши")
+        self.chk_mouse_mode = QCheckBox("Мышь")
+        self.chk_mouse_mode.setToolTip("Правый стик управляется мышью, как в редакторе Xbox 360")
+        self.chk_mouse_mode.toggled.connect(self.on_gamepad_option_changed)
+        srow.addWidget(self.chk_mouse_mode)
+        self.chk_smooth = QCheckBox("Сглаживание")
+        self.chk_smooth.setToolTip("Сглаживание движения мыши по осям правого стика")
+        self.chk_smooth.toggled.connect(self.on_gamepad_option_changed)
+        srow.addWidget(self.chk_smooth)
+        self.chk_grab = QCheckBox("Захват клавиатуры")
+        self.chk_grab.setToolTip("Перехват физической клавиатуры через evdev (grab)")
+        self.chk_grab.toggled.connect(self.on_gamepad_option_changed)
         srow.addWidget(self.chk_grab)
+        self.sx.valueChanged.connect(self.on_gamepad_option_changed)
+        self.sy.valueChanged.connect(self.on_gamepad_option_changed)
         srow.addStretch()
         # Ручная настройка зон: включил — двигаешь зоны и колесом меняешь размер,
         # выключил — новые координаты сохраняются в settings.json.
@@ -1219,29 +1231,10 @@ class RewasdApp(QMainWindow):
         lay.addWidget(self.macro_split, 1)
         return page
 
-    def page_settings(self):
-        page = self.page_frame()
-        lay = QVBoxLayout(page)
-        lay.setContentsMargins(24, 22, 24, 22)
-        h = QLabel("НАСТРОЙКИ")
-        h.setObjectName("h1")
-        lay.addWidget(h)
-        form = QGridLayout()
-        form.addWidget(QLabel("Чувствительность X"), 0, 0)
-        self.sx = QSlider(Qt.Orientation.Horizontal); self.sx.setRange(1, 15)
-        form.addWidget(self.sx, 0, 1)
-        form.addWidget(QLabel("Чувствительность Y"), 1, 0)
-        self.sy = QSlider(Qt.Orientation.Horizontal); self.sy.setRange(1, 15)
-        form.addWidget(self.sy, 1, 1)
-        self.chk_smooth = QCheckBox("Сглаживание движения")
-        self.chk_grab = QCheckBox("Захват устройства (grab)")
-        self.chk_mouse = QCheckBox("Эмуляция мыши")
-        form.addWidget(self.chk_smooth, 2, 0, 1, 2)
-        form.addWidget(self.chk_grab, 3, 0, 1, 2)
-        form.addWidget(self.chk_mouse, 4, 0, 1, 2)
-        lay.addLayout(form)
-        lay.addStretch()
-        return page
+    # Устаревший page_settings() удалён: вкладка «Настройки» не показывается,
+    # а её дублирующие виджеты (sx/sy/chk_grab/chk_smooth/chk_mouse) могли
+    # перезаписать элементы вкладки «Геймпад». Все параметры эмуляции теперь
+    # живут на вкладке «Геймпад» и сохраняются в settings.json.
 
     def start_mouse_engine(self):
         """Поднять скрытый движок мыши/клавиатуры из исходного проекта.
@@ -2273,15 +2266,33 @@ class RewasdApp(QMainWindow):
         except Exception:
             QMessageBox.warning(self, "Мышь", "Не удалось открыть модуль мыши:\n" + traceback.format_exc()[-600:])
 
-    def start_emulation(self):
+    def on_gamepad_option_changed(self, *_args):
+        """Сохранить параметры эмуляции и применить их, если она уже идёт."""
+        self.data["sens_x"] = int(self.sx.value())
+        self.data["sens_y"] = int(self.sy.value())
+        self.data["mouse_on"] = bool(self.chk_mouse_mode.isChecked())
+        self.data["smooth"] = bool(self.chk_smooth.isChecked())
+        self.data["grab"] = bool(self.chk_grab.isChecked())
+        self.save_settings()
         if self.worker and self.worker.isRunning():
-            return
+            self.start_emulation()
+
+    def start_emulation(self):
+        # Как в рабочем редакторе Xbox 360: перед запуском всегда останавливаем
+        # прежний поток. Иначе смена профиля, привязки или параметра не
+        # применялась бы — start_emulation просто возвращался без перезапуска.
+        if self.worker and self.worker.isRunning():
+            self.stop_emulation()
         keymap = dict(self.data["gamepad_map"])
         self.apply_data_to_ui(write=False)
         trigger_modes = self.data.get("trigger_modes", {}).get(self.data.get("current_gamepad_profile"), {})
-        self.worker = Worker(keymap, trigger_modes, True,
+        # Параметры берём из настроек/виджетов — как в рабочем редакторе Xbox 360,
+        # а не жёстко True: режим мыши и сглаживание можно выключить.
+        self.worker = Worker(keymap, trigger_modes,
+                             bool(self.data.get("mouse_on", True)),
                              self.sx.value(), self.sy.value(),
-                             True, self.chk_grab.isChecked())
+                             bool(self.data.get("smooth", True)),
+                             self.chk_grab.isChecked())
         self.worker.status_sig.connect(self.on_worker_status)
         self.worker.error_sig.connect(self.on_worker_error)
         self.worker.finished.connect(self.on_worker_finished)
@@ -2321,9 +2332,19 @@ class RewasdApp(QMainWindow):
     def apply_data_to_ui(self, write=True):
         self.refresh_profile_combos()
         self.apply_mouse_profile(int(self.data.get("current_profile", 0)))
+        # Автозапуск тоже вызывает этот метод: блокируем сигналы, чтобы
+        # восстановление виджетов не сохраняло настройки и не перезапускало Worker.
+        gp_widgets = (self.sx, self.sy, self.chk_mouse_mode,
+                      self.chk_smooth, self.chk_grab)
+        for w in gp_widgets:
+            w.blockSignals(True)
         self.sx.setValue(int(self.data.get("sens_x", 6)))
         self.sy.setValue(int(self.data.get("sens_y", 6)))
+        self.chk_mouse_mode.setChecked(bool(self.data.get("mouse_on", True)))
+        self.chk_smooth.setChecked(bool(self.data.get("smooth", True)))
         self.chk_grab.setChecked(bool(self.data.get("grab", False)))
+        for w in gp_widgets:
+            w.blockSignals(False)
         # при запуске всегда обычный режим, никогда не редактирование
         if hasattr(self, "btn_edit_zones"):
             self.btn_edit_zones.setChecked(False)

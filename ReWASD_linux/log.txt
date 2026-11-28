@@ -186,3 +186,6 @@
 [2026-11-19 17:01:01] [DEBUG] mouse_action slot=6 action='SCROLL_DOWN' pressed=False hold=False dur=None repeat=False sticky= toggle=-
 [2026-11-19 17:02:53] [DEBUG] mouse_action slot=5 action='SCROLL_UP' pressed=True hold=False dur=None repeat=False sticky= toggle=-
 [2026-11-19 17:02:53] [DEBUG] mouse_action slot=5 action='SCROLL_UP' pressed=False hold=False dur=None repeat=False sticky= toggle=-
+[2026-11-28 07:26:20] [profile] switch '/mnt/807EB5FA7EB5E954/games/Entropy Zero 2/hl2.exe' -> '/mnt/807EB5FA7EB5E954/games/Far Cry/Bin32/FarCry.exe' (active_game='/mnt/807EB5FA7EB5E954/games/Far Cry/Bin32/FarCry.exe')
+[2026-11-28 07:26:20] [profile] switch '/mnt/807EB5FA7EB5E954/games/Entropy Zero 2/hl2.exe' -> '/mnt/807EB5FA7EB5E954/games/Far Cry/Bin32/FarCry.exe' (active_game='/mnt/807EB5FA7EB5E954/games/Far Cry/Bin32/FarCry.exe')
+[2026-11-28 07:26:20] [profile] switch '/mnt/807EB5FA7EB5E954/games/Entropy Zero 2/hl2.exe' -> '/mnt/807EB5FA7EB5E954/games/Far Cry/Bin32/FarCry.exe' (active_game='/mnt/807EB5FA7EB5E954/games/Far Cry/Bin32/FarCry.exe')

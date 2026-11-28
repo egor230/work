@@ -5191,19 +5191,26 @@ class Worker(QThread):
     # Аналоговые триггеры: 0 или 255
     self.ui.write(ecodes.EV_ABS, ec, 255 if p else 0)
    elif "THUMB" in t and "PRESSED" not in t:
-    # Стики: несколько направлений на одну ось
+    # Стики: направление берём ТОЛЬКО из последней части имени (UP/DOWN/LEFT/RIGHT).
+    # Иначе "LEFT_THUMB_RIGHT" ошибочно совпадает с подстрокой "LEFT".
+    # Стандарт Xbox: вверх/влево = отрицательное, вниз/вправо = положительное.
+    direction = t.rsplit("_", 1)[-1]
     F = 32767
-    if "UP" in t or "RIGHT" in t:
-     val = F if p else 0
-    elif "DOWN" in t or "LEFT" in t:
+    if direction == "UP":
      val = -F if p else 0
+    elif direction == "DOWN":
+     val = F if p else 0
+    elif direction == "LEFT":
+     val = -F if p else 0
+    elif direction == "RIGHT":
+     val = F if p else 0
     else:
      val = 0
     if "RIGHT_THUMB" in t:
      # Правый стик: пишем через kb_rx/kb_ry (комбинируется с мышью)
-     if "LEFT" in t or "RIGHT" in t:
+     if direction in ("LEFT", "RIGHT"):
       self.kb_rx = val
-     elif "UP" in t or "DOWN" in t:
+     elif direction in ("UP", "DOWN"):
       self.kb_ry = val
     else:
      self.ui.write(ecodes.EV_ABS, ec, val)
