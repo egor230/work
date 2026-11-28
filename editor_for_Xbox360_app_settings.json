@@ -346,7 +346,7 @@
             "RIGHT_TRIGGER": "KEY_KPDOT",
             "GUIDE": "KEY_LEFTMETA",
             "BACK": "KEY_BACKSPACE",
-            "START": "KEY_KPENTER",
+            "START": "KEY_KPPLUS",
             "DPAD_UP": "KEY_W",
             "DPAD_DOWN": "KEY_S",
             "DPAD_LEFT": "KEY_A",
@@ -378,6 +378,22 @@
         "Obscure": {
             "RIGHT_THUMB_PRESSED": {
                 "key": "KEY_KPDOT",
+                "mode": "hold"
+            },
+            "RIGHT_TRIGGER": {
+                "key": "KEY_?",
+                "mode": "hold"
+            },
+            "RIGHT_SHOULDER": {
+                "key": "KEY_?",
+                "mode": "hold"
+            },
+            "LEFT_TRIGGER": {
+                "key": "KEY_?",
+                "mode": "hold"
+            },
+            "LEFT_SHOULDER": {
+                "key": "KEY_?",
                 "mode": "hold"
             }
         }

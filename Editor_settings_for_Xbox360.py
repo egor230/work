@@ -361,24 +361,26 @@ class Worker(QThread):
     # Аналоговые триггеры: 0 или 255
     self.ui.write(ecodes.EV_ABS, ec, 255 if p else 0)
    elif "THUMB" in t and "PRESSED" not in t:
-    # Стики: несколько направлений на одну ось.
-    # Стандарт Xbox: вверх/влево = отрицательное значение, вниз/вправо = положительное.
+    # Стики: направление берём ТОЛЬКО из последней части имени (UP/DOWN/LEFT/RIGHT).
+    # Иначе "LEFT_THUMB_RIGHT" ошибочно совпадает с подстрокой "LEFT".
+    # Стандарт Xbox: вверх/влево = отрицательное, вниз/вправо = положительное.
+    direction = t.rsplit("_", 1)[-1]
     F = 32767
-    if "UP" in t:
+    if direction == "UP":
      val = -F if p else 0
-    elif "DOWN" in t:
+    elif direction == "DOWN":
      val = F if p else 0
-    elif "LEFT" in t:
+    elif direction == "LEFT":
      val = -F if p else 0
-    elif "RIGHT" in t:
+    elif direction == "RIGHT":
      val = F if p else 0
     else:
      val = 0
     if "RIGHT_THUMB" in t:
      # Правый стик: пишем через kb_rx/kb_ry (комбинируется с мышью)
-     if "LEFT" in t or "RIGHT" in t:
+     if direction in ("LEFT", "RIGHT"):
       self.kb_rx = val
-     elif "UP" in t or "DOWN" in t:
+     elif direction in ("UP", "DOWN"):
       self.kb_ry = val
     else:
      self.ui.write(ecodes.EV_ABS, ec, val)
@@ -832,7 +834,7 @@ class AppController:
 
  def _on_trigger_key_clicked(self):
   """Назначение клавиши для триггерного режима выбранной кнопки"""
-  logical = self.window.trigger_button_combo.currentText()
+  logical = self.window.trigger_button_combo.currentData()
   mode_index = self.window.trigger_mode_combo.currentIndex()
   mode = "hold" if mode_index == 0 else "repeat"
 
@@ -850,7 +852,7 @@ class AppController:
 
  def _on_trigger_clear(self):
   """Очистка триггерного режима для выбранной кнопки (обычный маппинг НЕ затрагивается)"""
-  logical = self.window.trigger_button_combo.currentText()
+  logical = self.window.trigger_button_combo.currentData()
   self.pm.clear_trigger_mode(logical)
   self._refresh_bindings()
   self._save_app_settings()
@@ -861,7 +863,7 @@ class AppController:
 
  def _update_trigger_status(self):
   """Обновление метки статуса для выбранной кнопки триггера"""
-  logical = self.window.trigger_button_combo.currentText()
+  logical = self.window.trigger_button_combo.currentData()
   trigger_modes = self.pm.get_trigger_modes()
   val = trigger_modes.get(logical)
   if isinstance(val, dict):
@@ -886,7 +888,7 @@ class AppController:
     break
   if target_logical:
    # Устанавливаем выбранную кнопку в выпадающем списке
-   idx = self.window.trigger_button_combo.findText(target_logical)
+   idx = self.window.trigger_button_combo.findData(target_logical)
    if idx >= 0:
     self.window.trigger_button_combo.setCurrentIndex(idx)
    # Восстанавливаем режим (hold/repeat) в выпадающем списке

@@ -589,9 +589,26 @@ class MainWindow(QWidget):
   lay.addWidget(QLabel("Триггер:"))
   self.trigger_button_combo = QComboBox()
   self.trigger_button_combo.setFixedWidth(120)
-  # Заполняем списком всех логических имен из ZONE_DEFINITIONS (уникальные)
+  # Заполняем списком всех логических имен из ZONE_DEFINITIONS (уникальные).
+  # Отображаем понятные названия кнопок геймпада, но в itemData храним
+  # логическое имя — код использует именно его для поиска в профиле.
+  friendly = {
+   "A": "A", "B": "B", "X": "X", "Y": "Y",
+   "LEFT_SHOULDER": "LB (левый бампер)", "RIGHT_SHOULDER": "RB (правый бампер)",
+   "LEFT_TRIGGER": "LT (левый триггер)", "RIGHT_TRIGGER": "RT (правый триггер)",
+   "GUIDE": "Guide", "BACK": "Back", "START": "Start",
+   "DPAD_UP": "D-pad ↑", "DPAD_DOWN": "D-pad ↓",
+   "DPAD_LEFT": "D-pad ←", "DPAD_RIGHT": "D-pad →",
+   "LEFT_THUMB_UP": "Левый стик ↑", "LEFT_THUMB_DOWN": "Левый стик ↓",
+   "LEFT_THUMB_LEFT": "Левый стик ←", "LEFT_THUMB_RIGHT": "Левый стик →",
+   "LEFT_THUMB_PRESSED": "LS (нажатие левого стика)",
+   "RIGHT_THUMB_UP": "Правый стик ↑", "RIGHT_THUMB_DOWN": "Правый стик ↓",
+   "RIGHT_THUMB_LEFT": "Правый стик ←", "RIGHT_THUMB_RIGHT": "Правый стик →",
+   "RIGHT_THUMB_PRESSED": "RS (нажатие правого стика)",
+  }
   logical_names = sorted(set(z[1] for z in ZONE_DEFINITIONS))
-  self.trigger_button_combo.addItems(logical_names)
+  for logical in logical_names:
+   self.trigger_button_combo.addItem(friendly.get(logical, logical), logical)
   self.trigger_button_combo.setStyleSheet("background:#0d0e1a;color:white;border:1px solid #2c2f5a;border-radius:4px;padding:2px;")
   lay.addWidget(self.trigger_button_combo)
 
