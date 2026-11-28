@@ -700,7 +700,7 @@ https://m3u.su/dz.m3u8
 `https://raw.githubusercontent.com/IPTVRU2026/IPTVMIR/main/IPTV_MEGA_PLAYLIST.m3u`
 (8040 каналов, но много нестабильных ссылок).
 
-**Важно:** плеер LinkTV شلёт свой User-Agent `Televizo (Linux; Android 14)` и
+**Важно:** плеер LinkTV шлёт свой User-Agent `Televizo (Linux; Android 14)` и
 игнорирует User-Agent плейлиста. Из-за этого каналы ngenix/Wink показывают баннер
 «Wink ещё не показывает видео на этой территории». Настройка User-Agent в
 плейлисте на это не влияет (проверено через локальный прокси). Для таких каналов
