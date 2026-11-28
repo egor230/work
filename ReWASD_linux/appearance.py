@@ -420,9 +420,18 @@ class GamepadWidget(QWidget):
   painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, text)
 
  def _zone_at(self, pos):
-  for z in reversed(self.zones):
-   if z.contains(pos, self.width(), self.height()): return z
-  return None
+  # Крупные эллипсы LS/RS и кнопка Y перекрывали центры соседних зон,
+  # поэтому клик по L↑ попадал в LS. Берём ближайший центр среди всех
+  # зон, которые содержат точку, — так каждая кнопка выбирается по себе.
+  candidates = [z for z in self.zones
+                if z.contains(pos, self.width(), self.height())]
+  if not candidates:
+   return None
+  w, h = self.width(), self.height()
+  def _dist(z):
+   c = z.abs_rect(w, h).center()
+   return (pos.x() - c.x()) ** 2 + (pos.y() - c.y()) ** 2
+  return min(candidates, key=_dist)
 
  def mouseMoveEvent(self, event):
   pos = event.position()

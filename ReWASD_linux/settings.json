@@ -185,10 +185,10 @@
     "LBUTTON": "LBUTTON",
     "RBUTTON": "RBUTTON",
     "MBUTTON": "MBUTTON",
-    "SIDE_BUTTON": " ",
-    "EXTRA_BUTTON": " ",
-    "WHEEL_UP": "SCROLL_UP",
-    "WHEEL_DOWN": "SCROLL_DOWN"
+    "SIDE_BUTTON": "SCROLL_UP",
+    "EXTRA_BUTTON": "SCROLL_DOWN",
+    "WHEEL_UP": " ",
+    "WHEEL_DOWN": " "
   },
   "mouse_hold": {
     "LBUTTON": false,

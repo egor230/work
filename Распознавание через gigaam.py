@@ -12,9 +12,10 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 torch.set_num_threads(8)
 source_id = get_webcam_source_id()      # ← твоя функция
 set_mute("0", source_id)# Проверка и загрузка модели GigaAMprint("0")
+
 def check_model():
  models = ["v1_ssl", "v2_ssl", "ssl", "ctc", "v1_ctc", "v2_ctc", "rnnt", "v1_rnnt", "v2_rnnt", "emo", "v3_e2e_rnnt", "v3_e2e_ctc",
-          "multilingual_ctc", "multilingual_large_ctc", "multilingual_ssl", "multilingual_large_ssl"]
+          "multilingual_ctc", "multilingual_large_ctc", "multilingual_ssl", "multilingual_large_ssl", "v4_rnnt"]
  '''
 **Самая лучшая для распознавания голоса — `multilingual_large_ctc`** (600M, точнее 220M-версии). Модели `*_ssl` вообще не умеют распознавать речь — они только выдают эмбеддинги.
 
@@ -23,8 +24,9 @@ def check_model():
 - multilingual_ssl — 220M энкодер-эмбеддинг для извлечения аудио-представлений, речь не распознаёт.
 - multilingual_large_ssl — 600M энкодер-эмбеддинг, то же самое, но более мощный и точный для признаков.
 Для  скрипта (озвучка → текст) годятся только первые две; `large_ctc` лучше, но тяжелее и дольше грузится.
+- v4_rnnt — новейшая модель Сбера (27.11.2026), Zapformer 238M, две головы raw/e2e: WER 5.99% против 9.51% у v3 RNN-T. Загружается тем же кастомным лоадером.
  '''
- model_name = "v3_e2e_rnnt"  # активная модель (новая мультиязычная 600M CTC)
+ model_name = "v4_rnnt"  # активная модель (новая SOTA ru+en, 238M, WER 5.99%)
  try:  # Проверка наличия файла (указываем полный путь, как это делает gigaam)
   cache_dir = "/mnt/807EB5FA7EB5E954/soft/Virtual_machine/linux must have/python_linux/work/cache/gigaam"
   model = load_model(model_name, cache_dir ) # 4. Указываем корневой каталог, где лежит модель (GigaAM сам добавит /gigaam)

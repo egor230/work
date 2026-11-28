@@ -4887,6 +4887,9 @@ class Worker(QThread):
   self.kb_dev, self.m_dev = None, None
   self.kb_grabbed = False
   self.hat = {"x": 0, "y": 0}
+  # Нажатые направления по каждой оси: нужно, чтобы отпускание одной
+  # клавиши не сбрасывало ось, пока удерживается противоположная.
+  self.axis_dirs = {}
   self.m_rx, self.m_ry = 0.0, 0.0
   self.kb_rx, self.kb_ry = 0, 0
   self.smoother = deque(maxlen=20)
@@ -4957,6 +4960,7 @@ class Worker(QThread):
     self.kb_dev.grab()
     self.kb_grabbed = True
   except Exception as e:
+   self._clean()   # иначе клавиатура останется захваченной
    self.error_sig.emit(f"Ошибка захвата: {e}")
    return
 
@@ -5039,8 +5043,12 @@ class Worker(QThread):
       if d is self.kb_dev and ev.type == ecodes.EV_KEY:
        p = ev.value in (1, 2)  # True при нажатии или автоповторе ядра
 
-       # ESC — остановка эмуляции
-       if ev.code == ecodes.KEY_ESC and p:
+       # ESC/End — остановка эмуляции. End нужен здесь же: при захвате
+       # клавиатуры X-сервер (а значит и pynput) не получает эту клавишу.
+       # Если End назначена на кнопку геймпада — не перехватываем её.
+       if p and (ev.code == ecodes.KEY_ESC or
+                 (ev.code == ecodes.KEY_END and
+                  ev.code not in normal_inv and ev.code not in trigger_inv)):
         self.running = False
         break
 
@@ -5056,7 +5064,9 @@ class Worker(QThread):
          self._handle_trigger_key(logical, mode, ev.value)
 
        # === Обычные маппинги ===
-       elif ev.code in normal_inv:
+       # Отдельный if: клавиша может быть одновременно и триггером, и
+       # обычной привязкой к другой кнопке геймпада.
+       if ev.code in normal_inv:
         for logical in normal_inv[ev.code]:
          if logical in self.combined_set:
           # Кнопка с триггерным режимом — НЕ отправляем сразу,
@@ -5068,9 +5078,9 @@ class Worker(QThread):
 
       elif d is self.m_dev:
        self._mouse_ev(ev)
-    except:
+    except Exception as exc:
      self.running = False
-     self.error_sig.emit("Устройство отключилось!")
+     self.error_sig.emit("Ошибка эмуляции (устройство отключилось?): " + str(exc))
      break
 
    # --------------------------------------------------------
@@ -5167,13 +5177,35 @@ class Worker(QThread):
    pressed = 1 if ev.value else 0
    if ev.code == ecodes.BTN_LEFT:
     self.ui.write(ecodes.EV_ABS, ecodes.ABS_RZ, 255 if pressed else 0)
+    # Комбинированная логика hold/repeat сверяется с last_output. Без
+    # синхронизации отпускание ЛКМ «забывало» об активном удержании RT.
+    self.last_output["RIGHT_TRIGGER"] = pressed
    elif ev.code == ecodes.BTN_RIGHT:
     self.ui.write(ecodes.EV_ABS, ecodes.ABS_Z, 255 if pressed else 0)
+    self.last_output["LEFT_TRIGGER"] = pressed
    elif ev.code == ecodes.BTN_MIDDLE:
     self.ui.write(ecodes.EV_KEY, ecodes.BTN_THUMBR, pressed)
+    self.last_output["RIGHT_THUMB_PRESSED"] = pressed
    else:
     return
    self.ui.syn()
+
+ def _axis_dir_value(self, group, neg, pos, logical, p, scale=1):
+  """Значение оси с учётом нескольких удерживаемых направлений.
+
+  Если нажаты обе противоположные клавиши — ось нейтральна. После отпускания
+  одной направление оставшейся клавиши сохраняется, а не сбрасывается в ноль.
+  """
+  active = self.axis_dirs.setdefault(group, set())
+  if p:
+   active.add(logical)
+  else:
+   active.discard(logical)
+  if pos in active and neg not in active:
+   return scale
+  if neg in active and pos not in active:
+   return -scale
+  return 0
 
  def _dispatch(self, t, p):
   """Немедленная отправка события для кнопок БЕЗ триггерного режима
@@ -5182,10 +5214,12 @@ class Worker(QThread):
    ec = GAMEPAD_EC[t]
    if t.startswith("DPAD"):
     # D-pad: несколько направлений на одну ось
-    if "LEFT" in t:   ax, v = ecodes.ABS_HAT0X, -1 if p else 0
-    elif "RIGHT" in t: ax, v = ecodes.ABS_HAT0X, 1 if p else 0
-    elif "UP" in t:   ax, v = ecodes.ABS_HAT0Y, -1 if p else 0
-    else:             ax, v = ecodes.ABS_HAT0Y, 1 if p else 0  # DOWN
+    if "LEFT" in t or "RIGHT" in t:
+     ax = ecodes.ABS_HAT0X
+     v = self._axis_dir_value("dx", "DPAD_LEFT", "DPAD_RIGHT", t, p)
+    else:
+     ax = ecodes.ABS_HAT0Y
+     v = self._axis_dir_value("dy", "DPAD_UP", "DPAD_DOWN", t, p)
     self.ui.write(ecodes.EV_ABS, ax, v)
    elif t in ("LEFT_TRIGGER", "RIGHT_TRIGGER"):
     # Аналоговые триггеры: 0 или 255
@@ -5196,24 +5230,25 @@ class Worker(QThread):
     # Стандарт Xbox: вверх/влево = отрицательное, вниз/вправо = положительное.
     direction = t.rsplit("_", 1)[-1]
     F = 32767
-    if direction == "UP":
-     val = -F if p else 0
-    elif direction == "DOWN":
-     val = F if p else 0
-    elif direction == "LEFT":
-     val = -F if p else 0
-    elif direction == "RIGHT":
-     val = F if p else 0
-    else:
-     val = 0
-    if "RIGHT_THUMB" in t:
-     # Правый стик: пишем через kb_rx/kb_ry (комбинируется с мышью)
-     if direction in ("LEFT", "RIGHT"):
+    right = "RIGHT_THUMB" in t
+    if direction in ("LEFT", "RIGHT"):
+     group = "rx" if right else "lx"
+     neg = ("RIGHT_THUMB_LEFT" if right else "LEFT_THUMB_LEFT")
+     pos = ("RIGHT_THUMB_RIGHT" if right else "LEFT_THUMB_RIGHT")
+     val = self._axis_dir_value(group, neg, pos, t, p, F)
+     if right:
       self.kb_rx = val
-     elif direction in ("UP", "DOWN"):
+     else:
+      self.ui.write(ecodes.EV_ABS, ecodes.ABS_X, val)
+    elif direction in ("UP", "DOWN"):
+     group = "ry" if right else "ly"
+     neg = ("RIGHT_THUMB_UP" if right else "LEFT_THUMB_UP")
+     pos = ("RIGHT_THUMB_DOWN" if right else "LEFT_THUMB_DOWN")
+     val = self._axis_dir_value(group, neg, pos, t, p, F)
+     if right:
       self.kb_ry = val
-    else:
-     self.ui.write(ecodes.EV_ABS, ec, val)
+     else:
+      self.ui.write(ecodes.EV_ABS, ecodes.ABS_Y, val)
    else:
     # Обычные цифровые кнопки (A, B, X, Y, плечи, и т.д.)
     self.ui.write(ecodes.EV_KEY, ec, int(p))
@@ -5242,6 +5277,16 @@ class Worker(QThread):
    except:
     pass
    self.ui = None
+  # Явно закрываем файловые дескрипторы устройств: при частых перезапусках
+  # они могли копиться до исчерпания лимита.
+  for dev_name in ("kb_dev", "m_dev"):
+   dev = getattr(self, dev_name, None)
+   if dev is not None:
+    try:
+     dev.close()
+    except Exception:
+     pass
+    setattr(self, dev_name, None)
 
  def stop(self):
   self.running = False

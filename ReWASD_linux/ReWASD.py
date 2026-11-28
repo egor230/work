@@ -13,8 +13,8 @@ ReWASD Linux — единая программа в визуальном сти�
 import os
 import sys
 import json
+import copy
 import traceback
-import keyboard as keyboard_hotkey
 import time as time_module
 from pynput import keyboard as pynput_keyboard
 import mss
@@ -55,23 +55,45 @@ LOCK_FILE = Path("/tmp/rewasd_linux_single_instance.lock")
 
 
 def acquire_single_instance():
-    """Не дать запуститься второму экземпляру программы."""
-    try:
+    """Не дать запуститься второму экземпляру программы.
+
+    Без рекурсии: при битом lock-файле делается ровно одна повторная попытка.
+    """
+    def _create():
         fd = os.open(str(LOCK_FILE), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-        os.write(fd, str(os.getpid()).encode())
-        os.close(fd)
+        try:
+            os.write(fd, str(os.getpid()).encode())
+        finally:
+            os.close(fd)
         return True
+
+    try:
+        return _create()
     except FileExistsError:
         try:
             pid = int(LOCK_FILE.read_text().strip())
-            os.kill(pid, 0)  # живой процесс — действительно второй запуск
+        except (ValueError, OSError):
+            pid = None
+        if pid is not None:
+            try:
+                os.kill(pid, 0)  # живой процесс — действительно второй запуск
+                return False
+            except ProcessLookupError:
+                pass            # процесс мёртв — lock устарел
+            except PermissionError:
+                return False    # процесс есть, сигналы запрещены — не пускаем второй
+            except OSError:
+                pass
+        try:
+            LOCK_FILE.unlink(missing_ok=True)  # мёртвый/битый lock — чистим
+        except Exception:
+            return False                       # не смогли убрать — лучше не запускать
+        try:
+            return _create()                   # одна повторная попытка
+        except FileExistsError:
             return False
         except Exception:
-            try:
-                LOCK_FILE.unlink()  # мёртвый lock от прошлого crash — чистим
-            except Exception:
-                pass
-            return acquire_single_instance()
+            return True
     except Exception:
         return True  # lock-файл недоступен — не мешаем запуску
 
@@ -84,7 +106,11 @@ def release_single_instance():
 
 
 def _migrate_json_files():
-    """Собрать данные старых JSON в единый settings.json и удалить старые файлы."""
+    """Собрать данные старых JSON в единый settings.json.
+
+    Исходные файлы НЕ удаляются: если пользователь позже правит профиль в
+    редакторе Xbox 360, данные остаются доступными для сверки/переноса.
+    """
     try:
         data = json.loads(SETTINGS_FILE.read_text(encoding="utf-8"), strict=False) \
             if SETTINGS_FILE.exists() else {}
@@ -104,14 +130,10 @@ def _migrate_json_files():
     if changed:
         SETTINGS_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2),
                                  encoding="utf-8")
-    for filename in ("settings control mouse buttons.json",
-                     "editor_for_Xbox360_app_settings.json"):
-        old = HERE / filename
-        try:
-            if old.exists():
-                old.unlink()
-        except Exception:
-            pass
+    # Раньше здесь старые JSON удалялись. Из-за этого правки, сделанные в
+    # редакторе Xbox 360 после первого запуска, становились недоступны.
+    # Оставляем файлы на месте — автоматический импорт по-прежнему только
+    # один раз, но исходные данные не теряются.
 
 
 def _normalize_scripts_file():
@@ -155,6 +177,10 @@ KEY_LIST = sorted(set(list(KEY_MAPPER.default_mapping().values()) + [
 ]))
 MOUSE_BUTTONS = ["LBUTTON", "RBUTTON", "MBUTTON", "SIDE_BUTTON", "EXTRA_BUTTON",
                  "WHEEL_UP", "WHEEL_DOWN"]
+# Порядок кнопок в мышином движке другой: ...MBUTTON, WHEEL_UP, WHEEL_DOWN,
+# SIDE1, SIDE2. Без преобразования привязки колеса и боковых кнопок
+# записывались не в те слоты.
+MOUSE_INDEX_TO_ENGINE = [0, 1, 2, 5, 6, 3, 4]
 
 # Зоны поверх контура геймпада из реWASD (координаты относительно картинки 600x530)
 # Зоны подсветки берём из единого списка appearance.py — они совпадают
@@ -524,6 +550,9 @@ class KeySelectDialog(QDialog):
 
 
 class RewasdApp(QMainWindow):
+    # Сигнал для доставки глобальных хоткеев из потока pynput в GUI-поток.
+    hotkey_sig = pyqtSignal(str)
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("ReWASD Linux — Ultimate gaming experience")
@@ -531,7 +560,13 @@ class RewasdApp(QMainWindow):
         self.setStyleSheet(open(HERE / "style.qss", encoding="utf-8").read())
         self.worker = None
         self.mouse_window = None
+        self.script_editor = None
+        self._hotkey_listener = None
         self.data = self.load_settings()
+        # Снимок вложенных секций: позволяет не затирать правки, сделанные
+        # мышиным движком в отдельном окне, при автосохранении из ReWASD.
+        self._loaded_nested = copy.deepcopy({
+            k: self.data.get(k) for k in ("mouse_data", "gamepad_data", "macro_data")})
         # Восстанавливаем размер И положение окна с прошлого запуска
         geom = self.data.get("window_geometry")
         if geom and len(geom) == 4:
@@ -637,6 +672,27 @@ class RewasdApp(QMainWindow):
                 default.update(saved)
             except Exception:
                 pass
+        # gamepad_data — источник профилей и триггеров. Верхние ключи могли
+        # устареть, поэтому сверяем копии. Активные привязки из прошлой сессии
+        # сохраняем и записываем в текущий профиль, чтобы ничего не пропало.
+        gp = default.get("gamepad_data", {}) or {}
+        nested_profiles = gp.get("profiles") or {}
+        if nested_profiles:
+            default["gamepad_profiles"] = nested_profiles
+            if gp.get("trigger_modes") is not None:
+                default["trigger_modes"] = gp["trigger_modes"]
+            cur = gp.get("last_profile") or default.get("current_gamepad_profile")
+            if cur not in nested_profiles:
+                cur = default.get("current_gamepad_profile")
+            if cur not in nested_profiles:
+                cur = next(iter(nested_profiles), "Default")
+            default["current_gamepad_profile"] = cur
+            default["gamepad_profile_names"] = list(nested_profiles.keys())
+            active = default.get("gamepad_map") or {}
+            if active:
+                nested_profiles[cur] = dict(active)
+            default["gamepad_map"] = dict(nested_profiles.get(cur, KEY_MAPPER.default_mapping()))
+            gp["last_profile"] = cur
         # «По умолчанию» — обязательный первый профиль; восстанавливаем его,
         # если он пропал из-за старого сохранённого списка.
         profiles = default.get("profiles", [])
@@ -660,20 +716,37 @@ class RewasdApp(QMainWindow):
         открытии окна и при явном подтверждении сохранения в confirm_unsaved().
         """
         try:
-            SETTINGS_FILE.write_text(json.dumps(self.data, ensure_ascii=False, indent=2), encoding="utf-8")
+            merged = dict(self.data)
+            try:
+                disk = json.loads(SETTINGS_FILE.read_text(encoding="utf-8"), strict=False)
+            except Exception:
+                disk = {}
+            keys = ("mouse_data", "gamepad_data", "macro_data")
+            loaded = getattr(self, "_loaded_nested", {})
+            for key in keys:
+                # Секцию не меняли в интерфейсе — берём свежую с диска: её мог
+                # записать мышиный движок из своего окна.
+                if self.data.get(key) == loaded.get(key) and key in disk:
+                    merged[key] = disk[key]
+            SETTINGS_FILE.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8")
+            self._loaded_nested = copy.deepcopy({k: merged.get(k) for k in keys})
             self.status("Настройки сохранены")
         except Exception as e:
             self.status("Ошибка сохранения: " + str(e))
 
     def _take_baseline(self):
-        """Снимок настроек в момент открытия окна — с чем сравнивать при выходе."""
+        """Снимок настроек в момент открытия окна — с чем сравнивать при выходе.
+
+        Сравниваем с данными в памяти, а не с файлом: при загрузке часть
+        ключей нормализуется (сверка копий gamepad_data), и сравнение с файлом
+        давало бы ложный вопрос о сохранении сразу после открытия окна.
+        Текст файла запоминается отдельно — для кнопки «Не сохранять».
+        """
         try:
-            text = SETTINGS_FILE.read_text(encoding="utf-8")
-            self._baseline_text = text
-            self._baseline_data = json.loads(text)
+            self._baseline_text = SETTINGS_FILE.read_text(encoding="utf-8")
         except Exception:
             self._baseline_text = ""
-            self._baseline_data = {}
+        self._baseline_data = copy.deepcopy(self.data)
 
     def has_changes(self):
         """Любое изменение данных/виджетов относительно снимка."""
@@ -709,6 +782,9 @@ class RewasdApp(QMainWindow):
             # фактически сохраняла бы правки.
             try:
                 self.data = json.loads(json.dumps(self._baseline_data))
+                self._loaded_nested = copy.deepcopy({
+                    k: self.data.get(k)
+                    for k in ("mouse_data", "gamepad_data", "macro_data")})
                 SETTINGS_FILE.write_text(self._baseline_text, encoding="utf-8")
             except Exception:
                 pass
@@ -1001,6 +1077,12 @@ class RewasdApp(QMainWindow):
         self.chk_grab.setToolTip("Перехват физической клавиатуры через evdev (grab)")
         self.chk_grab.toggled.connect(self.on_gamepad_option_changed)
         srow.addWidget(self.chk_grab)
+        # Дребезг: при перетаскивании ползунка valueChanged приходит на каждом
+        # шаге. Без задержки каждое движение пересоздавало Worker и UInput.
+        self._gp_apply_timer = QTimer(self)
+        self._gp_apply_timer.setSingleShot(True)
+        self._gp_apply_timer.setInterval(400)
+        self._gp_apply_timer.timeout.connect(self._apply_gamepad_options)
         self.sx.valueChanged.connect(self.on_gamepad_option_changed)
         self.sy.valueChanged.connect(self.on_gamepad_option_changed)
         srow.addStretch()
@@ -1295,22 +1377,26 @@ class RewasdApp(QMainWindow):
             return None
 
     def install_hotkeys(self):
-        """Глобальные F11/End/F3 через pynput (keyboard требует root в Linux)."""
+        """Глобальные F11/End/F3 через pynput + локальные QShortcut."""
         self._last_hotkey = {}
-
-        def fire(name, action):
-            now = time_module.monotonic()
-            if now - self._last_hotkey.get(name, 0) < 0.5:
-                return
-            self._last_hotkey[name] = now
-            QTimer.singleShot(0, action)
-
         actions = {
             "f11": self.take_screenshot,
             "f3": lambda: self.btn_edit_zones.setChecked(
                 not self.btn_edit_zones.isChecked()),
             "end": self.stop_emulation,
         }
+        self._hotkey_actions = actions
+        # QTimer, созданный в потоке pynput, никогда не сработает: у этого
+        # потока нет event loop. Сигнал с автосоединением сам доставит вызов
+        # в GUI-поток через очередь событий Qt.
+        self.hotkey_sig.connect(self._on_hotkey)
+
+        def fire(name):
+            now = time_module.monotonic()
+            if now - self._last_hotkey.get(name, 0) < 0.5:
+                return
+            self._last_hotkey[name] = now
+            self.hotkey_sig.emit(name)
 
         def on_press(key):
             try:
@@ -1318,7 +1404,7 @@ class RewasdApp(QMainWindow):
             except Exception:
                 name = ""
             if name in actions:
-                fire(name, actions[name])
+                fire(name)
 
         try:
             listener = pynput_keyboard.Listener(on_press=on_press)
@@ -1326,6 +1412,8 @@ class RewasdApp(QMainWindow):
             listener.start()
             self._hotkey_listener = listener
         except Exception:
+            # Глобальный слушатель недоступен (например, Wayland) — остаются
+            # локальные QShortcut, работающие при фокусе на окне программы.
             pass
 
         # Дополнительно — локальные Qt-шорткаты, когда окно в фокусе
@@ -1333,10 +1421,24 @@ class RewasdApp(QMainWindow):
             from PyQt6.QtGui import QShortcut, QKeySequence
             for combo, name in (("F11", "f11"), ("F3", "f3"), ("End", "end")):
                 sc = QShortcut(QKeySequence(combo), self)
-                sc.activated.connect(
-                    lambda n=name: fire(n, actions[n]))
+                sc.activated.connect(lambda n=name: fire(n))
         except Exception:
             pass
+
+    def _on_hotkey(self, name):
+        """Выполнение хоткея строго в GUI-потоке."""
+        action = getattr(self, "_hotkey_actions", {}).get(name)
+        if action is not None:
+            action()
+
+    def _stop_hotkey_listener(self):
+        listener = getattr(self, "_hotkey_listener", None)
+        if listener is not None:
+            try:
+                listener.stop()
+            except Exception:
+                pass
+            self._hotkey_listener = None
 
     def stop_mouse_engine(self):
         try:
@@ -1414,7 +1516,11 @@ class RewasdApp(QMainWindow):
             res = cleanup_empty_script_entries(res)
             scripts_to_text(res)
             dict_save.save_jnson(res)
-            self.sync_engine_settings()
+            # Сначала записываем правку в settings.json, и только потом
+            # синхронизируем движок — иначе он перечитал бы старый файл.
+            self.data["mouse_data"] = res
+            self.save_settings()
+            self.sync_engine_settings(source=res)
             self.refresh_script_highlights()
             self.refresh_macro_table()
         except Exception:
@@ -1767,13 +1873,18 @@ class RewasdApp(QMainWindow):
                 and self.btn_edit_zones.isChecked():
             self.btn_edit_zones.setChecked(False)
 
-    def sync_engine_settings(self, restart=True):
-        """Передать движку актуальные данные и перезапустить его рантайм."""
+    def sync_engine_settings(self, restart=True, source=None):
+        """Передать движку актуальные данные и перезапустить его рантайм.
+
+        source нужен, когда данные только что изменены в памяти: перечитывание
+        файла затерло бы правку, ещё не записанную на диск.
+        """
         try:
-            root = self._read_all_settings()
-            mouse = root.get("mouse_data", {})
-            dict_save.save_jnson(mouse)          # память движка, а не только файл
-            dict_save.set_cur_app(mouse.get("current_app", ""))
+            if source is None:
+                root = self._read_all_settings()
+                source = root.get("mouse_data", {})
+            dict_save.save_jnson(source)         # память движка, а не только файл
+            dict_save.set_cur_app(source.get("current_app", ""))
             if restart and self.mouse_engine is not None:
                 self.mouse_engine.prepare(dict_save, force_ui_selection=True)
         except Exception:
@@ -1798,9 +1909,10 @@ class RewasdApp(QMainWindow):
             mouse = root.setdefault("mouse_data", {})
             path = mouse.get("current_app", "")
             vals = mouse.setdefault("key_value", {}).setdefault(path, [])
-            while len(vals) < len(MOUSE_BUTTONS):
+            need = max(MOUSE_INDEX_TO_ENGINE) + 1
+            while len(vals) < need:
                 vals.append(" ")
-            vals[index] = value
+            vals[MOUSE_INDEX_TO_ENGINE[index]] = value
             self._write_all_settings(root)
             self.sync_engine_settings()
         except Exception:
@@ -1822,7 +1934,8 @@ class RewasdApp(QMainWindow):
 
         vals = mouse.get("key_value", {}).get(path, [])
         for i, btn in enumerate(MOUSE_BUTTONS):
-            value = str(vals[i]) if i < len(vals) else ""
+            src = MOUSE_INDEX_TO_ENGINE[i]
+            value = str(vals[src]) if src < len(vals) else ""
             self.data["mouse_map"][btn] = value
             cb = self.mouse_key_combos.get(btn)
             if cb is not None:
@@ -2237,8 +2350,17 @@ class RewasdApp(QMainWindow):
             Path(path).write_text(json.dumps(self.data, ensure_ascii=False, indent=2), encoding="utf-8")
             self.status("Профиль сохранён: " + path)
 
-    def on_key_changed(self, logical, value):
+    def _set_gamepad_binding(self, logical, value):
+        """Привязка пишется и в рабочую карту, и в оба хранилища профиля."""
         self.data["gamepad_map"][logical] = value
+        profile = self.data.get("current_gamepad_profile")
+        for container in (self.data.get("gamepad_profiles", {}),
+                          (self.data.get("gamepad_data", {}).get("profiles", {}))):
+            if isinstance(container, dict) and profile in container:
+                container[profile][logical] = value
+
+    def on_key_changed(self, logical, value):
+        self._set_gamepad_binding(logical, value)
         b = self.kb_buttons.get(logical)
         if b:
             b.setText(value.replace("KEY_", ""))
@@ -2246,7 +2368,7 @@ class RewasdApp(QMainWindow):
     def pick_key(self, logical):
         dlg = KeySelectDialog(self, self.data["gamepad_map"].get(logical, ""))
         if dlg.exec() == QDialog.DialogCode.Accepted:
-            self.data["gamepad_map"][logical] = dlg.chosen
+            self._set_gamepad_binding(logical, dlg.chosen)
             self.kb_buttons[logical].setText(dlg.chosen.replace("KEY_", ""))
             cb = self.gamepad_combos.get(logical)
             if cb and dlg.chosen in KEY_LIST:
@@ -2278,6 +2400,14 @@ class RewasdApp(QMainWindow):
             QMessageBox.warning(self, "Мышь", "Не удалось открыть модуль мыши:\n" + traceback.format_exc()[-600:])
 
     def on_gamepad_option_changed(self, *_args):
+        """Отложить применение параметра, чтобы не дёргать движок на каждом тике."""
+        timer = getattr(self, "_gp_apply_timer", None)
+        if timer is not None:
+            timer.start()
+        else:
+            self._apply_gamepad_options()
+
+    def _apply_gamepad_options(self):
         """Сохранить параметры эмуляции и применить их, если она уже идёт."""
         self.data["sens_x"] = int(self.sx.value())
         self.data["sens_y"] = int(self.sy.value())
@@ -2306,7 +2436,10 @@ class RewasdApp(QMainWindow):
                              self.chk_grab.isChecked())
         self.worker.status_sig.connect(self.on_worker_status)
         self.worker.error_sig.connect(self.on_worker_error)
-        self.worker.finished.connect(self.on_worker_finished)
+        # Сигнал от старого потока может прийти уже после старта нового.
+        # Привязываем его к конкретному экземпляру, как в эталонном редакторе.
+        self.worker.finished.connect(
+            lambda source=self.worker: self._on_worker_finished(source))
         self.worker.start()
         self.btn_start.setEnabled(False)
         self.btn_stop.setEnabled(True)
@@ -2315,12 +2448,18 @@ class RewasdApp(QMainWindow):
 
     def stop_emulation(self):
         if self.worker:
+            # Worker.stop() уже делает wait(2000); второе ожидание до 3 с
+            # только замораживало GUI при перезапуске.
             try:
                 self.worker.stop()
             except Exception:
                 pass
-            self.worker.wait(3000)
         self.on_worker_finished()
+
+    def _on_worker_finished(self, source):
+        """Обработать завершение только текущего потока эмуляции."""
+        if self.worker is source:
+            self.on_worker_finished()
 
     def on_worker_status(self, msg):
         self.log_label.setText("Лог: " + str(msg)[-300:])
@@ -2426,9 +2565,11 @@ class RewasdApp(QMainWindow):
         if not self.confirm_unsaved():
             return
         self._closing = True
+        self._stop_hotkey_listener()
         self.stop_emulation()
         self.stop_mouse_engine()
         self.save_settings()
+        release_single_instance()
         app = QApplication.instance()
         if app is not None:
             app.quit()
@@ -2453,9 +2594,12 @@ class RewasdApp(QMainWindow):
             event.ignore()
             return
         self._closing = True
+        self._stop_hotkey_listener()
         self.stop_emulation()
         self.stop_mouse_engine()
         self.save_settings()
+        # os._exit минует finally в main(), поэтому lock снимаем сами.
+        release_single_instance()
         super().closeEvent(event)
         # Как в исходном скрипте мыши: гарантированный выход без повторного
         # срабатывания closeEvent (иначе окно подтверждения появляется дважды).
@@ -2475,7 +2619,11 @@ def main():
             QMessageBox.StandardButton.Ok)
         return 0
 
-    app.setQuitOnLastWindowClosed(True)  # закрытие окна завершает программу
+    # Главное окно стартует скрытым в трее. При True закрытие любого
+    # дополнительного окна (редактор скриптов, клавиатура) завершало бы
+    # приложение без stop_emulation/save_settings. Выход только через
+    # closeEvent главного окна или пункт трея «Выход».
+    app.setQuitOnLastWindowClosed(False)
     w = RewasdApp()
     # Иконка окна — видна на панели задач и в заголовке окна
     w.setWindowIcon(QIcon(str(ASSETS / "window_icon.png")))

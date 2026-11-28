@@ -1,4 +1,4 @@
-import hashlib, logging, math, os, urllib.request, warnings, numpy as np, onnxruntime as rt, torch, torch.nn.functional as F, torchaudio, torchaudio.functional as taF, omegaconf
+import hashlib, json, logging, math, os, urllib.request, warnings, numpy as np, onnxruntime as rt, torch, torch.nn.functional as F, torchaudio, torchaudio.functional as taF, omegaconf
 from abc import ABC, abstractmethod
 from pathlib import Path
 from subprocess import CalledProcessError, run
@@ -31,7 +31,16 @@ _MODEL_HASHES = {
 	"multilingual_ssl": "af54fed7a0337eeae7c4a25b2f8779c8",
 	"multilingual_large_ctc": "79a9adde50dd7f35bbf70927cb6557d0",
 	"multilingual_large_ssl": "2ef65a2ca413f6e1f99a4df0e86c1cee",
+	# Новое поколение (27.11.2026): Zapformer + двойные головы raw/e2e
+	"v4_ctc": "7f81bb7c82588bf3f6956e9ca6ce9451",
+	"v4_rnnt": "af1027b4fa8b306c7aa1974e4b740fe0",
+	"v4_ssl": "22f509eba66cd723e06995e650ae99e8",
+	"multilingual_v2_rnnt": "4c24acddcf2f81d512563067b40ca36d",
+	"multilingual_v2_ssl": "ea8a54fb545b2e0f89a7f23dd9bcd807",
 }
+
+# Для этих моделей CDN хранит два токенизатора: raw и e2e
+_DUAL_TOKENIZER_MODELS = {"v4_rnnt", "v4_ctc", "multilingual_v2_rnnt"}
 
 _PIPELINE = None
 warnings.simplefilter("ignore", category=UserWarning)
@@ -89,7 +98,12 @@ class FeatureExtractor(nn.Module):
 				win_length=self.win_length,
 				hop_length=self.hop_length,
 				n_fft=self.n_fft,
-				center=self.center
+				center=self.center,
+				# Параметры новых моделей: раньше игнорировались, теперь важны
+				mel_scale=kwargs.get("mel_scale", "htk"),
+				norm=kwargs.get("mel_norm", None),
+				f_min=kwargs.get("lowfreq", 0),
+				f_max=kwargs.get("highfreq", None)
 			),
 			SpecScaler()
 		)
@@ -652,6 +666,521 @@ class ConformerEncoder(nn.Module):
 		return audio_signal.transpose(1, 2), length
 
 
+# ===== Новое поколение GigaAM-v4 / Multilingual-v2 (Zapformer, 27.11.2026) =====
+# Имена модулей повторяют официальный чекпоинт, чтобы load_state_dict(strict=True)
+# работал без переименования ключей. Потоковый режим и ONNX-экспорт намеренно
+# опущены: скрипт использует только полный контекст и жадное декодирование.
+
+class SwishL(nn.Module):
+	def forward(self, x: Tensor) -> Tensor:
+		return (
+			F.silu(0.639521598815918 * x - 2.087040662765503)
+			- 0.021007252857089043 * x
+			+ 0.2303316444158554
+		)
+
+
+class SwishR(nn.Module):
+	def forward(self, x: Tensor) -> Tensor:
+		return (
+			F.silu(0.683202862739563 * x - 0.31602001190185547)
+			- 0.012898006476461887 * x
+			+ 0.133248575988922
+		)
+
+
+def _zap_activation(name, variant="r"):
+	if name.lower() == "silu":
+		return nn.SiLU()
+	return SwishL() if variant == "l" else SwishR()
+
+
+class RMSNormTorch(nn.Module):
+	def __init__(self, dim: int, eps: float = 1e-06):
+		super().__init__()
+		self.eps = eps
+		self.weight = nn.Parameter(torch.ones(dim))
+
+	def forward(self, x: Tensor) -> Tensor:
+		variance = (x * x).mean(dim=-1, keepdim=True)
+		return x * torch.rsqrt(variance + self.eps) * self.weight
+
+
+class RmsNorm(nn.Module):
+	def __init__(self):
+		super().__init__()
+		self.scale = nn.Parameter(torch.tensor(0.2))
+		self.eps = nn.Parameter(torch.tensor(0.1))
+
+	def forward(self, x: Tensor) -> Tensor:
+		x_sq = torch.mean(x * x, dim=-1, keepdim=True) + self.eps * self.eps
+		return x * (self.scale / x_sq.sqrt())
+
+
+class OrthogonalLinear(nn.Module):
+	def __init__(self, in_channels: int, out_channels: int, weight_rms: float = 0.3):
+		super().__init__()
+		self.weight = nn.Parameter(torch.empty(out_channels, in_channels))
+		nn.init.normal_(self.weight, std=weight_rms)
+		self.weight_scale = in_channels ** (-0.5) / weight_rms
+
+	def forward(self, x: Tensor, transpose: bool = False) -> Tensor:
+		weight = self.weight * self.weight_scale
+		if transpose:
+			weight = weight.t()
+		return F.linear(x, weight, None)
+
+
+class ActivationAndLinear(nn.Module):
+	def __init__(self, in_channels: int, out_channels: int, activation="swish"):
+		super().__init__()
+		self.weight = nn.Parameter(torch.empty(out_channels, in_channels))
+		self.bias = nn.Parameter(torch.empty(out_channels))
+		nn.init.kaiming_uniform_(self.weight, a=math.sqrt(5))
+		nn.init.zeros_(self.bias)
+		self.activation = _zap_activation(activation)
+
+	def forward(self, x: Tensor) -> Tensor:
+		return F.linear(self.activation(x), self.weight, self.bias)
+
+
+class RoPETable(nn.Module):
+	def __init__(self, dim: int, max_seq_len: int, base: float = 10000.0):
+		super().__init__()
+		inv_freq = 1.0 / base ** (torch.arange(0, dim, 2, dtype=torch.float32) / dim)
+		t = torch.arange(max_seq_len, dtype=torch.float32)
+		freqs = torch.outer(t, inv_freq)
+		self.cos = nn.Parameter(freqs.cos()[None, None, :, :], requires_grad=False)
+		self.sin = nn.Parameter(freqs.sin()[None, None, :, :], requires_grad=False)
+		self.max_seq_len = max_seq_len
+
+	@staticmethod
+	def key(dim: int, max_seq_len: int, base: float = 10000.0) -> str:
+		return f"ed{dim}_S{max_seq_len}_b{int(base)}"
+
+	def forward(self, positions: Tensor) -> Tuple[Tensor, Tensor]:
+		return self.cos.index_select(2, positions), self.sin.index_select(2, positions)
+
+
+def apply_rope(x: Tensor, cos: Tensor, sin: Tensor) -> Tensor:
+	b, h, s, d = x.shape
+	pair = x.reshape(b, h, s, d // 2, 2)
+	x0, x1 = pair[..., 0], pair[..., 1]
+	return torch.stack((x0 * cos - x1 * sin, x0 * sin + x1 * cos), dim=-1).reshape(b, h, s, d)
+
+
+def _zap_tuple(value, count=None):
+	values = (
+		tuple(map(int, value.split(",")))
+		if isinstance(value, str)
+		else ((value,) if isinstance(value, int) else tuple(value))
+	)
+	if count is not None and len(values) == 1:
+		values *= count
+	return values
+
+
+def _zapformer_conv2d(x, layer, padding=None):
+	if padding is None:
+		return layer(x)
+	return F.conv2d(x, layer.weight, layer.bias, layer.stride, padding, groups=layer.groups)
+
+
+class ZapformerConvNeXt(nn.Module):
+	def __init__(self, channels, causal, activation="swish"):
+		super().__init__()
+		self.causal = causal
+		kernel = 3 if causal else 7
+		self.depthwise_conv = nn.Conv2d(channels, channels, kernel, groups=channels, padding=0 if causal else 3)
+		self.pointwise_conv1 = nn.Conv2d(channels, channels * 3, 1)
+		self.activation = _zap_activation(activation, "l")
+		self.pointwise_conv2 = nn.Conv2d(channels * 3, channels, 1)
+
+	def forward(self, x):
+		residual = x
+		if self.causal:
+			x = F.pad(x, (1, 1, 2, 0))
+		x = _zapformer_conv2d(x, self.depthwise_conv)
+		x = self.activation(_zapformer_conv2d(x, self.pointwise_conv1))
+		return residual + _zapformer_conv2d(x, self.pointwise_conv2)
+
+
+class ZapformerFrontend(nn.Module):
+	def __init__(self, feat_in, dim, channels, causal, activation="swish"):
+		super().__init__()
+		self.causal = causal
+		c1, c2, c3 = channels
+		self.conv1 = nn.Conv2d(1, c1, 3, padding=0 if causal else 1)
+		self.conv2 = nn.Conv2d(c1, c2, 3, stride=2, padding=(1, 0))
+		self.conv3 = nn.Conv2d(c2, c3, 3, stride=2, padding=(1, 0))
+		self.subsampling_factor = self.conv2.stride[0] * self.conv3.stride[0]
+		self.activation = _zap_activation(activation)
+		self.convnext = ZapformerConvNeXt(c3, causal, activation)
+		self.out = nn.Linear(c3 * (((feat_in - 1) // 2 - 1) // 2), dim)
+
+	def forward(self, x, lengths, state=None):
+		valid = torch.arange(x.shape[1], device=x.device)[None] < lengths[:, None]
+		x = (x * valid.unsqueeze(-1)).unsqueeze(1)
+		for i, conv in enumerate((self.conv1, self.conv2, self.conv3)):
+			if i == 0 and self.causal:
+				x = F.pad(x, (1, 1, 2, 0))
+			x = self.activation(_zapformer_conv2d(x, conv))
+			if i:
+				lengths = (lengths + 1) // 2
+			valid = torch.arange(x.shape[2], device=x.device)[None] < lengths[:, None]
+			x = x * valid[:, None, :, None]
+		x = self.convnext(x)
+		return self.out(x.transpose(1, 2).flatten(2)) * valid.unsqueeze(-1), lengths
+
+
+class ZapformerAttention(nn.Module):
+	def __init__(self, dim, heads, qdim, vdim, dropout):
+		super().__init__()
+		self.heads, self.qdim, self.vdim = heads, qdim, vdim
+		self.in_norm = RMSNormTorch(dim)
+		self.qk_in_proj = nn.Linear(dim, 2 * heads * qdim)
+		self.vg_in_proj = nn.Linear(dim, 3 * heads * vdim)
+		self.out_proj = nn.Linear(heads * vdim, dim)
+		self.dropout = dropout
+
+	def forward(self, x_qk, x_vg, cos, sin, mask, offset=0):
+		b, t, _ = x_qk.shape
+		q, k = self.qk_in_proj(self.in_norm(x_qk)).chunk(2, -1)
+		q, k = [
+			apply_rope(
+				z.reshape(b, t, self.heads, self.qdim).transpose(1, 2),
+				cos.to(z.dtype),
+				sin.to(z.dtype),
+			)
+			for z in (q, k)
+		]
+		v, gate_in, gate_out = self.vg_in_proj(x_vg).chunk(3, -1)
+		v = (v * gate_in.sigmoid()).reshape(b, t, self.heads, self.vdim).transpose(1, 2)
+		all_masked = mask.all(-1, keepdim=True)[:, None]
+		out = F.scaled_dot_product_attention(
+			q[:, :, offset:].masked_fill(all_masked, 0),
+			k,
+			v,
+			attn_mask=~mask[:, None] | all_masked,
+			dropout_p=self.dropout if self.training else 0.0,
+		)
+		out = out.transpose(1, 2).reshape(b, t - offset, self.heads * self.vdim)
+		return self.out_proj(out * gate_out[:, offset:].sigmoid())
+
+
+class ZapformerFeedForward(nn.Module):
+	def __init__(self, dim, multiple, activation="swish"):
+		super().__init__()
+		self.in_proj = nn.Linear(dim, dim * multiple)
+		self.activation = _zap_activation(activation)
+		self.activation_dropout = nn.Dropout(0.05)
+		self.out_proj = nn.Linear(dim * multiple, dim)
+
+	def forward(self, x):
+		return self.out_proj(self.activation_dropout(self.activation(self.in_proj(x))))
+
+
+class ZapformerConvolution(nn.Module):
+	def __init__(self, dim, kernel, chunk, activation="swish"):
+		super().__init__()
+		self.chunk, self.context = chunk, (kernel - 1) // 2
+		self.in_proj = nn.Linear(dim, 2 * dim)
+		self.depthwise_conv = nn.Conv1d(dim, dim, kernel, groups=dim, padding=self.context)
+		self.weighted_mean = nn.Module()
+		self.weighted_mean.weights = nn.Parameter(torch.zeros(dim))
+		self.out_proj = ActivationAndLinear(dim, dim, activation)
+
+	def forward(self, x, valid, context, chunk_size=None):
+		x, gate = self.in_proj(x).chunk(2, -1)
+		x = x * valid.unsqueeze(-1)
+		accum = x.float()
+		mean = (context.to(accum.dtype) @ accum) / context.sum(-1, keepdim=True).clamp_min(1)
+		mean = mean * self.weighted_mean.weights
+		y = F.conv1d(
+			x.transpose(1, 2),
+			self.depthwise_conv.weight,
+			self.depthwise_conv.bias,
+			padding=self.context,
+			groups=x.shape[-1],
+		)
+		return self.out_proj((y.transpose(1, 2) + mean) * gate.sigmoid())
+
+
+class ZapformerLayer(nn.Module):
+	def __init__(self, dim, heads, qdim, vdim, multiple, kernel, chunk, dropout, activation="swish"):
+		super().__init__()
+		self.feed_forward1 = ZapformerFeedForward(dim, multiple, activation)
+		self.feed_forward2 = ZapformerFeedForward(dim, multiple, activation) if kernel > 0 else None
+		self.self_attn = ZapformerAttention(dim, heads, qdim, vdim, 0.1)
+		self.conv_module = ZapformerConvolution(dim, kernel, chunk, activation) if kernel > 0 else None
+		self.norm = RMSNormTorch(dim)
+		self.dropout = dropout
+
+	def forward(self, x, cos, sin, valid, allowed, chunk_size=None):
+		residual = x
+		qk = x
+		x = x + F.dropout(self.feed_forward1(x), self.dropout, self.training)
+		mask = ~allowed[None] | ~valid[:, None]
+		x = x + F.dropout(self.self_attn(qk, x, cos, sin, mask), self.dropout, self.training)
+		if self.conv_module is not None:
+			x = x + F.dropout(
+				self.conv_module(x, valid, ~mask, chunk_size=chunk_size),
+				self.dropout,
+				self.training,
+			)
+		if self.feed_forward2 is not None:
+			x = x + F.dropout(self.feed_forward2(x), self.dropout, self.training)
+		return self.norm(residual + 0.25 * (x - residual))
+
+
+class ZapformerStack(nn.Module):
+	def __init__(self, input_dim, dim, layers, heads, qdim, vdim, multiple, kernel, chunk, dropout, rope_bank, activation="swish"):
+		super().__init__()
+		self.proj = OrthogonalLinear(input_dim, dim)
+		self.layers = nn.ModuleList(
+			[ZapformerLayer(dim, heads, qdim, vdim, multiple, kernel, chunk, dropout, activation) for _ in range(layers)]
+		)
+		self.residual_scales = nn.Parameter(torch.tensor([-1.0] + [1.0 / layers] * layers))
+		self.input_scale = nn.Parameter(torch.ones(1))
+		self.rope_bank = rope_bank
+
+	def forward(self, x, cos, sin, valid, allowed, layer_hook=None, chunk_size=None):
+		residual = x
+		x = self.proj(x)
+		bypass = self.residual_scales[0] * x
+		x = self.input_scale * x
+		for i, layer in enumerate(self.layers):
+			x = layer(x, cos, sin, valid, allowed, chunk_size)
+			if layer_hook is not None:
+				x = layer_hook(x, i)
+			bypass = bypass + self.residual_scales[i + 1] * x
+		return residual + self.proj(bypass, transpose=True)
+
+
+class ZapformerEncoder(nn.Module):
+	"""Zapformer-энкодер из GigaAM-v4 / Multilingual-v2 (полный контекст)."""
+
+	def __init__(
+		self,
+		in_channels=64,
+		frontend_channels="8,32,128",
+		downsampling_factor="1,2,4,2",
+		embed_dim=None,
+		encoder_dim="320,512,768,512",
+		num_encoder_layers="6,8,14,8",
+		query_head_dim=None,
+		value_head_dim="96,96,96,96",
+		num_heads="4,4,4,4",
+		feedforward_multiple="4,4,3,4",
+		conv_params="31,31,15,31",
+		causal=False,
+		causal_frontend=False,
+		chunk_size=-1,
+		window_size=(-1, -1),
+		chunk_window=(-1, -1),
+		max_seq_len=10000,
+		dropout=0.1,
+		flash_attn=False,
+		dual_mode=False,
+		activation="swish",
+	):
+		super().__init__()
+		if flash_attn:
+			raise NotImplementedError("flash_attn не поддерживается Zipformer/Zapformer")
+		self.dual_mode = dual_mode
+		self.language_film = None
+		if dual_mode:
+			chunks = _zap_tuple(chunk_size)
+			windows = (
+				[tuple(w) for w in window_size]
+				if not isinstance(window_size[0], int)
+				else [tuple(window_size)] * len(chunks)
+			)
+			self._context_modes = dict(zip(chunks, windows))
+			causal, chunk_size, window_size = False, -1, (-1, -1)
+		self.feat_in = in_channels
+		self.causal, self.causal_frontend = causal, causal_frontend
+		self.downsampling_factor = ds = _zap_tuple(downsampling_factor)
+		n = len(ds)
+		dims, layers, heads, vdims, multiples, kernels = [
+			_zap_tuple(v, n)
+			for v in (
+				encoder_dim,
+				num_encoder_layers,
+				num_heads,
+				value_head_dim,
+				feedforward_multiple,
+				conv_params,
+			)
+		]
+		self.layer_dims = [dim for dim, count in zip(dims, layers) for _ in range(count)]
+		qdims = (
+			_zap_tuple(query_head_dim, n)
+			if query_head_dim is not None
+			else tuple(d // h for d, h in zip(dims, heads))
+		)
+		self.chunk_size = chunk_size if causal else -1
+		self.window_size, self.chunk_window = _zap_tuple(window_size), _zap_tuple(chunk_window)
+		dim = embed_dim or dims[0]
+		self.feat_out = dim
+		self.encoder_embed = ZapformerFrontend(
+			in_channels, dim, _zap_tuple(frontend_channels, 3), causal_frontend, activation
+		)
+		self.encoder = nn.Module()
+		self.encoder.rope_bank = nn.Module()
+		self.encoder.rope_bank.tables = nn.ModuleDict(
+			{
+				RoPETable.key(q, max_seq_len): RoPETable(q, max_seq_len)
+				for q in set(qdims)
+			}
+		)
+		self.encoder.encoders = nn.ModuleList(
+			[
+				ZapformerStack(
+					d * dim, e, l, h, q, v, m, k,
+					self.chunk_size // d if causal else -1,
+					dropout, self.encoder.rope_bank, activation,
+				)
+				for d, e, l, h, q, v, m, k in zip(
+					ds, dims, layers, heads, qdims, vdims, multiples, kernels
+				)
+			]
+		)
+		self.encoder.out_norm = RmsNorm()
+		self.qdims, self.max_seq_len = qdims, max_seq_len
+
+	@property
+	def frontend(self):
+		return self.encoder_embed
+
+	@property
+	def subsampling_factor(self):
+		return self.encoder_embed.subsampling_factor
+
+	def _allowed(self, size, device, chunk, window_size):
+		q = torch.arange(size, device=device)[:, None]
+		k = q.T
+		if chunk <= 0:
+			return torch.ones(size, size, device=device, dtype=torch.bool)
+		return self._attention_mask(q, k, chunk, window_size)
+
+	def _attention_mask(self, q, k, chunk, window_size=None):
+		qc, kc = q // chunk, k // chunk
+		allowed = qc == kc
+		for left, right, query, key in (
+			(*(self.window_size if window_size is None else window_size), q, k),
+			(*self.chunk_window, qc, kc),
+		):
+			if (left, right) != (-1, -1):
+				allowed = allowed | (
+					(key >= query - left) if left >= 0 else torch.ones_like(allowed)
+				) & ((key <= query + right) if right >= 0 else torch.ones_like(allowed))
+		return allowed
+
+	def forward(self, audio_signal, length, chunk_size=None, lang_embedding=None, left_context=32):
+		chunk = chunk_size
+		if chunk is None:
+			chunk = -1
+		window = self._context_modes[chunk] if self.dual_mode else self.window_size
+		x, length = self.encoder_embed(audio_signal.transpose(1, 2), length)
+		original = x.shape[1]
+		max_ds = max(self.downsampling_factor)
+		x = F.pad(x, (0, 0, 0, (-original) % max_ds))
+		valid = torch.arange(x.shape[1], device=x.device)[None] < length[:, None]
+		allowed = self._allowed(x.shape[1], x.device, chunk, window)
+		layer_offset = 0
+		for ds, qdim, stack in zip(self.downsampling_factor, self.qdims, self.encoder.encoders):
+			if ds > 1:
+				x = x * valid.unsqueeze(-1)
+			x = x.reshape(x.shape[0], -1, x.shape[-1] * ds)
+			table = self.encoder.rope_bank.tables[RoPETable.key(qdim, self.max_seq_len)]
+			cos, sin = table(torch.arange(x.shape[1], device=x.device))
+			hook = (
+				(lambda value, index: self.language_film(value, layer_offset + index, lang_embedding))
+				if self.language_film is not None
+				else None
+			)
+			x = stack(x, cos, sin, valid[:, ::ds], allowed[::ds, ::ds], hook)
+			layer_offset += len(stack.layers)
+			x = x.reshape(x.shape[0], -1, x.shape[-1] // ds)
+		return self.encoder.out_norm(x[:, :original]).transpose(1, 2), length
+
+
+class LanguageEmbedding(nn.Module):
+	def __init__(self, cfg):
+		super().__init__()
+		self.languages = tuple(cfg["languages"])
+		self.slots = {code: i + 1 for i, code in enumerate(self.languages)}
+		self.slots["auto"] = 0
+		self.default = cfg.get("default_tag") or "auto"
+		self.weight = nn.Parameter(torch.empty(cfg["num_slots"], cfg["embedding_dim"]))
+		if cfg.get("init") == "zeros":
+			nn.init.zeros_(self.weight)
+		else:
+			nn.init.normal_(self.weight, std=cfg.get("init_std", 0.02))
+
+	def _vector(self, tag):
+		if not isinstance(tag, dict):
+			values = json.loads(tag) if isinstance(tag, str) and tag.startswith("[") else ([tag] if isinstance(tag, str) else tag)
+			tag = {code: 1.0 for value in values for code in value.strip().lower().split("-")}
+		vector = self.weight.new_zeros(self.weight.shape[0])
+		for code, value in tag.items():
+			code = code.strip().lower()
+			vector[self.slots["kk" if code == "kz" else code]] += float(value)
+		return vector / vector.sum()
+
+	def forward(self, language, batch_size=1):
+		language = self.default if language is None else language
+		tags = [language] * batch_size if isinstance(language, (str, dict)) else language
+		vectors = torch.stack([self._vector(tag) for tag in tags])
+		return (vectors.unsqueeze(-1) * self.weight.unsqueeze(0)).sum(1)
+
+
+class LanguageFiLM(nn.Module):
+	def __init__(self, widths, embedding_dim, cfg):
+		super().__init__()
+		every = cfg.get("every_n", 4)
+		placement = cfg.get("placement", "every_n")
+		layers = range(len(widths))
+		if placement == "custom":
+			layers = cfg["layers"]
+		elif placement != "all":
+			layers = range(every - 1, len(widths), every)
+		self.projections = nn.ModuleDict(
+			{str(i): nn.Linear(embedding_dim, 2 * widths[i]) for i in layers}
+		)
+		for projection in self.projections.values():
+			nn.init.zeros_(projection.weight)
+			nn.init.zeros_(projection.bias)
+
+	def forward(self, hidden, index, embedding):
+		if str(index) not in self.projections:
+			return hidden
+		gamma, beta = self.projections[str(index)](embedding.to(hidden.dtype)).unsqueeze(1).chunk(2, -1)
+		return hidden * (1 + gamma) + beta
+
+
+class LanguageLateFusion(nn.Module):
+	def __init__(self, width, embedding_dim, cfg):
+		super().__init__()
+		hidden = cfg.get("hidden", 2048)
+		self.kernel = nn.Sequential(
+			nn.Linear(width + embedding_dim, hidden),
+			nn.ReLU(),
+			nn.Dropout(cfg.get("dropout", 0.0)),
+			nn.Linear(hidden, width),
+		)
+		nn.init.zeros_(self.kernel[-1].weight)
+		nn.init.zeros_(self.kernel[-1].bias)
+
+	def forward(self, encoded, embedding):
+		with torch.autocast(device_type=encoded.device.type, enabled=False):
+			encoded = encoded.float()
+			frames = encoded.transpose(1, 2)
+			language = embedding.float().unsqueeze(1).expand(-1, frames.shape[1], -1)
+			return encoded + self.kernel(torch.cat((frames, language), -1)).transpose(1, 2)
+
+
 def get_pipeline() -> "Pipeline":
 	"""Создает или возвращает кэшированный VAD пайплайн"""
 	from pyannote.audio import Model, Pipeline
@@ -846,22 +1375,39 @@ class GigaAM(nn.Module):
 	def __init__(self, cfg: omegaconf.DictConfig):
 		super().__init__()
 		self.cfg = cfg
+		self.language_fusion = None
 
+		# Передаём ВСЕ параметры препроцессора (у новых моделей есть mel_scale,
+		# mel_norm, lowfreq/highfreq — они влияют на признаки).
 		self.preprocessor = FeatureExtractor(
-			sample_rate=cfg.preprocessor.sample_rate,
-			features=cfg.preprocessor.features,
-			hop_length=cfg.preprocessor.get("hop_length"),
-			win_length=cfg.preprocessor.get("win_length"),
-			n_fft=cfg.preprocessor.get("n_fft"),
-			center=cfg.preprocessor.get("center", True)
+			**{k: v for k, v in cfg.preprocessor.items() if k != "_target_"}
 		)
 
-		self.encoder = ConformerEncoder(**cfg.encoder)
+		enc_cfg = {k: v for k, v in cfg.encoder.items() if k != "_target_"}
+		if str(cfg.encoder.get("_target_", "")).endswith("ZapformerEncoder"):
+			self.encoder = ZapformerEncoder(**enc_cfg)
+		else:
+			self.encoder = ConformerEncoder(**enc_cfg)
 
-	def forward(self, features: Tensor, feature_lengths: Tensor) -> Tuple[Tensor, Tensor]:
+		if hasattr(self.encoder, "subsampling_factor"):
+			self.encoder.frame_shift_ms = (
+				1000 * self.preprocessor.hop_length * self.encoder.subsampling_factor
+				/ cfg.preprocessor.sample_rate
+			)
+
+	def encode_language(self, language, batch_size):
+		"""Базовые модели не используют языковые подсказки"""
+		return None
+
+	def forward(self, features: Tensor, feature_lengths: Tensor, language=None, **kwargs) -> Tuple[Tensor, Tensor]:
 		"""Прямой проход модели"""
+		embedding = self.encode_language(language, features.shape[0])
 		features, feature_lengths = self.preprocessor(features, feature_lengths)
-		return self.encoder(features, feature_lengths)
+		enc_kwargs = {"lang_embedding": embedding} if embedding is not None else {}
+		encoded, lengths = self.encoder(features, feature_lengths, **enc_kwargs)
+		if self.language_fusion is not None:
+			encoded = self.language_fusion(encoded, embedding)
+		return encoded, lengths
 
 	def prepare_wav(self, wav_input: Union[str, np.ndarray, Tensor], sample_rate: int = SAMPLE_RATE) -> Tuple[Tensor, Tensor]:
 		"""Подготавливает аудио для модели"""
@@ -962,6 +1508,119 @@ class GigaAMASR(GigaAM):
 			return transcribed_segments
 
 
+class GigaAMDualASR(GigaAM):
+	"""Модели v4 / multilingual_v2: две головы raw и e2e на одном энкодере.
+
+	Внешний контракт сохранён: transcribe() возвращает строку (голова e2e),
+	как и старые модели. Жадное декодирование — родное, с порогом 0.4.
+	"""
+
+	def __init__(self, cfg: omegaconf.DictConfig):
+		super().__init__(cfg)
+		self.heads = nn.ModuleDict()
+		for name in ("e2e", "raw"):
+			head_cfg = cfg.heads[name]
+			if str(head_cfg.get("_target_", "")).endswith("RNNTHead") or "joint" in head_cfg:
+				self.heads[name] = RNNTHead(head_cfg.decoder, head_cfg.joint)
+			else:
+				self.heads[name] = CTCHead(head_cfg.feat_in, head_cfg.num_classes)
+
+		self.language_embedding = self.language_fusion = None
+		self.default_language = None
+		self._initialize_language_conditioning(cfg)
+
+		self.decodings = {}
+		for name, head in self.heads.items():
+			dc = cfg.decodings[name]
+			if isinstance(head, RNNTHead):
+				self.decodings[name] = RNNTGreedyDecoding(
+					dc.get("vocabulary"), dc.get("model_path"), dc.get("max_symbols_per_step", 10)
+				)
+			else:
+				self.decodings[name] = CTCGreedyDecoding(
+					dc.get("vocabulary"), dc.get("model_path")
+				)
+
+	def _initialize_language_conditioning(self, cfg):
+		conditioning = cfg.get("language_conditioning")
+		if not conditioning:
+			return
+		if not (
+			conditioning.get("film", {}).get("enabled", False)
+			or conditioning.get("late_fusion", {}).get("enabled", False)
+		):
+			return
+		if conditioning.get("film", {}).get("enabled", False):
+			self.language_embedding = LanguageEmbedding(conditioning)
+			self.encoder.language_film = LanguageFiLM(
+				self.encoder.layer_dims,
+				conditioning["embedding_dim"],
+				conditioning["film"],
+			)
+		if conditioning.get("late_fusion", {}).get("enabled", False):
+			if self.language_embedding is None:
+				self.language_embedding = LanguageEmbedding(conditioning)
+			width = next(iter(cfg.heads.values())).joint.enc_hidden
+			self.language_fusion = LanguageLateFusion(
+				width, conditioning["embedding_dim"], conditioning["late_fusion"]
+			)
+
+	def encode_language(self, language, batch_size):
+		if self.language_embedding is None:
+			return None
+		language = self.default_language if language is None else language
+		return self.language_embedding(language, batch_size)
+
+	def _decode_all(self, encoded, encoded_len):
+		return {
+			name: self.decodings[name].decode(self.heads[name], encoded, encoded_len)[0]
+			for name in self.heads
+		}
+
+	@torch.inference_mode()
+	def transcribe(self, wav_input: Union[str, np.ndarray, Tensor], sample_rate: int = SAMPLE_RATE,
+	               head: str = "e2e", **kwargs) -> Union[str, List[Dict[str, Union[str, Tuple[float, float]]]]]:
+		"""Текст с головы e2e (по умолчанию) — совместимо со старым API."""
+		if isinstance(wav_input, str):
+			audio_data = load_audio(wav_input, sample_rate=sample_rate)
+		elif isinstance(wav_input, np.ndarray):
+			audio_data = torch.from_numpy(wav_input.copy()).float()
+			if audio_data.ndim > 1:
+				audio_data = audio_data.flatten()
+		elif isinstance(wav_input, Tensor):
+			audio_data = wav_input.float().clone()
+			if audio_data.ndim > 1:
+				audio_data = audio_data.flatten()
+		else:
+			raise TypeError(f"Unsupported audio input type: {type(wav_input)}")
+
+		if audio_data.shape[-1] <= LONGFORM_THRESHOLD:
+			wav, length = self.prepare_wav(wav_input, sample_rate=sample_rate)
+			encoded, encoded_len = self.forward(wav, length)
+			return self._decode_all(encoded, encoded_len)[head]
+
+		print("long")
+		transcribed_segments = []
+		segments, boundaries = segment_audio_file(audio_data, SAMPLE_RATE, **kwargs)
+		for segment, segment_boundaries in zip(segments, boundaries):
+			wav = segment.unsqueeze(0)
+			length = torch.full([1], wav.shape[-1])
+			encoded, encoded_len = self.forward(wav, length)
+			result = self._decode_all(encoded, encoded_len)[head]
+			transcribed_segments.append({
+				"transcription": result,
+				"boundaries": segment_boundaries,
+			})
+		return transcribed_segments
+
+	@torch.inference_mode()
+	def transcribe_all(self, wav_input: Union[str, np.ndarray, Tensor], sample_rate: int = SAMPLE_RATE) -> Dict[str, str]:
+		"""Обе головы сразу: {'e2e': ..., 'raw': ...}."""
+		wav, length = self.prepare_wav(wav_input, sample_rate=sample_rate)
+		encoded, encoded_len = self.forward(wav, length)
+		return self._decode_all(encoded, encoded_len)
+
+
 def _download_file(file_url: str, file_path: str, force: bool = False) -> str:
 	"""Скачивает файл с прогресс-баром"""
 	if os.path.exists(file_path) and not force:
@@ -1002,8 +1661,26 @@ def _download_model(model_name: str, download_root: str, force: bool = False) ->
 	return model_name, _download_file(model_url, model_path, force)
 
 
-def _download_tokenizer(model_name: str, download_root: str, force: bool = False) -> Optional[str]:
-	"""Скачивает токенизатор если нужно"""
+def _download_tokenizer(model_name: str, download_root: str, force: bool = False) -> Union[Optional[str], Dict[str, str]]:
+	"""Скачивает токенизатор если нужно.
+
+	Для v4/multilingual_v2 CDN хранит отдельные токенизаторы raw и e2e —
+	возвращаем словарь {'raw': path, 'e2e': path} вместо одного пути.
+	"""
+	if model_name in _DUAL_TOKENIZER_MODELS:
+		paths = {}
+		for head in ("raw", "e2e"):
+			filename = f"{model_name}_{head}_tokenizer.model"
+			tokenizer_path = os.path.join(download_root, filename)
+			if os.path.exists(tokenizer_path) and not force:
+				logging.info(f"Tokenizer found at {tokenizer_path}, skipping download.")
+			else:
+				logging.info(f"Downloading tokenizer to {tokenizer_path}")
+			paths[head] = _download_file(
+				f"{_URL_DIR}/{filename}", tokenizer_path, force
+			)
+		return paths
+
 	if model_name != "v1_rnnt" and "e2e" not in model_name:
 		return None
 	tokenizer_url = f"{_URL_DIR}/{model_name}_tokenizer.model"
@@ -1107,13 +1784,27 @@ def load_model(model_name: str, download_root: Optional[str] = None,
 		cfg.preprocessor["_target_"] = "sber_gegaam.FeatureExtractor"
 
 	if "encoder" in cfg:
-		cfg.encoder["_target_"] = "sber_gegaam.ConformerEncoder"
+		is_zapformer = str(cfg.encoder.get("_target_", "")).endswith("ZapformerEncoder")
+		cfg.encoder["_target_"] = (
+			"sber_gegaam.ZapformerEncoder" if is_zapformer
+			else "sber_gegaam.ConformerEncoder"
+		)
 
-	if tokenizer_path is not None and "decoding" in cfg:
+	# Пути к токенизаторам: новые модели используют два (raw и e2e)
+	if isinstance(tokenizer_path, dict):
+		for head, path in tokenizer_path.items():
+			if "decodings" in cfg and head in cfg.decodings:
+				cfg.decodings[head].model_path = path
+	elif tokenizer_path is not None and "decoding" in cfg:
 		cfg.decoding.model_path = tokenizer_path
 
 	if "ssl" in model_name:
 		model = GigaAM(cfg)
+	elif "heads" in cfg:
+		model = GigaAMDualASR(cfg)
+		# Русскоязычный скрипт: языковая подсказка по умолчанию
+		if model_name == "multilingual_v2_rnnt":
+			model.default_language = "ru"
 	else:
 		model = GigaAMASR(cfg)
 
@@ -1133,4 +1824,4 @@ def load_model(model_name: str, download_root: Optional[str] = None,
 	return model.to(device_obj)
 
 
-__all__ = ["GigaAM", "GigaAMASR", "load_audio", "load_model"]
+__all__ = ["GigaAM", "GigaAMASR", "GigaAMDualASR", "load_audio", "load_model"]
