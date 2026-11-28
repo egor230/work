@@ -189,3 +189,8 @@
 [2026-11-28 07:26:20] [profile] switch '/mnt/807EB5FA7EB5E954/games/Entropy Zero 2/hl2.exe' -> '/mnt/807EB5FA7EB5E954/games/Far Cry/Bin32/FarCry.exe' (active_game='/mnt/807EB5FA7EB5E954/games/Far Cry/Bin32/FarCry.exe')
 [2026-11-28 07:26:20] [profile] switch '/mnt/807EB5FA7EB5E954/games/Entropy Zero 2/hl2.exe' -> '/mnt/807EB5FA7EB5E954/games/Far Cry/Bin32/FarCry.exe' (active_game='/mnt/807EB5FA7EB5E954/games/Far Cry/Bin32/FarCry.exe')
 [2026-11-28 07:26:20] [profile] switch '/mnt/807EB5FA7EB5E954/games/Entropy Zero 2/hl2.exe' -> '/mnt/807EB5FA7EB5E954/games/Far Cry/Bin32/FarCry.exe' (active_game='/mnt/807EB5FA7EB5E954/games/Far Cry/Bin32/FarCry.exe')
+[2026-11-28 08:02:04] [profile] switch '/mnt/807EB5FA7EB5E954/games/Entropy Zero 2/hl2.exe' -> 'C:/Windows/explorer.exe' (active_game='')
+[2026-11-28 08:02:04] [profile] switch '/mnt/807EB5FA7EB5E954/games/Entropy Zero 2/hl2.exe' -> 'C:/Windows/explorer.exe' (active_game='')
+[2026-11-28 08:08:49] mouse device id 0 not usable (absent or has no buttons), reselected id 6
+[2026-11-28 08:17:15] [profile] switch '/mnt/807EB5FA7EB5E954/games/Far Cry/Bin32/FarCry.exe' -> 'C:/Windows/explorer.exe' (active_game='')
+[2026-11-28 08:17:15] [profile] switch '/mnt/807EB5FA7EB5E954/games/Far Cry/Bin32/FarCry.exe' -> 'C:/Windows/explorer.exe' (active_game='')

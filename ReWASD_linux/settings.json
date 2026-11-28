@@ -51,7 +51,7 @@
     "/mnt/807EB5FA7EB5E954/games/Dark Messiah of Might and Magic/MM.EXE",
     "/mnt/807EB5FA7EB5E954/games/Need for Speed - Most Wanted/speed.exe"
   ],
-  "current_profile": 4,
+  "current_profile": 0,
   "gamepad_profile_names": [
     "Default",
     "race",
@@ -183,12 +183,12 @@
   },
   "mouse_map": {
     "LBUTTON": "LBUTTON",
-    "RBUTTON": "W",
-    "MBUTTON": "E",
-    "SIDE_BUTTON": "F",
-    "EXTRA_BUTTON": "SPACE",
-    "WHEEL_UP": "RBUTTON",
-    "WHEEL_DOWN": "E"
+    "RBUTTON": "RBUTTON",
+    "MBUTTON": "MBUTTON",
+    "SIDE_BUTTON": " ",
+    "EXTRA_BUTTON": " ",
+    "WHEEL_UP": "SCROLL_UP",
+    "WHEEL_DOWN": "SCROLL_DOWN"
   },
   "mouse_hold": {
     "LBUTTON": false,
@@ -250,13 +250,13 @@
   ],
   "window_size": [
     1410,
-    756
+    866
   ],
   "window_geometry": [
     361,
-    250,
+    140,
     1410,
-    756
+    866
   ],
   "main_splitter_sizes": [
     261,
@@ -287,8 +287,8 @@
     {
       "name": "LT",
       "logical_name": "LEFT_TRIGGER",
-      "rx": 0.27,
-      "ry": 0.18,
+      "rx": 0.2816279069767442,
+      "ry": 0.12476744186046511,
       "rw": 0.06,
       "rh": 0.05,
       "color": "#e67e22",
@@ -297,8 +297,8 @@
     {
       "name": "RT",
       "logical_name": "RIGHT_TRIGGER",
-      "rx": 0.67,
-      "ry": 0.18,
+      "rx": 0.6816279069767442,
+      "ry": 0.10877906976744184,
       "rw": 0.06,
       "rh": 0.05,
       "color": "#e67e22",
@@ -307,8 +307,8 @@
     {
       "name": "LB",
       "logical_name": "LEFT_SHOULDER",
-      "rx": 0.27,
-      "ry": 0.24,
+      "rx": 0.23705426356589146,
+      "ry": 0.19348837209302325,
       "rw": 0.06,
       "rh": 0.05,
       "color": "#95a5a6",
@@ -317,8 +317,8 @@
     {
       "name": "RB",
       "logical_name": "RIGHT_SHOULDER",
-      "rx": 0.67,
-      "ry": 0.24,
+      "rx": 0.7000387596899225,
+      "ry": 0.18186046511627907,
       "rw": 0.06,
       "rh": 0.05,
       "color": "#95a5a6",
@@ -357,8 +357,8 @@
     {
       "name": "L↑",
       "logical_name": "LEFT_THUMB_UP",
-      "rx": 0.28,
-      "ry": 0.275,
+      "rx": 0.2896899224806202,
+      "ry": 0.2473837209302326,
       "rw": 0.055,
       "rh": 0.04,
       "color": "#5b8cff",
@@ -367,8 +367,8 @@
     {
       "name": "L↓",
       "logical_name": "LEFT_THUMB_DOWN",
-      "rx": 0.28,
-      "ry": 0.35,
+      "rx": 0.28775193798449616,
+      "ry": 0.38052325581395346,
       "rw": 0.055,
       "rh": 0.04,
       "color": "#5b8cff",
@@ -377,8 +377,8 @@
     {
       "name": "L←",
       "logical_name": "LEFT_THUMB_LEFT",
-      "rx": 0.255,
-      "ry": 0.305,
+      "rx": 0.23077519379844963,
+      "ry": 0.3122674418604651,
       "rw": 0.04,
       "rh": 0.05,
       "color": "#5b8cff",
@@ -387,8 +387,8 @@
     {
       "name": "L→",
       "logical_name": "LEFT_THUMB_RIGHT",
-      "rx": 0.32,
-      "ry": 0.305,
+      "rx": 0.35294573643410854,
+      "ry": 0.3151744186046511,
       "rw": 0.04,
       "rh": 0.05,
       "color": "#5b8cff",
@@ -397,8 +397,8 @@
     {
       "name": "LS",
       "logical_name": "LEFT_THUMB_PRESSED",
-      "rx": 0.265,
-      "ry": 0.279,
+      "rx": 0.2805038759689923,
+      "ry": 0.2833604651162791,
       "rw": 0.0774,
       "rh": 0.09,
       "color": "#1a47c4",
@@ -1045,7 +1045,7 @@
       ]
     },
     "id": 6,
-    "current_app": "/mnt/807EB5FA7EB5E954/games/Entropy Zero 2/hl2.exe",
+    "current_app": "C:/Windows/explorer.exe",
     "script_mouse": {
       "/mnt/807EB5FA7EB5E954/games/Alien Isolation/AI.exe": {
         "SCROLL_DOWN": "#!/bin/bash\nxte \"keydown E\"\nsleep 0.23\nxte \"keyup E\"\nxte \"keydown E\"\nsleep 0.23\nxte \"keyup E\"\nxte \"keydown E\"\nsleep 0.23\nxte \"keyup E\"\nxte \"keydown E\"\nsleep 0.23\nxte \"keyup E\"\nxte \"keydown E\"\nsleep 0.23\nxte \"keyup E\"\nxte \"keydown E\"\nsleep 0.23\nxte \"keyup E\"\nxte \"keydown E\"\nsleep 0.23\nxte \"keyup E\"\nxte \"keydown E\"\nsleep 0.23\nxte \"keyup E\"\nxte \"keydown E\"\nsleep 0.23\nxte \"keyup E\"\nxte \"keydown R\"\nsleep 0.23\nxte \"keyup R\""

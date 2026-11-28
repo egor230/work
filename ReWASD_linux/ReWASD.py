@@ -650,10 +650,17 @@ class RewasdApp(QMainWindow):
         return default
 
     def save_settings(self):
+        """Записать текущие данные в JSON.
+
+        Важно: здесь НЕ обновляем снимок настроек. save_settings() вызывают
+        многие обработчики (смена профиля, ползунки, разделители, параметры
+        геймпада). Если сбрасывать снимок при каждом таком автосохранении, то
+        при закрытии окна всегда получается «изменений нет» и диалог
+        «Сохранить изменения?» не появляется. Снимок обновляется только при
+        открытии окна и при явном подтверждении сохранения в confirm_unsaved().
+        """
         try:
             SETTINGS_FILE.write_text(json.dumps(self.data, ensure_ascii=False, indent=2), encoding="utf-8")
-            if getattr(self, "_baseline_data", None) is not None:
-                self._take_baseline()  # явное сохранение сбрасывает «грязность»
             self.status("Настройки сохранены")
         except Exception as e:
             self.status("Ошибка сохранения: " + str(e))
@@ -696,8 +703,12 @@ class RewasdApp(QMainWindow):
         if answer == QMessageBox.StandardButton.Save:
             self.save_settings()
             self._take_baseline()
-        else:  # Не сохранять — возвращаем файл к состоянию открытия
+        else:  # Не сохранять — возвращаем и файл, и данные к состоянию открытия
+            # Иначе последующий вызов save_settings() в closeEvent/quit_app
+            # записал бы обратно уже изменённые self.data, и «Не сохранять»
+            # фактически сохраняла бы правки.
             try:
+                self.data = json.loads(json.dumps(self._baseline_data))
                 SETTINGS_FILE.write_text(self._baseline_text, encoding="utf-8")
             except Exception:
                 pass
