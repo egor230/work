@@ -1,4 +1,14 @@
-import sys, os, json, time, glob, subprocess  # Базовые библиотеки
+import sys, os, json, time, glob, subprocess, fcntl, tempfile  # Базовые библиотеки
+
+# --- Защита от второго экземпляра ---
+# Блокировка файла живёт, пока жив процесс. Неважно, через какой .sh запущено.
+_LOCK_PATH = os.path.join(tempfile.gettempdir(), "xbox360_gamepad_emulator.lock")
+_lock_fd = open(_LOCK_PATH, "w")
+try:
+    fcntl.flock(_lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+except (BlockingIOError, OSError):
+    print("Эмулятор геймпада уже запущен. Второй экземпляр не запускается.", flush=True)
+    sys.exit(0)
 from pathlib import Path
 from collections import deque  # Для сглаживания мыши
 from select import select  # Для опроса событий
@@ -611,6 +621,8 @@ class AppController:
   self.window.trigger_clear_btn.clicked.connect(self._on_trigger_clear)
 
   # Инициализация
+  self._saved_trigger_button = None
+  self._saved_trigger_mode = None
   self._load_app_settings()
   self._refresh_combo()
   self._refresh_bindings()
@@ -630,6 +642,9 @@ class AppController:
     if data.get("zones"):
      self.window.gamepad.set_zones_data(data["zones"])
     self.pm.load_profiles(data)  # Загружает профили + триггерные режимы + миграция
+    # Запоминаем, какую кнопку/режим триггера пользователь выбрал в прошлый раз
+    self._saved_trigger_button = data.get("last_trigger_button")
+    self._saved_trigger_mode = data.get("last_trigger_mode")
     # Поддержка старого формата: единая sens применяется к обеим осям,
     # если отдельных значений sens_x/sens_y ещё нет.
     legacy_sens = data.get("sens", 5)
@@ -645,12 +660,17 @@ class AppController:
 
  def _save_app_settings(self):
   """Сохранение ВСЕХ настроек в JSON (профили + триггерные режимы раздельно)"""
+  # Всегда помним текущий выбор — иначе _sync_trigger_ui вернёт старое значение
+  self._saved_trigger_button = self.window.trigger_button_combo.currentData()
+  self._saved_trigger_mode = self.window.trigger_mode_combo.currentIndex()
   data = {
    "image_path": self._current_image_path,
    "zones": self.window.gamepad.get_zones_data(),
    "last_profile": self.pm.current_profile,
    "profiles": self.pm.profiles,
    "trigger_modes": self.pm.trigger_modes,  # Триггерные режимы отдельно от маппингов
+   "last_trigger_button": self.window.trigger_button_combo.currentData(),
+   "last_trigger_mode": self.window.trigger_mode_combo.currentIndex(),
    "mouse_on": self.window.mouse_enabled(),
    # sens оставлен для совместимости со старыми версиями приложения.
    "sens": self.window.mouse_sens_x,
@@ -842,7 +862,7 @@ class AppController:
    self.pm.set_trigger_mode(logical, mode, key)  # Сохраняем ОТДЕЛЬНО от обычного маппинга
    self._refresh_bindings()
    self._save_app_settings()
-   self._sync_trigger_ui()
+   # НЕ вызываем _sync_trigger_ui: он вернул бы список к старому выбору
    self._update_trigger_status()
    # Перезапуск эмуляции для применения
    if self.worker and self.worker.isRunning():
@@ -856,7 +876,6 @@ class AppController:
   self.pm.clear_trigger_mode(logical)
   self._refresh_bindings()
   self._save_app_settings()
-  self._sync_trigger_ui()
   self._update_trigger_status()
   if self.worker and self.worker.isRunning():
    self._start_emulation()
@@ -880,12 +899,25 @@ class AppController:
   trigger_modes = self.pm.get_trigger_modes()
   target_logical = None
   target_mode = None
-  # Ищем первую кнопку с назначенным триггерным режимом
-  for logical, val in trigger_modes.items():
-   if isinstance(val, dict):
-    target_logical = logical
-    target_mode = val.get("mode", "hold")
-    break
+
+  # Сначала восстанавливаем то, что пользователь выбрал в прошлый раз
+  if self._saved_trigger_button:
+   idx = self.window.trigger_button_combo.findData(self._saved_trigger_button)
+   if idx >= 0:
+    target_logical = self._saved_trigger_button
+    saved = trigger_modes.get(target_logical)
+    if isinstance(saved, dict):
+     target_mode = saved.get("mode", "hold")
+    elif self._saved_trigger_mode is not None:
+     target_mode = "hold" if self._saved_trigger_mode == 0 else "repeat"
+
+  # Если сохранённого выбора нет — берём первую настроенную кнопку
+  if not target_logical:
+   for logical, val in trigger_modes.items():
+    if isinstance(val, dict):
+     target_logical = logical
+     target_mode = val.get("mode", "hold")
+     break
   if target_logical:
    # Устанавливаем выбранную кнопку в выпадающем списке
    idx = self.window.trigger_button_combo.findData(target_logical)

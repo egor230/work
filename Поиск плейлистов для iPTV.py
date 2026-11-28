@@ -173,10 +173,8 @@ class Channel:
       score += 35
     elif "HD" in n:
       score += 20
-    if self.timeshift == 2:
-      score += 100
-    elif self.timeshift > 0:
-      score += 50
+    # Раньше (+2) получал +100 и выигрывал у обычного канала при отборе,
+    # из-за чего плейлист начинался с таймшифтов. Убираем бонус.
     return score
 
 def parse_m3u(text: str, source_name: str, priority: int = 0,
@@ -513,27 +511,28 @@ def sanitize_channel_name(ch: Channel) -> Channel:
     ch.logo = ""
   return ch
 
+def base_channel_name(name: str) -> str:
+  """Название канала без таймшифта (+2) и без HD/SD-суффикса."""
+  n = re.sub(r'\s*\(\s*\+\d+\s*\)\s*$', '', name.strip(), flags=re.UNICODE)
+  n = re.sub(r'\s*(HD|SD|UHD|4K|FHD|1080p|720p)\s*$', '', n, flags=re.IGNORECASE)
+  return re.sub(r'\s+', ' ', n).strip().lower()
+
+def timeshift_of(name: str) -> int:
+  m = re.search(r'\(\s*\+(\d+)\s*\)\s*$', name.strip())
+  return int(m.group(1)) if m else 0
+
 def sort_channels(channels: List[Channel]) -> List[Channel]:
   def sort_key(ch: Channel):
-    name_low = ch.clean_name.lower()
-    
-    match_index = -1
-    for idx, pref in enumerate(PRIORITY_CHANNELS):
-      if name_low.startswith(pref):
-        match_index = idx
-        break
-        
-    if match_index != -1 and ch.timeshift == 2:
-      return (0, match_index, -ch.quality_score, name_low)
-      
-    ts_rank = 0 if ch.timeshift == 2 else (1 if ch.timeshift > 0 else 2)
-    country = detect_country(ch)
-    country_rank = 0 if country == "ru" else (1 if country == "ua" else 2)
-    name_rank = 0 if not ch.is_garbage_name else 1
-    quality = -ch.quality_score
-    alpha = ch.clean_name.lower()
-    return (1, ts_rank, country_rank, name_rank, quality, alpha)
-
+    base = base_channel_name(ch.clean_name)
+    pref = next((i for i, p in enumerate(PRIORITY_CHANNELS)
+                 if base.startswith(p)), len(PRIORITY_CHANNELS))
+    # Сначала приоритетные каналы в порядке списка, затем остальные по имени.
+    # Внутри группы: обычный канал (0), потом (+2), (+3) ... — чтобы
+    # «Первый канал» шёл сразу перед «Первый канал (+2)».
+    group = (0, pref) if pref < len(PRIORITY_CHANNELS) else (1, base)
+    return (group, timeshift_of(ch.clean_name),
+            -ch.quality_score, base)
+  
   channels.sort(key=sort_key)
   return channels
 

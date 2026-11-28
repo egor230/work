@@ -377,15 +377,25 @@
         "gta": {},
         "Obscure": {
             "RIGHT_THUMB_PRESSED": {
-                "key": "KEY_KPDOT",
+                "key": "KEY_H",
                 "mode": "hold"
             },
             "LEFT_TRIGGER": {
                 "key": "KEY_SLASH",
                 "mode": "hold"
+            },
+            "LEFT_SHOULDER": {
+                "key": "KEY_BACKSLASH",
+                "mode": "hold"
+            },
+            "RIGHT_TRIGGER": {
+                "key": "KEY_BACKSLASH",
+                "mode": "hold"
             }
         }
     },
+    "last_trigger_button": "RIGHT_TRIGGER",
+    "last_trigger_mode": 0,
     "mouse_on": true,
     "sens": 7,
     "sens_x": 7,
